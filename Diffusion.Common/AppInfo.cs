@@ -1,14 +1,14 @@
-﻿using System;
+using System;
 using System.IO;
 
 namespace Diffusion.Common;
 
 public static class AppInfo
 {
-    private const string AppName = "DiffusionToolkit";
+    private const string AppName = "Berry-AIGC-Toolbox";
     public static string AppDir { get; }
     public static SemanticVersion Version => SemanticVersionHelper.GetLocalVersion();
-    public static string AppDataPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DiffusionToolkit");
+    public static string AppDataPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Berry-AIGC-Toolbox");
 
     public static string DatabasePath { get; }
 
@@ -25,7 +25,7 @@ public static class AppInfo
             AppDir = AppDir.Substring(0, AppDir.Length - 1);
         }
 
-        DatabasePath = Path.Combine(AppInfo.AppDir, "diffusion-toolkit.db");
+        DatabasePath = Path.Combine(AppInfo.AppDir, "berry-aigc-toolbox.db");
 
         IsPortable = true;
 
@@ -35,7 +35,7 @@ public static class AppInfo
         {
             IsPortable = false;
             SettingsPath = Path.Combine(AppInfo.AppDataPath, "config.json");
-            DatabasePath = Path.Combine(AppInfo.AppDataPath, "diffusion-toolkit.db");
+            DatabasePath = Path.Combine(AppInfo.AppDataPath, "berry-aigc-toolbox.db");
         }
 
     }

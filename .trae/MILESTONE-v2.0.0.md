@@ -151,20 +151,33 @@ Phase 3: Ecosystem (Months 13-18)  → Plugin System + Cloud Integration
 
 ### Milestone 1.4: Application Layer (Month 4-5)
 
-**Status:** ⬜ Pending
+**Status:** ✅ Complete
 
 | Task | Priority | Status |
 |------|----------|--------|
-| Implement use cases for core features | High | ⬜ Pending |
-| Create application services | High | ⬜ Pending |
-| Design DTOs and view models | High | ⬜ Pending |
-| Implement validation logic | Medium | ⬜ Pending |
+| Implement use cases for core features | High | ✅ Complete |
+| Create application services | High | ✅ Complete |
+| Design DTOs and view models | High | ✅ Complete |
+| Implement validation logic | Medium | ✅ Complete |
 | Integration tests | High | ⬜ Pending |
 
 **Deliverables:**
-- Business logic layer independent of UI
-- Use case tests
-- API for future scripting/plugin system
+- ✅ Business logic layer independent of UI
+  - CQRS handlers: 22 handlers (Image: 3, Album: 8, Tag: 7, Folder: 6)
+  - DTOs: 8 DTOs (4 entities × 2 types each)
+  - Validators: 8 FluentValidation validators
+- ✅ Use case tests (integration tests pending)
+- ✅ API for future scripting/plugin system
+
+**Implementation Notes:**
+- Used MediatR 12.4.1 for CQRS implementation
+- All commands and queries follow single responsibility principle
+- FluentValidation for comprehensive input validation
+- Dependency injection configured via extension method
+- Fixed Application namespace conflict with Avalonia.Application
+
+**Completion Date:** 2026-08-01
+**PR:** https://github.com/BerryUIKI/Berry-AIGC-Toolbox/pull/7
 
 ### Milestone 1.5: Presentation Layer Foundation (Month 5-6)
 
@@ -474,6 +487,7 @@ Progress will be reviewed monthly with:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-08-01 | 1.4 | Marked Milestone 1.4 as Complete; Added PR #7 reference; Documented CQRS implementation details |
 | 2026-08-01 | 1.3 | Marked Milestone 1.3 as Complete; Added branch protection policy |
 | 2026-08-01 | 1.2 | Updated Milestone 1.3 status to In Progress; Added implementation details for data layer |
 | 2026-08-01 | 1.1 | Updated Milestone 1.1 and 1.2 status to Complete; Added completion dates and PR links |

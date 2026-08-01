@@ -1,4 +1,5 @@
 using BerryAIGen.Domain.Entities;
+using BerryAIGen.Domain.ValueObjects;
 
 namespace BerryAIGen.Domain.Interfaces.Repositories;
 

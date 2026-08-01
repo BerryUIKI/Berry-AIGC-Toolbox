@@ -1,3 +1,5 @@
+using BerryAIGen.Domain.Common;
+
 namespace BerryAIGen.Domain.ValueObjects;
 
 /// <summary>

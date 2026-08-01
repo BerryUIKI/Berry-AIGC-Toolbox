@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Diffusion.Updater": {
-      "commandName": "Project",
-      "commandLineArgs": "D:\\Play\\DiffusionistsToolkit\\Diffusion.Updater\\bin\\Debug\\net6.0-windows"
-    }
-  }
-}

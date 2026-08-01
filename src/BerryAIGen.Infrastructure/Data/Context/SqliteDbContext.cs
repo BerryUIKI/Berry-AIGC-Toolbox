@@ -1,4 +1,5 @@
 using BerryAIGen.Domain.Entities;
+using BerryAIGen.Infrastructure.Data.Converters;
 using Microsoft.EntityFrameworkCore;
 using System.Reflection;
 
@@ -52,6 +53,12 @@ public class SqliteDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Ignore strongly-typed ID types so EF Core doesn't try to treat them as entities
+        modelBuilder.Ignore<Domain.ValueObjects.ImageId>();
+        modelBuilder.Ignore<Domain.ValueObjects.AlbumId>();
+        modelBuilder.Ignore<Domain.ValueObjects.TagId>();
+        modelBuilder.Ignore<Domain.ValueObjects.FolderId>();
+
         // Apply all configurations from the current assembly
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
 
@@ -74,15 +81,19 @@ public class SqliteDbContext : DbContext
         {
             entity.ToTable("Images");
 
-            // Configure primary key
+            // Configure primary key with strongly-typed ID converter
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasConversion(new StronglyTypedIdConverter<Domain.ValueObjects.ImageId>());
 
             // Configure properties
             entity.Property(e => e.Path)
+                .HasConversion<FilePathConverter>()
                 .IsRequired()
                 .HasMaxLength(2048);
 
             entity.Property(e => e.Hash)
+                .HasConversion<HashConverter>()
                 .IsRequired()
                 .HasMaxLength(128);
 
@@ -99,7 +110,7 @@ public class SqliteDbContext : DbContext
             entity.Property(e => e.ModifiedAt)
                 .IsRequired();
 
-            // Configure value objects
+            // Configure value objects as owned entities
             entity.OwnsOne(e => e.Dimensions, dim =>
             {
                 dim.Property(d => d.Width).IsRequired();
@@ -108,39 +119,19 @@ public class SqliteDbContext : DbContext
 
             entity.OwnsOne(e => e.Rating, r =>
             {
-                r.Property(r => r.Value).IsRequired();
+                r.Property(ri => ri.Value).IsRequired();
             });
 
-            // Configure relationships
-            entity.HasOne(e => e.FolderId)
-                .WithMany()
-                .HasForeignKey("FolderId")
+            // Configure FolderId as a simple property (stored as GUID)
+            entity.Property(e => e.FolderId)
+                .HasConversion(new StronglyTypedIdConverter<Domain.ValueObjects.FolderId>())
                 .IsRequired();
-
-            // Configure many-to-many relationships (via shadow properties)
-            entity.HasMany("Tags")
-                .WithMany()
-                .UsingEntity("ImageTags",
-                    j => j.HasOne(typeof(Tag)).WithMany().HasForeignKey("TagId"),
-                    j => j.HasOne(typeof(Image)).WithMany().HasForeignKey("ImageId"),
-                    j => j.HasKey("ImageId", "TagId"));
-
-            entity.HasMany("Albums")
-                .WithMany()
-                .UsingEntity("AlbumImages",
-                    j => j.HasOne(typeof(Album)).WithMany().HasForeignKey("AlbumId"),
-                    j => j.HasOne(typeof(Image)).WithMany().HasForeignKey("ImageId"),
-                    j =>
-                    {
-                        j.HasKey("ImageId", "AlbumId");
-                        j.Property<int>("SortOrder").HasDefaultValue(0);
-                    });
 
             // Create indexes
             entity.HasIndex(e => e.Path).IsUnique();
             entity.HasIndex(e => e.Hash);
             entity.HasIndex(e => e.CreatedAt);
-            entity.HasIndex("FolderId");
+            entity.HasIndex(e => e.FolderId);
         });
     }
 
@@ -151,6 +142,8 @@ public class SqliteDbContext : DbContext
             entity.ToTable("Albums");
 
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasConversion(new StronglyTypedIdConverter<Domain.ValueObjects.AlbumId>());
 
             entity.Property(e => e.Name)
                 .IsRequired()
@@ -161,6 +154,10 @@ public class SqliteDbContext : DbContext
 
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ModifiedAt).IsRequired();
+
+            // Configure CoverImageId as optional
+            entity.Property(e => e.CoverImageId)
+                .HasConversion(new NullableStronglyTypedIdConverter<Domain.ValueObjects.ImageId>());
 
             // Create indexes
             entity.HasIndex(e => e.Name).IsUnique();
@@ -174,6 +171,8 @@ public class SqliteDbContext : DbContext
             entity.ToTable("Tags");
 
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasConversion(new StronglyTypedIdConverter<Domain.ValueObjects.TagId>());
 
             entity.Property(e => e.Name)
                 .IsRequired()
@@ -199,19 +198,20 @@ public class SqliteDbContext : DbContext
             entity.ToTable("Folders");
 
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasConversion(new StronglyTypedIdConverter<Domain.ValueObjects.FolderId>());
 
             entity.Property(e => e.Path)
+                .HasConversion<FilePathConverter>()
                 .IsRequired()
                 .HasMaxLength(2048);
 
+            // Configure ParentFolderId as optional
+            entity.Property(e => e.ParentFolderId)
+                .HasConversion(new NullableStronglyTypedIdConverter<Domain.ValueObjects.FolderId>());
+
             entity.Property(e => e.CreatedAt).IsRequired();
             entity.Property(e => e.ModifiedAt).IsRequired();
-
-            // Configure self-referencing relationship
-            entity.HasOne<Folder>()
-                .WithMany()
-                .HasForeignKey(e => e.ParentFolderId)
-                .OnDelete(DeleteBehavior.Restrict);
 
             // Create indexes
             entity.HasIndex(e => e.Path).IsUnique();

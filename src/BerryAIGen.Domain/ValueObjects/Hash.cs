@@ -57,9 +57,8 @@ public sealed class Hash : ValueObject
     /// <returns>A Hash instance.</returns>
     public static Hash FromBytes(byte[] bytes)
     {
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hashBytes = sha256.ComputeHash(bytes);
-        var hexString = BitConverter.ToString(hashBytes).Replace("-", "");
+        var hashBytes = System.Security.Cryptography.SHA256.HashData(bytes);
+        var hexString = Convert.ToHexString(hashBytes);
         return new Hash(hexString, "SHA256");
     }
 

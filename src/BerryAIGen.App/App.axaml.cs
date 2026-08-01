@@ -7,7 +7,7 @@ namespace BerryAIGen.App;
 /// <summary>
 /// Main application class for BerryAIGen.
 /// </summary>
-public class App : Application
+public class App : Avalonia.Application
 {
     /// <summary>
     /// Initializes the application by loading XAML resources.

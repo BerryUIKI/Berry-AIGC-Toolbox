@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <!-- Target Framework -->
+    <TargetFramework>net8.0</TargetFramework>
+    
+    <!-- Language Features -->
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- Build Settings -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWin32Manifest>true</NoWin32Manifest>
+    
+    <!-- Package Settings -->
+    <Authors>Berry-AIGC-Toolbox Contributors</Authors>
+    <Company>Berry-AIGC-Toolbox</Company>
+    <Product>Berry-AIGC-Toolbox</Product>
+    <Copyright>Copyright © 2026 Berry-AIGC-Toolbox Contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+    
+    <!-- Repository Information -->
+    <RepositoryUrl>https://github.com/Berry-Wahlberg/Berry-AIGC-Toolbox</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Analyzers -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
+</Project>

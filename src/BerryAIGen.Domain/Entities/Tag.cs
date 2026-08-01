@@ -99,6 +99,6 @@ public sealed class Tag : Entity<TagId>
     /// </summary>
     private static bool IsValidHexColor(string color)
     {
-        return color.StartsWith("#") && color.Length == 7 && color.Skip(1).All(char.IsAsciiHexDigit);
+        return color.StartsWith('#') && color.Length == 7 && color.Skip(1).All(char.IsAsciiHexDigit);
     }
 }

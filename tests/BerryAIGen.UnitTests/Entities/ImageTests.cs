@@ -1,4 +1,5 @@
 using BerryAIGen.Domain.Entities;
+using BerryAIGen.Domain.Events;
 using BerryAIGen.Domain.ValueObjects;
 
 namespace BerryAIGen.Domain.Tests.Entities;

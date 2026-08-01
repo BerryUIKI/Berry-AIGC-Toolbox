@@ -1,7 +1,8 @@
 # Berry-AIGC-Toolbox v2.0.0 - Project Milestone Document
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Created:** 2026-08-01
+**Last Updated:** 2026-08-01
 **Target Release:** v2.0.0 (Avalonia Cross-Platform Edition)
 **Strategic Timeline:** 18+ months
 
@@ -67,7 +68,7 @@ Phase 3: Ecosystem (Months 13-18)  → Plugin System + Cloud Integration
 
 ### Milestone 1.1: Project Infrastructure Setup (Month 1-2)
 
-**Status:** 🟡 In Progress
+**Status:** ✅ Complete (PR #1 merged)
 
 | Task | Priority | Status | Assignee |
 |------|----------|--------|----------|
@@ -79,25 +80,40 @@ Phase 3: Ecosystem (Months 13-18)  → Plugin System + Cloud Integration
 
 **Deliverables:**
 - ✅ Clean Architecture solution structure (Core, Application, Infrastructure, Presentation)
-- ⬜ Working build system for all platforms
+- ✅ Central package management
+- ✅ Build configuration and NuGet settings
+- ✅ Base domain classes (Entity, AggregateRoot, ValueObject, IDomainEvent)
+- ✅ Initial Avalonia UI shell
+- ✅ Project documentation (milestones, architecture, tech stack)
+- ⬜ Working build system for all platforms (Windows only currently)
 - ⬜ Developer onboarding documentation
+
+**Completion Date:** 2026-08-01
+**PR:** https://github.com/BerryUIKI/Berry-AIGC-Toolbox/pull/1
 
 ### Milestone 1.2: Domain Layer Implementation (Month 2-3)
 
-**Status:** ⬜ Pending
+**Status:** ✅ Complete (PR #2 ready for review)
 
 | Task | Priority | Status |
 |------|----------|--------|
-| Migrate domain entities (Image, Album, Tag, Folder) | High | ⬜ Pending |
-| Implement value objects and domain logic | High | ⬜ Pending |
-| Create repository interfaces | High | ⬜ Pending |
-| Design domain events | Medium | ⬜ Pending |
-| Unit tests for domain layer | High | ⬜ Pending |
+| Implement value objects (ImageId, FilePath, Hash, Rating, etc.) | High | ✅ Complete |
+| Migrate domain entities (Image, Album, Tag, Folder) | High | ✅ Complete |
+| Create repository interfaces | High | ✅ Complete |
+| Design domain events | High | ✅ Complete |
+| Unit tests for domain layer | High | ✅ Complete |
 
 **Deliverables:**
-- Complete domain model with business logic
-- Repository contracts (interfaces)
-- Comprehensive unit tests (>80% coverage)
+- ✅ Complete domain model with business logic
+- ✅ Repository contracts (interfaces)
+- ✅ Comprehensive unit tests
+- ✅ 8 value objects with validation
+- ✅ 4 domain entities (2 aggregate roots)
+- ✅ 12 domain events
+- ✅ 5 repository interfaces + Unit of Work
+
+**Completion Date:** 2026-08-01
+**PR:** https://github.com/BerryUIKI/Berry-AIGC-Toolbox/pull/2
 
 ### Milestone 1.3: Data Layer Migration (Month 3-4)
 
@@ -441,6 +457,7 @@ Progress will be reviewed monthly with:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-08-01 | 1.1 | Updated Milestone 1.1 and 1.2 status to Complete; Added completion dates and PR links |
 | 2026-08-01 | 1.0 | Initial milestone document created |
 
 ---

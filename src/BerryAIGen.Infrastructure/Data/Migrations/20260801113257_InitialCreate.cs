@@ -56,7 +56,7 @@ namespace BerryAIGen.Infrastructure.Data.Migrations
                     Dimensions_Width = table.Column<int>(type: "INTEGER", nullable: false),
                     Dimensions_Height = table.Column<int>(type: "INTEGER", nullable: false),
                     FileSize = table.Column<long>(type: "INTEGER", nullable: false),
-                    Rating_Value = table.Column<int>(type: "INTEGER", nullable: false),
+                    Rating = table.Column<int>(type: "INTEGER", nullable: false),
                     IsFavorite = table.Column<bool>(type: "INTEGER", nullable: false),
                     IsNSFW = table.Column<bool>(type: "INTEGER", nullable: false),
                     AestheticScore = table.Column<double>(type: "REAL", nullable: true),

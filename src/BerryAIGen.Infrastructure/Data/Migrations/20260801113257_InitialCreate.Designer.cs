@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BerryAIGen.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(SqliteDbContext))]
-    [Migration("20260801103508_InitialCreate")]
+    [Migration("20260801113257_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -134,6 +134,9 @@ namespace BerryAIGen.Infrastructure.Data.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Rating")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
@@ -198,26 +201,7 @@ namespace BerryAIGen.Infrastructure.Data.Migrations
                                 .HasForeignKey("ImageId");
                         });
 
-                    b.OwnsOne("BerryAIGen.Domain.ValueObjects.Rating", "Rating", b1 =>
-                        {
-                            b1.Property<Guid>("ImageId")
-                                .HasColumnType("TEXT");
-
-                            b1.Property<int>("Value")
-                                .HasColumnType("INTEGER");
-
-                            b1.HasKey("ImageId");
-
-                            b1.ToTable("Images");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ImageId");
-                        });
-
                     b.Navigation("Dimensions")
-                        .IsRequired();
-
-                    b.Navigation("Rating")
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

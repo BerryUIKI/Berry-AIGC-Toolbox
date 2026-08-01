@@ -117,10 +117,10 @@ public class SqliteDbContext : DbContext
                 dim.Property(d => d.Height).IsRequired();
             });
 
-            entity.OwnsOne(e => e.Rating, r =>
-            {
-                r.Property(ri => ri.Value).IsRequired();
-            });
+            // Configure Rating as a simple property with converter (not owned entity)
+            entity.Property(e => e.Rating)
+                .HasConversion<RatingConverter>()
+                .IsRequired();
 
             // Configure FolderId as a simple property (stored as GUID)
             entity.Property(e => e.FolderId)

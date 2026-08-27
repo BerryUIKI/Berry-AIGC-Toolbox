@@ -1,51 +1,132 @@
 # Berry-AIGC-Toolbox
 
-> **⚠️ Clean-Slate Rewrite (Orphan Branch: `rewrite`)**
-> This branch starts from zero with a new tech stack. All previous code
-> (WPF v1.x in `legacy/`, Avalonia v2.0 in `src/`) lives on the old branches
-> (`main`, `dev`, etc.) and is intentionally NOT carried over.
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24c8db)](https://tauri.app)
+[![Rust](https://img.shields.io/badge/Rust-1.7+-orange)](https://www.rust-lang.org)
+[![Vue](https://img.shields.io/badge/Vue-3-42b883)](https://vuejs.org)
 
-## 简介 / About
+Berry-AIGC-Toolbox is an open-source **metadata indexer and viewer for
+AI-generated images**. It helps you organize, search, and manage your growing
+collection of AI-generated content — prompts, models, and metadata — across
+multiple AI platforms and file formats.
 
-Berry-AIGC-Toolbox 是一个 AI 生成图像的元数据索引器与查看器，帮助用户组织、
-搜索和管理不断增长的 AI 生成内容集合。
+> This project is a **clean-slate rewrite** (Tauri 2 + Rust + Vue 3) of the
+> original Berry-AIGC-Toolbox. The legacy C#/.NET codebase is archived in the
+> `old/main` branch for reference only.
 
-Berry-AIGC-Toolbox is an AI-generated image metadata indexer and viewer that
-helps you organize, search, and manage your growing collection of AI-generated
-content.
+## Features
 
-## 技术栈 / Tech Stack (Planned)
+### Scanning & Indexing
+- Scan folders for images and videos, store and index prompts and other metadata (PNGInfo)
+- Rebuild metadata on demand (re-scan and re-extract from existing files)
+- Folder-based organization with drag-and-drop file management
 
-| 组件 Component | 技术 Technology |
-|---|---|
-| Desktop Shell | [Tauri 2](https://tauri.app/) (Rust) |
-| Frontend | Web frontend (to be decided) |
-| Backend / Core | Rust |
+### Supported Metadata Formats
+- AUTOMATIC1111 / SDNext
+- InvokeAI (Dream / sd-metadata / invokeai_metadata)
+- NovelAI
+- Stable Diffusion
+- Fooocus / FooocusMRE
+- ComfyUI
+- EasyDiffusion
+- Stable Swarm
 
-> Stack details are a placeholder — final choices will be recorded here as the
-> rewrite progresses.
+### Supported File Formats
+- JPG / JPEG (+ EXIF)
+- PNG
+- WebP
+- MP4 (video)
+- .TXT sidecar metadata files
 
-## 开发状态 / Status
+### Organization
+- Albums (including drag-and-drop to add images)
+- Custom tags
+- Favorites
+- Ratings (1–10)
+- NSFW tagging: manual, keyword-based auto-tagging, and blur
 
-- 🟡 **In progress**: initial scaffolding on the `rewrite` orphan branch
-- Not yet runnable
+### Search & Prompts
+- Advanced metadata search (model file name/hash, prompts, parameters, and more)
+- Visual search builder for fine-grained queries
+- Prompt and negative-prompt lists with usage statistics
+- Reverse hash search against a known model list (partial name matching supported)
 
-## 开发 / Development
+### Sorting
+- By creation date
+- By aesthetics score
+- By rating
 
-Prerequisites and build instructions will be added once the initial scaffold
-is in place.
+### Model Management
+- Filter checkpoints by name and hash
+- AUTOMATIC1111 cache.json integration (SHA256 hash lookup)
 
-## 分支策略 / Branch Policy
+### Localization
+- English, French, Spanish, German, Japanese, Simplified Chinese, Traditional Chinese
 
-See [BRANCH_POLICY.md](BRANCH_POLICY.md) for the full branching strategy.
-`main` is protected: all changes flow through PRs via `dev`.
+### Database
+- Backup and restore of the metadata database
 
-## 许可 / License
+## Tech Stack
 
-[MIT](LICENSE)
+| Component        | Technology                         |
+|------------------|------------------------------------|
+| Desktop Shell    | [Tauri 2](https://tauri.app)       |
+| Core Logic       | [Rust](https://www.rust-lang.org)  |
+| Frontend         | [Vue 3](https://vuejs.org) + TypeScript |
+| Database         | SQLite                             |
+| Packaging        | Tauri bundler (Windows / macOS / Linux) |
+
+## Roadmap
+
+The rewrite is delivered in feature-first milestones — each milestone produces
+a runnable slice of the application.
+
+| # | Milestone                    | Outcome                                   |
+|---|------------------------------|-------------------------------------------|
+| M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite |
+| M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage |
+| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting |
+| M4 | Search                       | Metadata search engine + visual search GUI |
+| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats |
+| M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore |
+| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers |
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed milestone breakdown,
+deliverables, and status tracking.
+
+## Repository Structure
+
+| Branch      | Purpose                                                             |
+|-------------|---------------------------------------------------------------------|
+| `rewrite`   | Protected default branch — production-ready code (PR-only)          |
+| `dev`       | Development integration branch — feature work lands here first      |
+| `old/main`  | Read-only archive of the legacy C#/.NET codebase                    |
+
+All changes flow through Pull Requests. See
+[BRANCH_POLICY.md](BRANCH_POLICY.md) for the full branching strategy.
+
+## Development
+
+> Build and run instructions will be added here once the M1 scaffold is in place.
+
+### Prerequisites (planned)
+- [Rust toolchain](https://www.rust-lang.org/tools/install)
+- [Node.js](https://nodejs.org) LTS
+- Tauri 2 prerequisites for your platform (see [Tauri docs](https://tauri.app))
+
+### Contribution Workflow
+1. Create a feature branch from `dev` (`feature/your-feature`)
+2. Implement with tests
+3. Open a Pull Request targeting `dev`
+4. After merge to `dev`, a release PR merges `dev` into `rewrite`
+
+## License
+
+This project is licensed under the **GNU Affero General Public License v3.0**
+(AGPL-3.0) — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Project Status**: 🟡 Clean-slate rewrite (bootstrap)
-**Branch**: `rewrite` (orphan, no shared history)
+**Project Status**: 🟡 Active development (M1: Scaffolding & Foundation)
+**Current Branch**: `dev`
 **Last Updated**: 2026-08-27

@@ -1,60 +1,61 @@
 # Branch Management Policy
 
+## Overview
+
+As of 2026-08-27, the repository was restructured: the old C#/.NET codebase was
+archived and development restarted from scratch (new tech stack: Tauri 2 + Rust
++ Vue 3). The branch workflow is:
+
+> **All pull requests target `dev` first. `dev` is merged into `rewrite` only
+> as a unified release PR. `rewrite` carries official releases only.**
+
 ## Branch Structure
 
-Berry-AIGC-Toolbox follows a structured branching strategy to ensure code quality and stable releases.
+### `rewrite` — Official Release Branch (default, protected)
 
-### Main Branches
+- 🔒 **Protected branch** — direct pushes are **FORBIDDEN**
+- **Accepts release PRs from `dev` only** (no feature branches target `rewrite`)
+- Requires 1 approval before merging
+- Linear history enforced (no merge commits)
+- Force pushes and deletions are blocked
+- Conversation resolution required
+- Enforced for administrators
+- Every merge into `rewrite` is a formal release (tag accordingly)
 
-- **`main`** - Production-ready code only
-  - 🔒 **Protected branch** - Direct pushes are **FORBIDDEN**
-  - All changes must come via Pull Requests from `dev`
-  - Requires 1 approval before merging
-  - Linear history enforced (no merge commits)
-  - Force pushes and deletions are blocked
-  - Conversation resolution required
+### `dev` — Development Integration Branch
 
-- **`dev`** - Development integration branch
-  - All feature branches should target this branch
-  - Acts as a staging area before merging to `main`
-  - Pull Requests should be submitted here first
+- All feature / fix / chore / docs branches target `dev`
+- Acts as the staging area; code lands here first and is integration-tested
+- When `dev` reaches a release-ready state, a single release PR merges `dev` → `rewrite`
 
-### Feature Branches
+### Feature / Fix / Chore / Docs Branches
 
-- **Naming Convention**: `feature/<feature-name>`
-  - Example: `feature/data-layer-migration`
-  - Example: `feature/domain-layer-implementation`
-
+- **Naming**: `feature/<name>`, `fix/<name>`, `chore/<name>`, `docs/<name>`
+  - Example: `feature/metadata-parser`
+  - Example: `chore/branch-policy-update`
 - **Workflow**:
   1. Create from `dev`: `git checkout dev && git pull && git checkout -b feature/your-feature`
   2. Make commits with clear messages
-  3. Push to remote: `git push -u origin feature/your-feature`
-  4. Create PR targeting `dev` (NOT `main`)
-  5. After approval and merge to `dev`, create PR from `dev` to `main`
+  3. Push and open a PR **targeting `dev`** (NOT `rewrite`)
+  4. After approval and merge to `dev`, the feature branch can be deleted
 
-### Bugfix Branches
+### `old/main` — Legacy Archive (read-only)
 
-- **Naming Convention**: `fix/<bug-name>`
-  - Example: `fix/rating-serialization`
+- Renamed from `main` on 2026-08-27; archive of the legacy C#/.NET codebase
+  (WPF v1.x + Avalonia v2.0), full history preserved
+- Reference only; no development happens here; may be deleted when no longer needed
 
-### Clean-Slate Rewrite Branch
+## Release Process
 
-- **`rewrite`** - Orphan branch (no shared history) for the clean-slate rewrite
-  - Created 2026-08-27 as a fresh start with a new tech stack
-  - Work happens directly on `rewrite` until the new stack is established
-  - Once the rewrite stabilizes, it will be promoted via PR into `dev` / `main`
-  - Old branches (`main`, `dev`, `legacy` code) remain intact for reference
-
-### Release Process
-
-1. Feature development happens in `feature/*` branches
+1. Feature development happens in `feature/*` (etc.) branches
 2. PRs merge into `dev` for integration testing
-3. When ready for release, PR from `dev` to `main`
-4. Tag releases on `main` branch
+3. When `dev` is release-ready, open the release PR: `dev` → `rewrite`
+4. After approval, merge the release PR and tag the release on `rewrite`
+5. `rewrite` always reflects the latest official release
 
 ## Branch Protection Rules
 
-### main Branch Protection
+### `rewrite` (enabled via GitHub API, 2026-08-27)
 
 ✅ **Enabled Rules**:
 - Require pull request reviews (1 approval required)
@@ -65,12 +66,13 @@ Berry-AIGC-Toolbox follows a structured branching strategy to ensure code qualit
 - Block force pushes
 - Block deletions
 
-❌ **Direct pushes to main are BLOCKED**
+❌ **Direct pushes to `rewrite` are BLOCKED** (including admins)
+❌ **Feature branches must NOT target `rewrite`** — only `dev` → `rewrite` release PRs
 
 ## Workflow Example
 
 ```bash
-# Start new feature
+# Start a feature branch from dev
 git checkout dev
 git pull origin dev
 git checkout -b feature/my-feature
@@ -79,7 +81,7 @@ git checkout -b feature/my-feature
 git add .
 git commit -m "feat: add new feature"
 
-# Push and create PR
+# Push and create PR targeting dev
 git push -u origin feature/my-feature
 gh pr create --base dev --title "feat: my feature"
 
@@ -87,8 +89,8 @@ gh pr create --base dev --title "feat: my feature"
 git checkout dev
 git pull origin dev
 
-# When ready for release, create PR to main
-gh pr create --base main --head dev --title "release: merge dev to main"
+# When dev is release-ready, open the release PR to rewrite
+gh pr create --base rewrite --head dev --title "release: merge dev to rewrite"
 ```
 
 ## Questions?
@@ -98,4 +100,4 @@ If you have questions about this policy, please open an issue or reach out to th
 ---
 
 **Last Updated**: 2026-08-27
-**Policy Version**: 1.1
+**Policy Version**: 3.0

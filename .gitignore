@@ -1,0 +1,29 @@
+# --- OS ---
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# --- Rust / Cargo ---
+/target/
+**/*.rs.bk
+
+# --- Tauri ---
+src-tauri/gen/schemas/
+src-tauri/target/
+
+# --- Node / frontend ---
+node_modules/
+dist/
+build/
+*.local
+
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+
+# --- Logs / temp ---
+*.log
+*.tmp

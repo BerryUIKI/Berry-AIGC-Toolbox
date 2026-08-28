@@ -26,6 +26,17 @@ pub enum DatabaseError {
     },
 }
 
+/// SQL that inserts or updates a file row keyed by its unique path.
+const UPSERT_FILE_SQL: &str =
+    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+     ON CONFLICT(path) DO UPDATE SET
+         folder_id   = excluded.folder_id,
+         container   = excluded.container,
+         size_bytes  = excluded.size_bytes,
+         modified_at = excluded.modified_at,
+         metadata    = excluded.metadata";
+
 /// A SQLite database with a fully migrated schema.
 pub struct Database {
     conn: Connection,
@@ -195,14 +206,7 @@ impl Database {
             .map(serde_json::to_string)
             .transpose()?;
         self.conn.execute(
-            "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(path) DO UPDATE SET
-                 folder_id   = excluded.folder_id,
-                 container   = excluded.container,
-                 size_bytes  = excluded.size_bytes,
-                 modified_at = excluded.modified_at,
-                 metadata    = excluded.metadata",
+            UPSERT_FILE_SQL,
             params![
                 file.folder_id,
                 file.path,
@@ -213,6 +217,41 @@ impl Database {
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
+    }
+
+    /// Insert or update many files in a single transaction, returning the
+    /// number of rows written.
+    ///
+    /// Prefer this over repeated [`upsert_file`](Self::upsert_file) calls when
+    /// inserting in bulk (e.g. a folder scan): one commit per batch instead of
+    /// one fsync per file.
+    pub fn upsert_files(&self, files: &[ImageFile]) -> Result<u64, DatabaseError> {
+        if files.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached(UPSERT_FILE_SQL)?;
+            for file in files {
+                let metadata = file
+                    .metadata
+                    .as_ref()
+                    .map(serde_json::to_string)
+                    .transpose()?;
+                stmt.execute(params![
+                    file.folder_id,
+                    file.path,
+                    file.container.id(),
+                    file.size_bytes as i64,
+                    file.modified_at,
+                    metadata,
+                ])?;
+                count += 1;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
     }
 
     /// Delete every file of `folder_id` whose path is not in `seen`.

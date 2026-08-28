@@ -1,0 +1,28 @@
+mod commands;
+
+use std::sync::Mutex;
+
+use berry_storage::Database;
+use tauri::Manager;
+
+/// Application-wide state managed by Tauri.
+pub struct AppState {
+    /// The migrated SQLite database, opened in the app data directory.
+    pub db: Mutex<Database>,
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            // Open (and migrate) the SQLite database in the OS app data dir.
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let db = Database::connect(&data_dir.join("berry.db"))?;
+            app.manage(AppState { db: Mutex::new(db) });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![commands::get_app_info])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

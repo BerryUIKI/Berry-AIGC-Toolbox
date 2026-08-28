@@ -14,7 +14,7 @@ milestone; see the legend below.
 
 ## Milestones
 
-### M1: Scaffolding & Foundation — 🟡 In progress
+### M1: Scaffolding & Foundation — ✅ Complete
 
 **Goal**: A runnable shell application with a solid project skeleton.
 

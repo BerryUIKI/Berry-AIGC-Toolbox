@@ -1,0 +1,9 @@
+[package]
+name = "berry-metadata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Metadata detection and extraction for AI-generated image formats"
+
+[dependencies]
+berry-domain = { path = "../berry-domain" }

@@ -107,12 +107,32 @@ All changes flow through Pull Requests. See
 
 ## Development
 
-> Build and run instructions will be added here once the M1 scaffold is in place.
-
-### Prerequisites (planned)
-- [Rust toolchain](https://www.rust-lang.org/tools/install)
+### Prerequisites
+- [Rust toolchain](https://www.rust-lang.org/tools/install) (stable)
 - [Node.js](https://nodejs.org) LTS
+- [pnpm](https://pnpm.io)
 - Tauri 2 prerequisites for your platform (see [Tauri docs](https://tauri.app))
+
+### Commands
+
+```bash
+pnpm install          # install frontend dependencies
+pnpm tauri dev        # run the desktop app in development (hot reload)
+pnpm build            # type-check (vue-tsc) and build the frontend to dist/
+pnpm tauri build      # build a release bundle (installer)
+
+cargo test --workspace    # run all Rust tests
+cargo clippy --workspace -- -D warnings   # lint (must be clean)
+cargo fmt --all -- --check                # check formatting
+```
+
+Run cargo commands from the repository root — a single workspace covers the
+`src-tauri` app crate and the `crates/*` core crates.
+
+### Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout, data
+flow, and schema-versioning rules.
 
 ### Contribution Workflow
 1. Create a feature branch from `dev` (`feature/your-feature`)

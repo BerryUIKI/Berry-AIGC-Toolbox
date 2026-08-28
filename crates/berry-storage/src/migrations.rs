@@ -14,6 +14,27 @@ pub const MIGRATIONS: &[&str] = &[
         value TEXT NOT NULL
     ) STRICT;
     "#,
+    // v2: folder and file indexing.
+    r#"
+    CREATE TABLE folders (
+        id        INTEGER PRIMARY KEY,
+        path      TEXT NOT NULL UNIQUE,
+        added_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ) STRICT;
+
+    CREATE TABLE files (
+        id          INTEGER PRIMARY KEY,
+        folder_id   INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+        path        TEXT NOT NULL UNIQUE,
+        container   TEXT NOT NULL,      -- stable Container id: png|jpg|webp|mp4
+        size_bytes  INTEGER NOT NULL,
+        modified_at INTEGER NOT NULL,   -- unix seconds; incremental-scan cache
+        metadata    TEXT,               -- JSON ExtractedMetadata, NULL until extracted
+        indexed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ) STRICT;
+
+    CREATE INDEX idx_files_folder ON files(folder_id);
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

@@ -14,6 +14,7 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Open (and migrate) the SQLite database in the OS app data dir.
             let data_dir = app.path().app_data_dir()?;
@@ -22,7 +23,14 @@ pub fn run() {
             app.manage(AppState { db: Mutex::new(db) });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::get_app_info])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_app_info,
+            commands::add_folder,
+            commands::list_folders,
+            commands::remove_folder,
+            commands::list_files,
+            commands::scan_folder,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -7,3 +7,4 @@ description = "Metadata detection and extraction for AI-generated image formats"
 
 [dependencies]
 berry-domain = { path = "../berry-domain" }
+kamadak-exif = "0.6.1"

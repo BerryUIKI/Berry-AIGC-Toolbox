@@ -22,7 +22,7 @@ tauri-build = { version = "2", features = [] }
 berry-domain = { path = "../crates/berry-domain" }
 berry-scan = { path = "../crates/berry-scan" }
 berry-storage = { path = "../crates/berry-storage" }
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"

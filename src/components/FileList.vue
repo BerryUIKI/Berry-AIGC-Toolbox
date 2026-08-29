@@ -1,29 +1,17 @@
 <script setup lang="ts">
 import type { ImageFile } from "../types";
+import {
+  assetUrl,
+  formatBytes,
+  formatDateTime,
+  getFileName,
+  normalizePath,
+} from "../utils/image";
 
 defineProps<{
   files: ImageFile[];
   loading: boolean;
 }>();
-
-/** Strip the Windows `\\?\` verbatim prefix, if present. */
-function displayPath(path: string): string {
-  return path.replace(/^\\\\\?\\/, "");
-}
-
-function fileName(path: string): string {
-  return path.split(/[\\/]/).pop() ?? path;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDate(unixSeconds: number): string {
-  return new Date(unixSeconds * 1000).toLocaleString();
-}
 
 /** First `max` chars, with an ellipsis when truncated. */
 function snippet(text: string | null | undefined, max: number): string {
@@ -48,22 +36,35 @@ function size(meta: ImageFile["metadata"]): string {
       <table class="table">
         <thead>
           <tr>
+            <th class="th-preview">Preview</th>
             <th>Name</th>
             <th>Type</th>
             <th>Size</th>
             <th>Modified</th>
             <th>Format</th>
             <th>Prompt</th>
-            <th>Size</th>
+            <th>Dimensions</th>
             <th>Model</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="file in files" :key="file.id ?? file.path">
-            <td class="name" :title="displayPath(file.path)">{{ fileName(file.path) }}</td>
+            <td class="preview-cell">
+              <img
+                v-if="file.container !== 'mp4' && file.container !== 'txt'"
+                :src="assetUrl(file.path)"
+                :alt="getFileName(file.path)"
+                class="thumb"
+                loading="lazy"
+              />
+              <div v-else class="thumb-placeholder">
+                {{ file.container.toUpperCase() }}
+              </div>
+            </td>
+            <td class="name" :title="normalizePath(file.path)">{{ getFileName(file.path) }}</td>
             <td>{{ file.container }}</td>
-            <td>{{ formatSize(file.size_bytes) }}</td>
-            <td class="date">{{ formatDate(file.modified_at) }}</td>
+            <td>{{ formatBytes(file.size_bytes) }}</td>
+            <td class="date">{{ formatDateTime(file.modified_at) }}</td>
             <td>
               <span v-if="file.metadata" class="format">{{ file.metadata.format }}</span>
               <span v-else class="none">—</span>
@@ -112,6 +113,37 @@ function size(meta: ImageFile["metadata"]): string {
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.th-preview {
+  width: 44px;
+}
+
+.preview-cell {
+  width: 44px;
+  padding: 0.25rem 0.4rem !important;
+}
+
+.thumb {
+  width: 38px;
+  height: 38px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  display: block;
+}
+
+.thumb-placeholder {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7em;
+  font-weight: 600;
+  color: #999;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
 }
 
 .name {

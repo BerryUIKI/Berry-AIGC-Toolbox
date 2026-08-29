@@ -30,6 +30,7 @@ pub fn run() {
             commands::remove_folder,
             commands::list_files,
             commands::scan_folder,
+            commands::rebuild_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

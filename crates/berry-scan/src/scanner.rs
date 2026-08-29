@@ -94,6 +94,9 @@ pub struct Scanner {
     /// are skipped purely on (size, mtime); when true, unchanged files that
     /// still lack metadata are re-processed so extraction can fill them in.
     extracts: bool,
+    /// When true, every file is re-processed regardless of the (size, mtime)
+    /// cache — the "rebuild metadata" mode.
+    force_extract: bool,
     extractor: MetadataExtractor,
 }
 
@@ -103,6 +106,7 @@ impl Scanner {
         Self {
             db_path,
             extracts: false,
+            force_extract: false,
             extractor: Box::new(|_, _| None),
         }
     }
@@ -126,7 +130,20 @@ impl Scanner {
         Self {
             db_path,
             extracts: true,
+            force_extract: false,
             extractor: Box::new(extractor),
+        }
+    }
+
+    /// A scanner that re-extracts metadata from every file, ignoring the
+    /// incremental cache. Used by the "rebuild metadata" action so files
+    /// indexed under an older extractor get the current one's output.
+    pub fn with_forced_extractor(db_path: PathBuf) -> Self {
+        Self {
+            db_path,
+            extracts: true,
+            force_extract: true,
+            extractor: Box::new(berry_metadata::extract_metadata),
         }
     }
 
@@ -182,13 +199,15 @@ impl Scanner {
             let current = Some(path_str.clone());
 
             // Skip unchanged files that already have everything this scan
-            // would produce (incremental scan).
+            // would produce (incremental scan). A forced rebuild bypasses the
+            // cache so every file is re-extracted.
             let cache = existing.get(&path_str);
-            let unchanged = cache.is_some_and(|(size, mtime, has_metadata)| {
-                *size == file.size_bytes
-                    && *mtime == file.modified_at
-                    && (*has_metadata || !self.extracts)
-            });
+            let unchanged = !self.force_extract
+                && cache.is_some_and(|(size, mtime, has_metadata)| {
+                    *size == file.size_bytes
+                        && *mtime == file.modified_at
+                        && (*has_metadata || !self.extracts)
+                });
             if unchanged {
                 stats.unchanged += 1;
                 seen.push(path_str);
@@ -706,6 +725,39 @@ mod tests {
             .unwrap();
         assert_eq!(stats.unchanged, 1);
         assert_eq!(stats.updated, 0);
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
+
+    #[test]
+    fn forced_scan_reprocesses_unchanged_files() {
+        let env = setup("forced");
+        write(
+            &env.images.join("a.png"),
+            &a1111_png("a robot\nSteps: 5, Sampler: Euler, Size: 512x512"),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let before = db.list_files(folder.id).unwrap();
+        assert!(before[0].metadata.is_some());
+
+        // A forced rebuild re-processes the unchanged file instead of skipping.
+        let stats = Scanner::with_forced_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        assert_eq!(stats.updated, 1);
+        assert_eq!(stats.unchanged, 0);
+
+        let after = db.list_files(folder.id).unwrap();
+        let meta = after[0].metadata.as_ref().expect("metadata kept");
+        assert_eq!(meta.prompt.as_deref(), Some("a robot"));
+        assert_eq!(meta.steps, Some(5));
 
         drop(db);
         std::fs::remove_dir_all(&env.dir).unwrap();

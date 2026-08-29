@@ -113,6 +113,30 @@ pub async fn scan_folder(
     folder_id: i64,
     state: State<'_, AppState>,
 ) -> Result<ScanStats, String> {
+    run_scan(app, folder_id, state, false).await
+}
+
+/// Re-extract metadata from every file in a folder, ignoring the incremental
+/// cache. Use after a metadata-parser update so already-indexed files get the
+/// current extractor's output.
+#[tauri::command]
+pub async fn rebuild_metadata(
+    app: AppHandle,
+    folder_id: i64,
+    state: State<'_, AppState>,
+) -> Result<ScanStats, String> {
+    run_scan(app, folder_id, state, true).await
+}
+
+/// Shared scan runner: snapshots the folder path and database path while the
+/// lock is held, then spawns a [`Scanner`] on a blocking thread. `forced` makes
+/// the scanner bypass the incremental cache (used by `rebuild_metadata`).
+async fn run_scan(
+    app: AppHandle,
+    folder_id: i64,
+    state: State<'_, AppState>,
+    forced: bool,
+) -> Result<ScanStats, String> {
     // Snapshot the folder path and database path while the lock is held, then
     // release it before spawning the scan thread.
     let (root, db_path) = {
@@ -130,7 +154,11 @@ pub async fn scan_folder(
         (folder.path, db_path)
     };
 
-    let scanner = Scanner::with_default_extractor(db_path);
+    let scanner = if forced {
+        Scanner::with_forced_extractor(db_path)
+    } else {
+        Scanner::with_default_extractor(db_path)
+    };
     tauri::async_runtime::spawn_blocking(move || {
         scanner
             .scan_folder(folder_id, Path::new(&root), |progress| {

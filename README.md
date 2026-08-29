@@ -17,7 +17,7 @@ multiple AI platforms and file formats.
 ## Features
 
 ### Scanning & Indexing
-- Scan folders for images and videos, store and index prompts and other metadata (PNGInfo)
+- Scan folders for images and videos, store and index prompts and other metadata (PNGInfo, EXIF, .TXT sidecars)
 - Rebuild metadata on demand (re-scan and re-extract from existing files)
 - Folder-based organization with drag-and-drop file management
 
@@ -81,15 +81,15 @@ multiple AI platforms and file formats.
 The rewrite is delivered in feature-first milestones — each milestone produces
 a runnable slice of the application.
 
-| # | Milestone                    | Outcome                                   |
-|---|------------------------------|-------------------------------------------|
-| M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite |
-| M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage |
-| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting |
-| M4 | Search                       | Metadata search engine + visual search GUI |
-| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats |
-| M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore |
-| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers |
+| # | Milestone                    | Outcome                                   | Status  |
+|---|------------------------------|-------------------------------------------|---------|
+| M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite | ✅ |
+| M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage | ✅ |
+| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting | ⬜ |
+| M4 | Search                       | Metadata search engine + visual search GUI | ⬜ |
+| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ⬜ |
+| M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore | ⬜ |
+| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers | ⬜ |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed milestone breakdown,
 deliverables, and status tracking.
@@ -147,6 +147,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: 🟡 Active development (M1: Scaffolding & Foundation)
+**Project Status**: 🟡 Active development (M3: Browsing & Metadata View)
 **Current Branch**: `dev`
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29

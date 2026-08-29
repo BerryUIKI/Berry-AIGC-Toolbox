@@ -29,7 +29,7 @@ milestone; see the legend below.
 
 ---
 
-### M2: Scanning & Indexing — ⬜ Planned
+### M2: Scanning & Indexing — ✅ Complete
 
 **Goal**: Index images and extract metadata into the database.
 
@@ -129,4 +129,4 @@ milestone; see the legend below.
 
 ---
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29

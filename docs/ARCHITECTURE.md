@@ -42,7 +42,7 @@ A single Cargo workspace at the repository root (`Cargo.toml`). Run `cargo test`
 |---|---|---|
 | `berry-aigc-toolbox` (`src-tauri/`) | Tauri app shell: window setup, IPC commands, application state. **No business logic** — commands are thin adapters over the core crates. | berry-storage, berry-scan |
 | `berry-domain` | Pure domain types shared across crates: `ImageFile`, `Folder`, `Container`, `ExtractedMetadata`, `MetadataFormat`. Depends on nothing in this repo. | serde |
-| `berry-metadata` | Detecting and parsing generation metadata (PNGInfo, EXIF, `.txt` sidecars). Serves `detect_container` (magic-byte sniffing); per-format parsers land across M2. | berry-domain |
+| `berry-metadata` | Detecting and parsing generation metadata. `detect_container` sniffs a file's container from its magic bytes; `extract_metadata` dispatches on it — PNGInfo (`parameters` text chunks) for PNG, EXIF (`Software` tag + dimensions) for JPEG/WebP, with a sibling `.txt` sidecar as a fallback for both. | berry-domain, kamadak-exif |
 | `berry-scan` | Folder scanning orchestration: walks a directory, detects containers, extracts metadata, upserts rows in batches, and cleans up orphan rows. Opens its own DB connection per scan so it never blocks the shell's. | berry-domain, berry-metadata, berry-storage, walkdir |
 | `berry-storage` | SQLite connection + schema versioning. All schema changes go through the ordered `MIGRATIONS` list; there is no ad-hoc DDL. | berry-domain, rusqlite |
 
@@ -76,6 +76,13 @@ from a `#[tauri::command]`:
 The scanner opens its **own** SQLite connection to the same database file per
 scan (WAL allows concurrent readers), so a long scan does not block the shell's
 connection used by read commands.
+
+### Rebuild metadata
+
+`rebuild_metadata` runs the same scanner with extraction forced on: the
+incremental cache is bypassed, so every file is re-read and re-extracted even
+when its `(size, mtime)` is unchanged. Use it after a metadata-parser update so
+files indexed under an older extractor pick up the new fields.
 
 ## Schema versioning
 

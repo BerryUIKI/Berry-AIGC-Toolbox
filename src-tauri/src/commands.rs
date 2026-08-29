@@ -4,10 +4,11 @@
 //! crates, and serialize the result. Business logic lives in the `berry-*`
 //! crates, not here.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
-use berry_domain::{Folder, ImageFile};
+use berry_domain::{FileSortField, Folder, ImageFile, SortDirection};
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
 use serde::Serialize;
@@ -100,6 +101,49 @@ pub fn remove_folder(folder_id: i64, state: State<'_, AppState>) -> Result<(), S
 #[tauri::command]
 pub fn list_files(folder_id: i64, state: State<'_, AppState>) -> Result<Vec<ImageFile>, String> {
     db(&state)?.list_files(folder_id).map_err(|e| e.to_string())
+}
+
+/// Query indexed files with optional folder filtering and multi-criteria sorting.
+#[tauri::command]
+pub fn query_files(
+    folder_id: Option<i64>,
+    sort: Option<FileSortField>,
+    direction: Option<SortDirection>,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
+    let sort = sort.unwrap_or(FileSortField::ModifiedAt);
+    let direction = direction.unwrap_or(SortDirection::Desc);
+    db(&state)?
+        .query_files(folder_id, sort, direction)
+        .map_err(|e| e.to_string())
+}
+
+/// Update user rating (1–10, or null to clear) for an image file.
+#[tauri::command]
+pub fn set_file_rating(
+    file_id: i64,
+    rating: Option<u8>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    db(&state)?
+        .set_file_rating(file_id, rating)
+        .map_err(|e| e.to_string())
+}
+
+/// Aggregated file counts across the library and per folder.
+#[derive(Serialize)]
+pub struct LibraryCounts {
+    pub total: i64,
+    pub folders: HashMap<i64, i64>,
+}
+
+/// Get file counts per folder plus total indexed files across all folders.
+#[tauri::command]
+pub fn get_library_counts(state: State<'_, AppState>) -> Result<LibraryCounts, String> {
+    let db = db(&state)?;
+    let total = db.count_all_files().map_err(|e| e.to_string())?;
+    let folders = db.get_folder_file_counts().map_err(|e| e.to_string())?;
+    Ok(LibraryCounts { total, folders })
 }
 
 /// Scan a folder on a blocking thread, emitting `scan-progress` events as it

@@ -31,6 +31,20 @@ export interface ExtractedMetadata {
   model_hash: string | null;
 }
 
+export type FileSortField =
+  | "modified_at"
+  | "path"
+  | "size_bytes"
+  | "rating"
+  | "aesthetic_score";
+
+export type SortDirection = "asc" | "desc";
+
+export interface LibraryCounts {
+  total: number;
+  folders: Record<number, number>;
+}
+
 export interface ImageFile {
   id: number | null;
   folder_id: number;
@@ -39,7 +53,10 @@ export interface ImageFile {
   modified_at: number;
   container: Container;
   metadata: ExtractedMetadata | null;
+  rating?: number | null;
+  aesthetic_score?: number | null;
 }
+
 
 export interface ScanProgress {
   folder_id: number;

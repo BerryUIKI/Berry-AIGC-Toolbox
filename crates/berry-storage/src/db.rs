@@ -1,8 +1,9 @@
 //! SQLite database connection and migration runner.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use berry_domain::{Container, ExtractedMetadata, Folder, ImageFile};
+use berry_domain::{Container, ExtractedMetadata, FileSortField, Folder, ImageFile, SortDirection};
 use rusqlite::{params, Connection, OpenFlags};
 
 use crate::migrations::{LATEST_VERSION, MIGRATIONS};
@@ -18,6 +19,10 @@ pub enum DatabaseError {
     UnknownContainer(String),
     #[error("no folder with id {0}")]
     FolderNotFound(i64),
+    #[error("no file with id {0}")]
+    FileNotFound(i64),
+    #[error("rating must be between 1 and 10, got {0}")]
+    InvalidRating(u8),
     #[error("failed to open database at {path}: {source}")]
     Open {
         path: PathBuf,
@@ -28,14 +33,16 @@ pub enum DatabaseError {
 
 /// SQL that inserts or updates a file row keyed by its unique path.
 const UPSERT_FILE_SQL: &str =
-    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
      ON CONFLICT(path) DO UPDATE SET
-         folder_id   = excluded.folder_id,
-         container   = excluded.container,
-         size_bytes  = excluded.size_bytes,
-         modified_at = excluded.modified_at,
-         metadata    = excluded.metadata";
+         folder_id       = excluded.folder_id,
+         container       = excluded.container,
+         size_bytes      = excluded.size_bytes,
+         modified_at     = excluded.modified_at,
+         metadata        = excluded.metadata,
+         rating          = coalesce(excluded.rating, files.rating),
+         aesthetic_score = coalesce(excluded.aesthetic_score, files.aesthetic_score)";
 
 /// A SQLite database with a fully migrated schema.
 pub struct Database {
@@ -214,6 +221,8 @@ impl Database {
                 file.size_bytes as i64,
                 file.modified_at,
                 metadata,
+                file.rating.map(|r| r as i64),
+                file.aesthetic_score,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -246,6 +255,8 @@ impl Database {
                     file.size_bytes as i64,
                     file.modified_at,
                     metadata,
+                    file.rating.map(|r| r as i64),
+                    file.aesthetic_score,
                 ])?;
                 count += 1;
             }
@@ -274,33 +285,52 @@ impl Database {
         Ok(affected as u64)
     }
 
-    /// Files of a folder, ordered by path, with `metadata` deserialized.
-    pub fn list_files(&self, folder_id: i64) -> Result<Vec<ImageFile>, DatabaseError> {
-        let mut stmt = self.conn.prepare_cached(
-            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata
-             FROM files WHERE folder_id = ?1 ORDER BY path",
-        )?;
-        let rows = stmt.query_map([folder_id], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, i64>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, i64>(4)?,
-                row.get::<_, i64>(5)?,
-                row.get::<_, Option<String>>(6)?,
-            ))
-        })?;
+    /// Query files with optional folder filtering and multi-criteria sorting.
+    pub fn query_files(
+        &self,
+        folder_id: Option<i64>,
+        sort: FileSortField,
+        direction: SortDirection,
+    ) -> Result<Vec<ImageFile>, DatabaseError> {
+        let order_clause = match (sort, direction) {
+            (FileSortField::ModifiedAt, SortDirection::Asc) => "modified_at ASC, id ASC",
+            (FileSortField::ModifiedAt, SortDirection::Desc) => "modified_at DESC, id DESC",
+            (FileSortField::Path, SortDirection::Asc) => "path ASC",
+            (FileSortField::Path, SortDirection::Desc) => "path DESC",
+            (FileSortField::SizeBytes, SortDirection::Asc) => "size_bytes ASC, id ASC",
+            (FileSortField::SizeBytes, SortDirection::Desc) => "size_bytes DESC, id DESC",
+            (FileSortField::Rating, SortDirection::Asc) => {
+                "rating ASC NULLS LAST, modified_at DESC, id DESC"
+            }
+            (FileSortField::Rating, SortDirection::Desc) => {
+                "rating DESC NULLS LAST, modified_at DESC, id DESC"
+            }
+            (FileSortField::AestheticScore, SortDirection::Asc) => {
+                "aesthetic_score ASC NULLS LAST, modified_at DESC, id DESC"
+            }
+            (FileSortField::AestheticScore, SortDirection::Desc) => {
+                "aesthetic_score DESC NULLS LAST, modified_at DESC, id DESC"
+            }
+        };
 
-        let mut files = Vec::new();
-        for row in rows {
-            let (id, folder_id, path, container, size_bytes, modified_at, metadata) = row?;
-            let container = Container::from_id(&container)
-                .ok_or_else(|| DatabaseError::UnknownContainer(container))?;
+        let map_row = |row: &rusqlite::Row<'_>| -> Result<ImageFile, DatabaseError> {
+            let id: i64 = row.get(0)?;
+            let folder_id: i64 = row.get(1)?;
+            let path: String = row.get(2)?;
+            let container_id: String = row.get(3)?;
+            let size_bytes: i64 = row.get(4)?;
+            let modified_at: i64 = row.get(5)?;
+            let metadata: Option<String> = row.get(6)?;
+            let rating: Option<i64> = row.get(7)?;
+            let aesthetic_score: Option<f64> = row.get(8)?;
+
+            let container = Container::from_id(&container_id)
+                .ok_or_else(|| DatabaseError::UnknownContainer(container_id))?;
             let metadata = metadata
                 .map(|json| serde_json::from_str::<ExtractedMetadata>(&json))
                 .transpose()?;
-            files.push(ImageFile {
+
+            Ok(ImageFile {
                 id: Some(id),
                 folder_id,
                 path,
@@ -308,9 +338,56 @@ impl Database {
                 modified_at,
                 container,
                 metadata,
-            });
+                rating: rating.map(|r| r as u8),
+                aesthetic_score,
+            })
+        };
+
+        let mut files = Vec::new();
+        if let Some(fid) = folder_id {
+            let sql = format!(
+                "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
+                 FROM files WHERE folder_id = ?1 ORDER BY {order_clause}"
+            );
+            let mut stmt = self.conn.prepare_cached(&sql)?;
+            let rows = stmt.query_and_then([fid], map_row)?;
+            for file in rows {
+                files.push(file?);
+            }
+        } else {
+            let sql = format!(
+                "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
+                 FROM files ORDER BY {order_clause}"
+            );
+            let mut stmt = self.conn.prepare_cached(&sql)?;
+            let rows = stmt.query_and_then([], map_row)?;
+            for file in rows {
+                files.push(file?);
+            }
         }
         Ok(files)
+    }
+
+    /// Files of a folder, ordered by path, with `metadata` deserialized.
+    pub fn list_files(&self, folder_id: i64) -> Result<Vec<ImageFile>, DatabaseError> {
+        self.query_files(Some(folder_id), FileSortField::Path, SortDirection::Asc)
+    }
+
+    /// Update user rating (1–10, or None to clear) for an image file.
+    pub fn set_file_rating(&self, file_id: i64, rating: Option<u8>) -> Result<(), DatabaseError> {
+        if let Some(r) = rating {
+            if !(1..=10).contains(&r) {
+                return Err(DatabaseError::InvalidRating(r));
+            }
+        }
+        let affected = self.conn.execute(
+            "UPDATE files SET rating = ?1 WHERE id = ?2",
+            params![rating.map(|r| r as i64), file_id],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(file_id));
+        }
+        Ok(())
     }
 
     /// Number of indexed files in a folder.
@@ -321,6 +398,28 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(count)
+    }
+
+    /// Total number of indexed files across all folders.
+    pub fn count_all_files(&self) -> Result<i64, DatabaseError> {
+        let count = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
+        Ok(count)
+    }
+
+    /// Counts of indexed files per folder.
+    pub fn get_folder_file_counts(&self) -> Result<HashMap<i64, i64>, DatabaseError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT folder_id, COUNT(*) FROM files GROUP BY folder_id")?;
+        let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)))?;
+        let mut counts = HashMap::new();
+        for row in rows {
+            let (folder_id, count) = row?;
+            counts.insert(folder_id, count);
+        }
+        Ok(counts)
     }
 }
 
@@ -382,6 +481,8 @@ mod tests {
             modified_at: 1,
             container: Container::Png,
             metadata: None,
+            rating: None,
+            aesthetic_score: None,
         }
     }
 
@@ -515,5 +616,134 @@ mod tests {
         let files = db.list_files(folder.id).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].path, "/img/a.png");
+    }
+
+    #[test]
+    fn query_files_sorts_and_filters() {
+        let db = Database::connect_in_memory().unwrap();
+        let f1 = db.add_folder("/folder1").unwrap();
+        let f2 = db.add_folder("/folder2").unwrap();
+
+        let mut f1_a = image(f1.id, "/folder1/a.png");
+        f1_a.modified_at = 100;
+        f1_a.size_bytes = 500;
+        f1_a.rating = Some(8);
+        f1_a.aesthetic_score = Some(7.5);
+
+        let mut f1_b = image(f1.id, "/folder1/b.png");
+        f1_b.modified_at = 200;
+        f1_b.size_bytes = 300;
+        f1_b.rating = Some(9);
+        f1_b.aesthetic_score = None;
+
+        let mut f2_c = image(f2.id, "/folder2/c.png");
+        f2_c.modified_at = 150;
+        f2_c.size_bytes = 800;
+        f2_c.rating = None;
+        f2_c.aesthetic_score = Some(8.2);
+
+        db.upsert_files(&[f1_a, f1_b, f2_c]).unwrap();
+
+        // 1. Filter by folder
+        let folder1_files = db
+            .query_files(Some(f1.id), FileSortField::Path, SortDirection::Asc)
+            .unwrap();
+        assert_eq!(folder1_files.len(), 2);
+        assert_eq!(folder1_files[0].path, "/folder1/a.png");
+        assert_eq!(folder1_files[1].path, "/folder1/b.png");
+
+        // 2. All folders (folder_id: None), sorted by modified_at DESC
+        let all_by_date_desc = db
+            .query_files(None, FileSortField::ModifiedAt, SortDirection::Desc)
+            .unwrap();
+        assert_eq!(all_by_date_desc.len(), 3);
+        assert_eq!(all_by_date_desc[0].path, "/folder1/b.png"); // 200
+        assert_eq!(all_by_date_desc[1].path, "/folder2/c.png"); // 150
+        assert_eq!(all_by_date_desc[2].path, "/folder1/a.png"); // 100
+
+        // 3. Sorted by size ASC
+        let all_by_size = db
+            .query_files(None, FileSortField::SizeBytes, SortDirection::Asc)
+            .unwrap();
+        assert_eq!(all_by_size[0].path, "/folder1/b.png"); // 300
+        assert_eq!(all_by_size[1].path, "/folder1/a.png"); // 500
+        assert_eq!(all_by_size[2].path, "/folder2/c.png"); // 800
+
+        // 4. Sorted by rating DESC (NULLs last)
+        let all_by_rating = db
+            .query_files(None, FileSortField::Rating, SortDirection::Desc)
+            .unwrap();
+        assert_eq!(all_by_rating[0].path, "/folder1/b.png"); // rating 9
+        assert_eq!(all_by_rating[1].path, "/folder1/a.png"); // rating 8
+        assert_eq!(all_by_rating[2].path, "/folder2/c.png"); // rating None (nulls last)
+
+        // 5. Sorted by aesthetic_score DESC (NULLs last)
+        let all_by_aesthetic = db
+            .query_files(None, FileSortField::AestheticScore, SortDirection::Desc)
+            .unwrap();
+        assert_eq!(all_by_aesthetic[0].path, "/folder2/c.png"); // 8.2
+        assert_eq!(all_by_aesthetic[1].path, "/folder1/a.png"); // 7.5
+        assert_eq!(all_by_aesthetic[2].path, "/folder1/b.png"); // None (nulls last)
+    }
+
+    #[test]
+    fn rating_updates_and_preservation_on_reupsert() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let id = db.upsert_file(&image(folder.id, "/img/a.png")).unwrap();
+
+        // Initially no rating
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, None);
+
+        // Set valid rating
+        db.set_file_rating(id, Some(7)).unwrap();
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, Some(7));
+
+        // Invalid rating rejected
+        assert!(matches!(
+            db.set_file_rating(id, Some(0)),
+            Err(DatabaseError::InvalidRating(0))
+        ));
+        assert!(matches!(
+            db.set_file_rating(id, Some(11)),
+            Err(DatabaseError::InvalidRating(11))
+        ));
+
+        // Setting rating on nonexistent file returns error
+        assert!(matches!(
+            db.set_file_rating(999, Some(5)),
+            Err(DatabaseError::FileNotFound(999))
+        ));
+
+        // Re-scanning (upserting without rating) preserves the previously set rating
+        let re_scan_file = image(folder.id, "/img/a.png"); // has rating: None
+        db.upsert_file(&re_scan_file).unwrap();
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, Some(7), "re-upsert preserves user rating");
+
+        // Clearing rating with None works
+        db.set_file_rating(id, None).unwrap();
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, None);
+    }
+
+    #[test]
+    fn file_counts_per_folder_and_total() {
+        let db = Database::connect_in_memory().unwrap();
+        let f1 = db.add_folder("/f1").unwrap();
+        let f2 = db.add_folder("/f2").unwrap();
+
+        assert_eq!(db.count_all_files().unwrap(), 0);
+
+        db.upsert_file(&image(f1.id, "/f1/1.png")).unwrap();
+        db.upsert_file(&image(f1.id, "/f1/2.png")).unwrap();
+        db.upsert_file(&image(f2.id, "/f2/1.png")).unwrap();
+
+        assert_eq!(db.count_all_files().unwrap(), 3);
+        let counts = db.get_folder_file_counts().unwrap();
+        assert_eq!(counts.get(&f1.id), Some(&2));
+        assert_eq!(counts.get(&f2.id), Some(&1));
     }
 }

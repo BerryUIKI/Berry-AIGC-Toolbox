@@ -82,6 +82,36 @@ pub struct ImageFile {
     pub container: Container,
     /// Extracted generation metadata, `None` until extraction runs.
     pub metadata: Option<crate::ExtractedMetadata>,
+    /// User rating from 1 to 10, if set.
+    pub rating: Option<u8>,
+    /// Calculated or extracted aesthetic score, if available.
+    pub aesthetic_score: Option<f64>,
+}
+
+/// Field by which to sort a list of [`ImageFile`]s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileSortField {
+    /// Filesystem modification timestamp (`modified_at`).
+    ModifiedAt,
+    /// Absolute file path (`path`).
+    Path,
+    /// File size in bytes (`size_bytes`).
+    SizeBytes,
+    /// User rating (`rating`).
+    Rating,
+    /// Aesthetic score (`aesthetic_score`).
+    AestheticScore,
+}
+
+/// Direction of sorting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortDirection {
+    /// Ascending (low to high, oldest to newest, A-Z).
+    Asc,
+    /// Descending (high to low, newest to oldest, Z-A).
+    Desc,
 }
 
 #[cfg(test)]
@@ -127,5 +157,18 @@ mod tests {
     fn ids_are_also_extensions() {
         assert_eq!(Container::Jpeg.id(), "jpg");
         assert_eq!(Container::Jpeg.extension(), "jpg");
+    }
+
+    #[test]
+    fn sort_enums_serde_roundtrip() {
+        let field_json = serde_json::to_string(&FileSortField::AestheticScore).unwrap();
+        assert_eq!(field_json, "\"aesthetic_score\"");
+        let back_field: FileSortField = serde_json::from_str(&field_json).unwrap();
+        assert_eq!(back_field, FileSortField::AestheticScore);
+
+        let dir_json = serde_json::to_string(&SortDirection::Desc).unwrap();
+        assert_eq!(dir_json, "\"desc\"");
+        let back_dir: SortDirection = serde_json::from_str(&dir_json).unwrap();
+        assert_eq!(back_dir, SortDirection::Desc);
     }
 }

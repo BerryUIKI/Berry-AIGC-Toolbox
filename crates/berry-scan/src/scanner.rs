@@ -246,6 +246,8 @@ impl Scanner {
                 modified_at: file.modified_at,
                 container,
                 metadata,
+                rating: None,
+                aesthetic_score: None,
             });
 
             if cache.is_some() {

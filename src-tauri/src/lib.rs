@@ -29,6 +29,9 @@ pub fn run() {
             commands::list_folders,
             commands::remove_folder,
             commands::list_files,
+            commands::query_files,
+            commands::set_file_rating,
+            commands::get_library_counts,
             commands::scan_folder,
             commands::rebuild_metadata,
         ])

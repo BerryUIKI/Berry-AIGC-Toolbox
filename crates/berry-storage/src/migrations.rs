@@ -35,6 +35,15 @@ pub const MIGRATIONS: &[&str] = &[
 
     CREATE INDEX idx_files_folder ON files(folder_id);
     "#,
+    // v3: ratings, aesthetics score, and browsing indexes.
+    r#"
+    ALTER TABLE files ADD COLUMN rating INTEGER;
+    ALTER TABLE files ADD COLUMN aesthetic_score REAL;
+
+    CREATE INDEX idx_files_modified ON files(modified_at);
+    CREATE INDEX idx_files_rating ON files(rating);
+    CREATE INDEX idx_files_aesthetic ON files(aesthetic_score);
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

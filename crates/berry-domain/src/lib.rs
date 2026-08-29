@@ -11,5 +11,5 @@ mod metadata_format;
 
 pub use extracted_metadata::ExtractedMetadata;
 pub use folder::Folder;
-pub use image_file::{Container, ImageFile};
+pub use image_file::{Container, FileSortField, ImageFile, SortDirection};
 pub use metadata_format::MetadataFormat;

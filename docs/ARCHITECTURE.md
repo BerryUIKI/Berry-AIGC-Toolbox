@@ -15,16 +15,22 @@ persistence, and SQLite as the metadata store.
 │  lib.rs, commands.rs         │   crates together, exposes IPC commands
 └──────────────┬───────────────┘
                │
-┌──────────────▼───────────────┐   ┌───────────────────────────────┐
-│  berry-domain                │   │  berry-metadata               │
-│  shared domain types         │──▶│  format detection & parsing   │
-│  (ImageFile, MetadataFormat) │   │  (full parsers land in M2)    │
-└──────────────┬───────────────┘   └───────────────────────────────┘
-               │
 ┌──────────────▼───────────────┐
-│  berry-storage               │   SQLite persistence: schema
-│  Database, migrations        │   versioning via PRAGMA user_version
-└──────────────────────────────┘
+│  berry-scan                  │   Scanner: walk folder → detect container
+│  Scanner, ScanStats          │   → extract metadata → persist rows
+└───┬──────────────┬───────────┘
+    │              │
+┌───▼────────────┐ │ ┌───────────────────────────┐
+│  berry-domain  │ │ │  berry-metadata           │
+│  shared types  │◀┘ │  format detection & parse │
+│  (ImageFile,   │    │  (PNGInfo/EXIF/sidecar)  │
+│   MetadataFormat)   └───────────────────────────┘
+└───┬────────────┘
+    │
+┌───▼────────────┐
+│  berry-storage │   SQLite persistence: schema
+│  Database      │   versioning via PRAGMA user_version
+└────────────────┘
 ```
 
 ## Crate layout
@@ -34,9 +40,10 @@ A single Cargo workspace at the repository root (`Cargo.toml`). Run `cargo test`
 
 | Crate | Responsibility | Depends on |
 |---|---|---|
-| `berry-aigc-toolbox` (`src-tauri/`) | Tauri app shell: window setup, IPC commands, application state. **No business logic** — commands are thin adapters over the core crates. | berry-storage |
-| `berry-domain` | Pure domain types shared across crates: `ImageFile`, `Container`, `MetadataFormat`. Depends on nothing in this repo. | serde |
-| `berry-metadata` | Detecting and parsing generation metadata (PNGInfo, EXIF, `.txt` sidecars). M1 ships `detect_container` (magic-byte sniffing); per-format parsers arrive in M2. | berry-domain |
+| `berry-aigc-toolbox` (`src-tauri/`) | Tauri app shell: window setup, IPC commands, application state. **No business logic** — commands are thin adapters over the core crates. | berry-storage, berry-scan |
+| `berry-domain` | Pure domain types shared across crates: `ImageFile`, `Folder`, `Container`, `ExtractedMetadata`, `MetadataFormat`. Depends on nothing in this repo. | serde |
+| `berry-metadata` | Detecting and parsing generation metadata (PNGInfo, EXIF, `.txt` sidecars). Serves `detect_container` (magic-byte sniffing); per-format parsers land across M2. | berry-domain |
+| `berry-scan` | Folder scanning orchestration: walks a directory, detects containers, extracts metadata, upserts rows in batches, and cleans up orphan rows. Opens its own DB connection per scan so it never blocks the shell's. | berry-domain, berry-metadata, berry-storage, walkdir |
 | `berry-storage` | SQLite connection + schema versioning. All schema changes go through the ordered `MIGRATIONS` list; there is no ad-hoc DDL. | berry-domain, rusqlite |
 
 ## Data flow
@@ -48,6 +55,27 @@ A single Cargo workspace at the repository root (`Cargo.toml`). Run `cargo test`
 3. Long-lived resources (the SQLite `Database`) live in Tauri-managed state
    (`AppState` in `src-tauri/src/lib.rs`), opened once during `.setup()` in the
    OS app-data directory.
+
+## Scanning
+
+A scan (`berry-scan::Scanner`) is a single unit of work the app shell can call
+from a `#[tauri::command]`:
+
+1. Recursively walk the folder (`walkdir`), skipping hidden directories, and
+   keep files with a supported media extension (`.png/.jpg/.jpeg/.webp/.mp4`).
+2. For each file, compare `(size, modified_at)` against the stored row — if
+   unchanged (and already extracted when an extractor is installed) it is
+   skipped as part of the **incremental scan**.
+3. Otherwise detect the container from magic bytes (falling back to the
+   extension), run the metadata extractor, and upsert the row.
+4. Upserts are batched (one transaction per 256 files); progress is reported
+   through an `on_progress` callback that the shell forwards as Tauri events.
+5. Finally, rows for files that disappeared from disk are deleted
+   (`delete_files_not_in`).
+
+The scanner opens its **own** SQLite connection to the same database file per
+scan (WAL allows concurrent readers), so a long scan does not block the shell's
+connection used by read commands.
 
 ## Schema versioning
 

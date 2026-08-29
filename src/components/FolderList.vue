@@ -16,7 +16,9 @@ const emit = defineEmits<{
 }>();
 
 const selectedId = ref<number | null>(null);
-const scanningId = ref<number | null>(null);
+/** The folder currently being scanned, and whether it is a full scan or a
+ * metadata rebuild. Only one scan runs at a time. */
+const running = ref<{ id: number; action: "scan" | "rebuild" } | null>(null);
 const stats = ref<ScanStats | null>(null);
 const error = ref("");
 
@@ -25,21 +27,24 @@ function displayPath(path: string): string {
   return path.replace(/^\\\\\?\\/, "");
 }
 
-function isScanning(id: number): boolean {
-  return scanningId.value === id;
+function isBusy(id: number): boolean {
+  return running.value?.id === id;
 }
 
-async function scan(folder: Folder) {
+async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
   error.value = "";
   stats.value = null;
-  scanningId.value = folder.id;
+  running.value = { id: folder.id, action };
   try {
-    stats.value = await invoke<ScanStats>("scan_folder", { folderId: folder.id });
+    stats.value = await invoke<ScanStats>(
+      action === "rebuild" ? "rebuild_metadata" : "scan_folder",
+      { folderId: folder.id },
+    );
     emit("scanned", folder.id);
   } catch (e) {
     error.value = String(e);
   } finally {
-    scanningId.value = null;
+    running.value = null;
   }
 }
 
@@ -79,13 +84,24 @@ const progressPercent = computed(() => {
       >
         <div class="path">
           <span class="name">{{ displayPath(folder.path) }}</span>
-          <button class="ghost scan" :disabled="isScanning(folder.id)" @click.stop="scan(folder)">
-            {{ isScanning(folder.id) ? "Scanning…" : "Scan" }}
+          <button
+            class="ghost scan"
+            :disabled="isBusy(folder.id)"
+            @click.stop="scan(folder, 'scan')"
+          >
+            {{ running?.id === folder.id && running?.action === "scan" ? "Scanning…" : "Scan" }}
+          </button>
+          <button
+            class="ghost rebuild"
+            :disabled="isBusy(folder.id)"
+            @click.stop="scan(folder, 'rebuild')"
+          >
+            {{ running?.id === folder.id && running?.action === "rebuild" ? "Rebuilding…" : "Rebuild" }}
           </button>
           <button class="ghost remove" @click.stop="remove(folder)">×</button>
         </div>
 
-        <div v-if="isScanning(folder.id) && props.progress && props.progress.found > 0" class="bar">
+        <div v-if="isBusy(folder.id) && props.progress && props.progress.found > 0" class="bar">
           <div class="fill" :style="{ width: progressPercent + '%' }"></div>
           <span class="bar-label">
             {{ props.progress.scanned }} / {{ props.progress.found }}
@@ -93,7 +109,7 @@ const progressPercent = computed(() => {
           </span>
         </div>
 
-        <p v-if="folder.id === scanningId && stats" class="stats">
+        <p v-if="folder.id === running?.id && stats" class="stats">
           +{{ stats.added }} added · {{ stats.updated }} updated ·
           {{ stats.unchanged }} unchanged · {{ stats.removed }} removed ·
           {{ stats.failed }} failed · {{ stats.duration_ms }} ms
@@ -164,6 +180,10 @@ button.ghost:disabled {
 
 button.remove {
   color: #d33;
+}
+
+button.rebuild {
+  color: #2f6fed;
 }
 
 .bar {

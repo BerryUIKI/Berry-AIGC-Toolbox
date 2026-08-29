@@ -54,7 +54,8 @@ A single Cargo workspace (`Cargo.toml`) — run cargo commands from the root.
 |---|---|---|
 | `berry-aigc-toolbox` (`src-tauri/`) | Tauri shell: window setup, IPC commands, `AppState` | Thin adapters only — **no business logic** |
 | `berry-domain` | `ImageFile`, `Container`, `MetadataFormat` | Depends on nothing in-repo |
-| `berry-metadata` | `detect_container` (magic bytes) now; per-format parsers in M2 | Depends on domain |
+| `berry-metadata` | `detect_container` (magic bytes), `extract_metadata` dispatch: PNGInfo (`parameters` chunk), EXIF (`Software` tag + dimensions), `.txt` sidecar fallback | Depends on domain + kamadak-exif |
+| `berry-scan` | `Scanner`: walk → detect container → extract → batch upsert → orphan cleanup; incremental (size, mtime) skip + forced rebuild | Depends on domain + metadata + storage |
 | `berry-storage` | `Database`, ordered `MIGRATIONS` | Depends on domain + rusqlite(bundled) |
 
 **Data flow:** the frontend calls `invoke("get_app_info", …)`; the command locks

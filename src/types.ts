@@ -1,0 +1,60 @@
+// TypeScript mirrors of the serde types returned by the Tauri commands.
+// Field names stay snake_case, matching Rust's serde defaults.
+
+export interface AppInfo {
+  app_version: string;
+  schema_version: number;
+  database_path: string;
+}
+
+export interface Folder {
+  id: number;
+  path: string;
+  added_at: string;
+}
+
+export type Container = "png" | "jpg" | "webp" | "mp4" | "txt";
+
+export interface ExtractedMetadata {
+  format: string;
+  parameters: string | null;
+  raw: string | null;
+  prompt: string | null;
+  negative_prompt: string | null;
+  width: number | null;
+  height: number | null;
+  seed: string | null;
+  steps: number | null;
+  cfg_scale: number | null;
+  sampler: string | null;
+  model_name: string | null;
+  model_hash: string | null;
+}
+
+export interface ImageFile {
+  id: number | null;
+  folder_id: number;
+  path: string;
+  size_bytes: number;
+  modified_at: number;
+  container: Container;
+  metadata: ExtractedMetadata | null;
+}
+
+export interface ScanProgress {
+  folder_id: number;
+  scanned: number;
+  found: number;
+  current: string | null;
+}
+
+export interface ScanStats {
+  folder_id: number;
+  found: number;
+  added: number;
+  updated: number;
+  unchanged: number;
+  removed: number;
+  failed: number;
+  duration_ms: number;
+}

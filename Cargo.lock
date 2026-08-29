@@ -121,11 +121,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "berry-scan"
+version = "0.1.0"
+dependencies = [
+ "berry-domain",
+ "berry-metadata",
+ "berry-storage",
+ "serde",
+ "thiserror 2.0.20",
+ "walkdir",
+]
+
+[[package]]
 name = "berry-storage"
 version = "0.1.0"
 dependencies = [
  "berry-domain",
  "rusqlite",
+ "serde_json",
  "thiserror 2.0.20",
 ]
 

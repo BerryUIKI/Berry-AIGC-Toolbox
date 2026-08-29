@@ -107,6 +107,14 @@ impl Scanner {
         }
     }
 
+    /// A scanner using [`berry_metadata::extract_metadata`] as the extractor.
+    ///
+    /// This is the production configuration: PNGInfo is extracted now, and the
+    /// extractor grows EXIF / sidecar support as `berry-metadata` does.
+    pub fn with_default_extractor(db_path: PathBuf) -> Self {
+        Self::with_extractor(db_path, berry_metadata::extract_metadata)
+    }
+
     /// A scanner that runs `extractor` on each file to fill in `metadata`.
     ///
     /// Metadata extraction lives in `berry-metadata`; the app shell composes
@@ -358,6 +366,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use berry_domain::MetadataFormat;
 
     struct TestEnv {
         dir: PathBuf,
@@ -388,6 +397,25 @@ mod tests {
             content,
         ]
         .concat()
+    }
+
+    /// Build a PNG chunk (the walker does not validate CRC, so zeros are fine).
+    fn chunk(chunk_type: &[u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut out = (data.len() as u32).to_be_bytes().to_vec();
+        out.extend_from_slice(chunk_type);
+        out.extend_from_slice(data);
+        out.extend_from_slice(&[0, 0, 0, 0]);
+        out
+    }
+
+    /// A minimal PNG carrying an A1111 `parameters` tEXt chunk.
+    fn a1111_png(parameters: &str) -> Vec<u8> {
+        let ihdr = chunk(b"IHDR", &[0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0]);
+        let mut tex_data = b"parameters\x00".to_vec();
+        tex_data.extend_from_slice(parameters.as_bytes());
+        let tex = chunk(b"tEXt", &tex_data);
+        let iend = chunk(b"IEND", &[]);
+        png(&[ihdr, tex, iend].concat())
     }
 
     fn jpg(content: &[u8]) -> Vec<u8> {
@@ -576,6 +604,108 @@ mod tests {
             .unwrap();
         assert_eq!(max_scanned, 3);
         assert_eq!(last_seen, 3);
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
+
+    #[test]
+    fn scan_extracts_png_parameters() {
+        let env = setup("extract");
+        write(
+            &env.images.join("a.png"),
+            &a1111_png(
+                "a cat on a couch\nNegative prompt: blurry\nSteps: 20, Sampler: Euler a, \
+                 CFG scale: 6, Seed: 42, Size: 512x768, Model hash: abc123, \
+                 Model: realisticVision.safetensors",
+            ),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files.len(), 1);
+        let meta = files[0].metadata.as_ref().expect("metadata extracted");
+        assert_eq!(meta.format, MetadataFormat::A1111);
+        assert_eq!(meta.prompt.as_deref(), Some("a cat on a couch"));
+        assert_eq!(meta.negative_prompt.as_deref(), Some("blurry"));
+        assert_eq!(meta.steps, Some(20));
+        assert_eq!(meta.seed.as_deref(), Some("42"));
+        assert_eq!(meta.width, Some(512));
+        assert_eq!(meta.height, Some(768));
+        assert_eq!(meta.sampler.as_deref(), Some("Euler a"));
+        assert_eq!(meta.cfg_scale, Some(6.0));
+        assert_eq!(
+            meta.model_name.as_deref(),
+            Some("realisticVision.safetensors")
+        );
+        assert_eq!(meta.model_hash.as_deref(), Some("abc123"));
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
+
+    #[test]
+    fn scan_with_extractor_backfills_missing_metadata() {
+        let env = setup("backfill");
+        write(
+            &env.images.join("a.png"),
+            &a1111_png("a robot\nSteps: 5, Sampler: Euler, Size: 512x512"),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        // First scan without extraction leaves metadata empty.
+        Scanner::new(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let before = db.list_files(folder.id).unwrap();
+        assert!(before[0].metadata.is_none());
+
+        // A second scan with extraction fills metadata in even though the file
+        // (size, mtime) is unchanged.
+        let stats = Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        assert_eq!(stats.updated, 1);
+        assert_eq!(stats.unchanged, 0);
+
+        let after = db.list_files(folder.id).unwrap();
+        let meta = after[0].metadata.as_ref().expect("metadata backfilled");
+        assert_eq!(meta.prompt.as_deref(), Some("a robot"));
+        assert_eq!(meta.steps, Some(5));
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
+
+    #[test]
+    fn scan_with_extractor_skips_files_that_have_metadata() {
+        let env = setup("reskip");
+        write(
+            &env.images.join("a.png"),
+            &a1111_png("a robot\nSteps: 5, Sampler: Euler, Size: 512x512"),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+
+        // Unchanged files that already carry metadata are skipped entirely.
+        let stats = Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        assert_eq!(stats.unchanged, 1);
+        assert_eq!(stats.updated, 0);
 
         drop(db);
         std::fs::remove_dir_all(&env.dir).unwrap();

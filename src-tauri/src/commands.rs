@@ -130,7 +130,7 @@ pub async fn scan_folder(
         (folder.path, db_path)
     };
 
-    let scanner = Scanner::new(db_path);
+    let scanner = Scanner::with_default_extractor(db_path);
     tauri::async_runtime::spawn_blocking(move || {
         scanner
             .scan_folder(folder_id, Path::new(&root), |progress| {

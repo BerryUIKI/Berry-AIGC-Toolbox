@@ -248,6 +248,8 @@ impl Scanner {
                 metadata,
                 rating: None,
                 aesthetic_score: None,
+                is_favorite: false,
+                is_nsfw: false,
             });
 
             if cache.is_some() {

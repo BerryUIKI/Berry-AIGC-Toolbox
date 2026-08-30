@@ -78,6 +78,32 @@ pub fn parse_query(input: &str) -> SearchCriteria {
                         criteria.max_aesthetic = max;
                     }
                 }
+                "fav" | "favorite" => match val.to_ascii_lowercase().as_str() {
+                    "true" | "yes" | "1" => criteria.is_favorite = Some(true),
+                    "false" | "no" | "0" => criteria.is_favorite = Some(false),
+                    _ => {}
+                },
+                "nsfw" => match val.to_ascii_lowercase().as_str() {
+                    "true" | "yes" | "1" => criteria.is_nsfw = Some(true),
+                    "false" | "no" | "0" => criteria.is_nsfw = Some(false),
+                    _ => {}
+                },
+                "is" => match val.to_ascii_lowercase().as_str() {
+                    "fav" | "favorite" => criteria.is_favorite = Some(true),
+                    "nsfw" => criteria.is_nsfw = Some(true),
+                    "sfw" => criteria.is_nsfw = Some(false),
+                    _ => {}
+                },
+                "album" | "album_id" => {
+                    if let Ok(id) = val.parse::<i64>() {
+                        criteria.album_id = Some(id);
+                    }
+                }
+                "tag" | "tag_id" => {
+                    if let Ok(id) = val.parse::<i64>() {
+                        criteria.tag_id = Some(id);
+                    }
+                }
                 _ => {
                     // Unknown key: treat the whole token as a search term
                     bare_terms.push(token);
@@ -297,5 +323,21 @@ mod tests {
         assert_eq!(criteria.text, Some("anime girl".to_string()));
         assert_eq!(criteria.model_name, Some("SDXL".to_string()));
         assert_eq!(criteria.min_rating, Some(8));
+    }
+
+    #[test]
+    fn test_organization_tokens() {
+        let c1 = parse_query("fav:true nsfw:false album:42 tag:7");
+        assert_eq!(c1.is_favorite, Some(true));
+        assert_eq!(c1.is_nsfw, Some(false));
+        assert_eq!(c1.album_id, Some(42));
+        assert_eq!(c1.tag_id, Some(7));
+
+        let c2 = parse_query("is:fav is:nsfw");
+        assert_eq!(c2.is_favorite, Some(true));
+        assert_eq!(c2.is_nsfw, Some(true));
+
+        let c3 = parse_query("is:sfw");
+        assert_eq!(c3.is_nsfw, Some(false));
     }
 }

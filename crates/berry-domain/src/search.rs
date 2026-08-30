@@ -33,6 +33,14 @@ pub struct SearchCriteria {
     pub min_aesthetic: Option<f64>,
     /// Maximum aesthetic score.
     pub max_aesthetic: Option<f64>,
+    /// Filter by favorite status.
+    pub is_favorite: Option<bool>,
+    /// Filter by NSFW status.
+    pub is_nsfw: Option<bool>,
+    /// Optional album constraint. If set, only files belonging to this album are returned.
+    pub album_id: Option<i64>,
+    /// Optional tag constraint. If set, only files tagged with this tag are returned.
+    pub tag_id: Option<i64>,
     /// Optional folder constraint. If `None`, searches across all indexed folders.
     pub folder_id: Option<i64>,
     /// Field to sort results by. Defaults to `ModifiedAt`.
@@ -66,6 +74,10 @@ mod tests {
             max_rating: Some(10),
             min_aesthetic: Some(0.6),
             max_aesthetic: Some(0.95),
+            is_favorite: Some(true),
+            is_nsfw: Some(false),
+            album_id: Some(10),
+            tag_id: Some(5),
             folder_id: Some(42),
             sort: Some(FileSortField::Rating),
             direction: Some(SortDirection::Desc),

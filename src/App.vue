@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
@@ -9,6 +9,7 @@ import type {
   ImageFile,
   LibraryCounts,
   ScanProgress,
+  SearchCriteria,
   SortDirection,
 } from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
@@ -18,6 +19,8 @@ import VirtualGrid from "./components/VirtualGrid.vue";
 import SortBar from "./components/SortBar.vue";
 import PreviewPane from "./components/PreviewPane.vue";
 import SearchBar from "./components/SearchBar.vue";
+import FilterDrawer from "./components/FilterDrawer.vue";
+import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
@@ -25,6 +28,11 @@ const libraryCounts = ref<LibraryCounts | null>(null);
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
+const filterDrawerOpen = ref(false);
+const distinctModels = ref<string[]>([]);
+const distinctSamplers = ref<string[]>([]);
+const activeCriteria = ref<SearchCriteria>({});
+const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
 const previewingFile = ref<ImageFile | null>(null);
@@ -41,6 +49,7 @@ onMounted(async () => {
     info.value = await invoke<AppInfo>("get_app_info");
     await reloadFolders();
     await refreshCounts();
+    await reloadFiltersMeta();
     await loadFiles();
   } catch (e) {
     error.value = String(e);
@@ -67,9 +76,19 @@ async function refreshCounts() {
   }
 }
 
+async function reloadFiltersMeta() {
+  try {
+    distinctModels.value = await invoke<string[]>("list_distinct_models");
+    distinctSamplers.value = await invoke<string[]>("list_distinct_samplers");
+  } catch (e) {
+    console.error("Failed to load distinct models/samplers:", e);
+  }
+}
+
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
   void refreshCounts();
+  void reloadFiltersMeta();
   selectedFolder.value = folder;
   selectedFile.value = null;
   previewingFile.value = null;
@@ -79,6 +98,7 @@ function onFolderAdded(folder: Folder) {
 function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
   void refreshCounts();
+  void reloadFiltersMeta();
   if (selectedFolder.value?.id === folderId) {
     selectedFolder.value = null;
     selectedFile.value = null;
@@ -96,6 +116,7 @@ async function onFolderSelected(folder: Folder | null) {
 
 async function onFolderScanned(_folderId: number) {
   await refreshCounts();
+  await reloadFiltersMeta();
   await loadFiles();
 }
 
@@ -157,6 +178,20 @@ function onSearch(query: string) {
 }
 
 function onClearSearch() {
+  searchQuery.value = "";
+  activeCriteria.value = {};
+  void loadFiles();
+}
+
+function onApplyFilters(criteria: SearchCriteria) {
+  activeCriteria.value = criteria;
+  const q = criteriaToQuery(criteria);
+  searchQuery.value = q;
+  void loadFiles();
+}
+
+function onResetFilters() {
+  activeCriteria.value = {};
   searchQuery.value = "";
   void loadFiles();
 }
@@ -248,6 +283,18 @@ function onClearSearch() {
           @search="onSearch"
           @clear="onClearSearch"
         />
+        <button
+          type="button"
+          class="filter-toggle-btn"
+          :class="{ active: filterDrawerOpen || activeFilterCount > 0 }"
+          title="Open visual search filters"
+          @click="filterDrawerOpen = true"
+        >
+          <span>⚡ Filters</span>
+          <span v-if="activeFilterCount > 0" class="filter-count-badge">
+            {{ activeFilterCount }}
+          </span>
+        </button>
       </div>
 
       <div v-if="searchQuery.trim()" class="search-status-bar">
@@ -294,7 +341,6 @@ function onClearSearch() {
       </template>
     </section>
 
-    <!-- Full-screen Preview Modal with Inspector -->
     <PreviewPane
       v-if="previewingFile"
       :file="previewingFile"
@@ -302,6 +348,16 @@ function onClearSearch() {
       @close="previewingFile = null"
       @navigate="onPreviewNavigate"
       @rate="onFileRated"
+    />
+
+    <!-- Visual Search Builder / Filter Drawer -->
+    <FilterDrawer
+      v-model:open="filterDrawerOpen"
+      :models="distinctModels"
+      :samplers="distinctSamplers"
+      :initial-criteria="activeCriteria"
+      @apply="onApplyFilters"
+      @reset="onResetFilters"
     />
   </main>
 </template>
@@ -495,7 +551,57 @@ h1 {
 }
 
 .search-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
   margin-bottom: 0.75rem;
+}
+
+.filter-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.filter-toggle-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-color: rgba(128, 128, 128, 0.4);
+}
+
+.filter-toggle-btn.active {
+  background: rgba(47, 111, 237, 0.12);
+  border-color: #2f6fed;
+  color: #2f6fed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filter-toggle-btn.active {
+    background: rgba(47, 111, 237, 0.2);
+    color: #60a5fa;
+  }
+}
+
+.filter-count-badge {
+  background: #2f6fed;
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  line-height: 1.2;
 }
 
 .search-status-bar {

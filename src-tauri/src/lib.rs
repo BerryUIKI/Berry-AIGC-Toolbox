@@ -72,6 +72,10 @@ pub fn run() {
             commands::copy_files,
             commands::trash_files,
             commands::reveal_in_file_manager,
+            commands::vacuum_database,
+            commands::backup_database,
+            commands::get_database_stats,
+            commands::restore_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

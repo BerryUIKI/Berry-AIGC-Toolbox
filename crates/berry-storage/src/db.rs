@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use berry_domain::{
-    Album, CheckpointModelStat, Container, ExtractedMetadata, FileSortField, Folder, ImageFile,
-    ModelCacheEntry, PromptStat, SearchCriteria, SortDirection, Tag,
+    Album, CheckpointModelStat, Container, DatabaseStats, ExtractedMetadata, FileSortField, Folder,
+    ImageFile, ModelCacheEntry, PromptStat, SearchCriteria, SortDirection, Tag,
 };
 use rusqlite::{params, Connection, OpenFlags};
 
@@ -138,6 +138,67 @@ impl Database {
             Some(row) => Ok(Some(row.get(0)?)),
             None => Ok(None),
         }
+    }
+
+    /// Run SQLite VACUUM and PRAGMA optimize.
+    pub fn vacuum_database(&self) -> Result<(), DatabaseError> {
+        self.conn.execute("VACUUM", [])?;
+        self.conn.execute("PRAGMA optimize", [])?;
+        Ok(())
+    }
+
+    /// Point-in-time database backup using SQLite VACUUM INTO.
+    pub fn backup_database(&self, destination_path: &str) -> Result<(), DatabaseError> {
+        let dest = Path::new(destination_path);
+        if dest.exists() {
+            let _ = std::fs::remove_file(dest);
+        }
+        self.conn.execute("VACUUM INTO ?1", [destination_path])?;
+        Ok(())
+    }
+
+    /// Retrieve database storage and table statistics.
+    pub fn get_database_stats(&self) -> Result<DatabaseStats, DatabaseError> {
+        let file_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
+        let folder_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM folders", [], |row| row.get(0))?;
+        let album_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM albums", [], |row| row.get(0))?;
+        let tag_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))?;
+        let model_cache_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM model_cache", [], |row| row.get(0))
+            .unwrap_or(0);
+
+        let page_size: i64 = self
+            .conn
+            .query_row("PRAGMA page_size", [], |row| row.get(0))?;
+        let page_count: i64 = self
+            .conn
+            .query_row("PRAGMA page_count", [], |row| row.get(0))?;
+        let freelist_count: i64 = self
+            .conn
+            .query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+
+        let db_size_bytes = (page_count * page_size) as u64;
+
+        Ok(DatabaseStats {
+            file_count,
+            folder_count,
+            album_count,
+            tag_count,
+            model_cache_count,
+            db_size_bytes,
+            page_size,
+            page_count,
+            freelist_count,
+        })
     }
 
     // --- Folders ---
@@ -1991,5 +2052,38 @@ mod tests {
         // Delete file
         db.delete_file_by_path("/folder2/cat.png").unwrap();
         assert_eq!(db.get_file_by_path("/folder2/cat.png").unwrap(), None);
+    }
+
+    #[test]
+    fn database_stats_and_vacuum_backup() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db = Database::connect(&db_path).unwrap();
+
+        let f = db.add_folder("/test_folder").unwrap();
+        db.upsert_file(&image(f.id, "/test_folder/img1.png"))
+            .unwrap();
+        db.create_album("Test Album", None).unwrap();
+        db.create_tag("Tag1", None).unwrap();
+
+        let stats = db.get_database_stats().unwrap();
+        assert_eq!(stats.file_count, 1);
+        assert_eq!(stats.folder_count, 1);
+        assert_eq!(stats.album_count, 1);
+        assert_eq!(stats.tag_count, 1);
+        assert!(stats.db_size_bytes > 0);
+
+        // Test vacuum
+        db.vacuum_database().unwrap();
+
+        // Test backup
+        let backup_path = temp_dir.path().join("backup.db");
+        db.backup_database(&backup_path.to_string_lossy()).unwrap();
+        assert!(backup_path.exists());
+
+        // Verify backup database is a valid SQLite db
+        let backup_db = Database::connect(&backup_path).unwrap();
+        let backup_stats = backup_db.get_database_stats().unwrap();
+        assert_eq!(backup_stats.file_count, 1);
     }
 }

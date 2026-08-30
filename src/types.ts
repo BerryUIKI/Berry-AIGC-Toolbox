@@ -157,4 +157,16 @@ export interface ModelCacheEntry {
   sha256?: string | null;
 }
 
+export interface DatabaseStats {
+  file_count: number;
+  folder_count: number;
+  album_count: number;
+  tag_count: number;
+  model_cache_count: number;
+  db_size_bytes: number;
+  page_size: number;
+  page_count: number;
+  freelist_count: number;
+}
+
 

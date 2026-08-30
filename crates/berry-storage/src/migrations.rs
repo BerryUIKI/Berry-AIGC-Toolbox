@@ -44,6 +44,45 @@ pub const MIGRATIONS: &[&str] = &[
     CREATE INDEX idx_files_rating ON files(rating);
     CREATE INDEX idx_files_aesthetic ON files(aesthetic_score);
     "#,
+    // v4: albums, tags, favorites, and nsfw flag.
+    r#"
+    CREATE TABLE albums (
+        id          INTEGER PRIMARY KEY,
+        name        TEXT NOT NULL UNIQUE,
+        description TEXT,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ) STRICT;
+
+    CREATE TABLE album_files (
+        album_id    INTEGER NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
+        file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+        added_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+        PRIMARY KEY (album_id, file_id)
+    ) STRICT;
+
+    CREATE INDEX idx_album_files_file ON album_files(file_id);
+
+    CREATE TABLE tags (
+        id          INTEGER PRIMARY KEY,
+        name        TEXT NOT NULL UNIQUE,
+        color       TEXT,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ) STRICT;
+
+    CREATE TABLE file_tags (
+        file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+        tag_id      INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (file_id, tag_id)
+    ) STRICT;
+
+    CREATE INDEX idx_file_tags_tag ON file_tags(tag_id);
+
+    ALTER TABLE files ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE files ADD COLUMN is_nsfw INTEGER NOT NULL DEFAULT 0;
+
+    CREATE INDEX idx_files_favorite ON files(is_favorite);
+    CREATE INDEX idx_files_nsfw ON files(is_nsfw);
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

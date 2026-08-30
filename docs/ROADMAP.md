@@ -75,31 +75,32 @@ milestone; see the legend below.
 
 ---
 
-### M5: Organization — ⬜ Planned
+### M5: Organization — ✅ Complete
 
 **Goal**: Organize and curate the library.
 
 **Deliverables**:
-- Albums (add via context menu or drag-and-drop)
-- Custom tags
-- Favorites and ratings (1–10)
-- NSFW: manual tagging, keyword auto-tagging, blur
-- Prompt / negative-prompt lists with usage statistics
+- Albums (custom collections, batch assignment, sidebar navigation)
+- Custom tags (color-coded chips, batch tagging, search filtering)
+- Favorites and ratings (1–10 stars) with batch actions
+- NSFW: manual tagging, blur overlay with click-to-reveal
+- Prompt / negative-prompt insights modal (`PromptStatsModal.vue`) with keyword frequencies and quick-search links
 
 **Legacy mapping**: albums, tags, favorites, ratings, NSFW (v1.x organization)
 
 ---
 
-### M6: Models & File Operations — ⬜ Planned
+### M6: Performance, Cache & Polish — ✅ Complete
 
-**Goal**: Manage models and file-level operations.
+**Goal**: Manage models, multi-format metadata parsers, file-level operations, database maintenance, and keyboard shortcuts.
 
 **Deliverables**:
-- Checkpoint filtering by name and hash
-- AUTOMATIC1111 cache.json integration (SHA256)
-- Drag-and-drop move/copy between folders
-- Database backup and restore
-- Remaining metadata formats rollout: InvokeAI, NovelAI, Fooocus/FooocusMRE, ComfyUI, EasyDiffusion, Stable Swarm
+- Multi-format metadata parsers: ComfyUI (node graphs), NovelAI (Comment JSON), InvokeAI (sd-metadata/invokeai_metadata), Fooocus (parameters text), EasyDiffusion, and Stable Swarm
+- Checkpoint model catalog & short hash / SHA256 resolution (`ModelManagerModal.vue`, A1111 `cache.json` import)
+- File-level operations: move files, copy files, safe trash deletion (cross-platform OS trash integration), and reveal in system file manager (Finder / Explorer / Files)
+- Drag-and-drop from grid cards directly onto sidebar Folders, Albums, and Tags
+- Database maintenance: `VACUUM` & optimize, point-in-time backup snapshot export, integrity verification & restore (`DatabaseManagerModal.vue`)
+- Global keyboard shortcuts (`Space` preview, `Esc`, Arrow navigation, `Cmd/Ctrl+A`, `1-5` rating, `F` favorite, `Delete` trash, `?` guide modal)
 
 **Legacy mapping**: Checkpoints tab, drag-and-drop, Database tab (v0.9+)
 

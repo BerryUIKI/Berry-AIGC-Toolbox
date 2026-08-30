@@ -85,7 +85,7 @@ a runnable slice of the application.
 |---|------------------------------|-------------------------------------------|---------|
 | M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite | ✅ |
 | M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage | ✅ |
-| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting | ⬜ |
+| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting | ✅ |
 | M4 | Search                       | Metadata search engine + visual search GUI | ⬜ |
 | M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ⬜ |
 | M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore | ⬜ |
@@ -147,6 +147,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: 🟡 Active development (M3: Browsing & Metadata View)
+**Project Status**: 🟡 Active development (M4: Search)
 **Current Branch**: `dev`
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-31

@@ -16,6 +16,7 @@ import FolderList from "./components/FolderList.vue";
 import FileList from "./components/FileList.vue";
 import VirtualGrid from "./components/VirtualGrid.vue";
 import SortBar from "./components/SortBar.vue";
+import PreviewPane from "./components/PreviewPane.vue";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
@@ -24,6 +25,7 @@ const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
+const previewingFile = ref<ImageFile | null>(null);
 const viewMode = ref<"grid" | "table">("grid");
 const sortField = ref<FileSortField>("modified_at");
 const sortDirection = ref<SortDirection>("desc");
@@ -68,6 +70,7 @@ function onFolderAdded(folder: Folder) {
   void refreshCounts();
   selectedFolder.value = folder;
   selectedFile.value = null;
+  previewingFile.value = null;
   void loadFiles();
 }
 
@@ -77,6 +80,7 @@ function onFolderRemoved(folderId: number) {
   if (selectedFolder.value?.id === folderId) {
     selectedFolder.value = null;
     selectedFile.value = null;
+    previewingFile.value = null;
   }
   void loadFiles();
 }
@@ -84,6 +88,7 @@ function onFolderRemoved(folderId: number) {
 async function onFolderSelected(folder: Folder | null) {
   selectedFolder.value = folder;
   selectedFile.value = null;
+  previewingFile.value = null;
   await loadFiles();
 }
 
@@ -94,6 +99,29 @@ async function onFolderScanned(_folderId: number) {
 
 function onFileSelected(file: ImageFile) {
   selectedFile.value = file;
+}
+
+function onActivateFile(file: ImageFile) {
+  selectedFile.value = file;
+  previewingFile.value = file;
+}
+
+function onPreviewNavigate(file: ImageFile) {
+  selectedFile.value = file;
+  previewingFile.value = file;
+}
+
+function onFileRated(fileId: number, rating: number | null) {
+  const idx = files.value.findIndex((f) => f.id === fileId);
+  if (idx !== -1) {
+    files.value[idx].rating = rating ?? undefined;
+  }
+  if (selectedFile.value?.id === fileId) {
+    selectedFile.value.rating = rating ?? undefined;
+  }
+  if (previewingFile.value?.id === fileId) {
+    previewingFile.value.rating = rating ?? undefined;
+  }
 }
 
 async function loadFiles() {
@@ -149,6 +177,14 @@ async function loadFiles() {
           <span v-else class="folder-badge all-badge">All Images</span>
           <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
             Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
+            <button
+              type="button"
+              class="preview-trigger-btn"
+              title="Open Preview (Enter / Space)"
+              @click="onActivateFile(selectedFile)"
+            >
+              👁
+            </button>
           </span>
         </div>
 
@@ -188,6 +224,7 @@ async function loadFiles() {
         :selected-file="selectedFile"
         :loading="filesLoading"
         @select="onFileSelected"
+        @activate="onActivateFile"
       />
       <FileList
         v-else
@@ -195,8 +232,19 @@ async function loadFiles() {
         :selected-file="selectedFile"
         :loading="filesLoading"
         @select="onFileSelected"
+        @activate="onActivateFile"
       />
     </section>
+
+    <!-- Full-screen Preview Modal with Inspector -->
+    <PreviewPane
+      v-if="previewingFile"
+      :file="previewingFile"
+      :files="files"
+      @close="previewingFile = null"
+      @navigate="onPreviewNavigate"
+      @rate="onFileRated"
+    />
   </main>
 </template>
 
@@ -316,10 +364,13 @@ h1 {
   font-size: 0.78em;
   background: rgba(0, 0, 0, 0.05);
   color: #666;
-  max-width: 18rem;
+  max-width: 20rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -327,6 +378,21 @@ h1 {
     background: rgba(255, 255, 255, 0.08);
     color: #aaa;
   }
+}
+
+.preview-trigger-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.15rem;
+  font-size: 1em;
+  opacity: 0.7;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.preview-trigger-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 .toolbar-actions {

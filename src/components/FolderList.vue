@@ -1,21 +1,32 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { Folder, ScanProgress, ScanStats } from "../types";
+import type { Folder, LibraryCounts, ScanProgress, ScanStats } from "../types";
 
 const props = defineProps<{
   folders: Folder[];
+  counts?: LibraryCounts | null;
+  selectedId?: number | null;
   /** Latest `scan-progress` event, forwarded from the App shell listener. */
   progress: ScanProgress | null;
 }>();
 
 const emit = defineEmits<{
   removed: [folderId: number];
-  selected: [folder: Folder];
+  selected: [folder: Folder | null];
   scanned: [folderId: number];
 }>();
 
 const selectedId = ref<number | null>(null);
+
+watch(
+  () => props.selectedId,
+  (val) => {
+    selectedId.value = val !== undefined ? val : null;
+  },
+  { immediate: true },
+);
+
 /** The folder currently being scanned, and whether it is a full scan or a
  * metadata rebuild. Only one scan runs at a time. */
 const running = ref<{ id: number; action: "scan" | "rebuild" } | null>(null);
@@ -59,6 +70,11 @@ async function remove(folder: Folder) {
   }
 }
 
+function selectAllImages() {
+  selectedId.value = null;
+  emit("selected", null);
+}
+
 function select(folder: Folder) {
   selectedId.value = folder.id;
   emit("selected", folder);
@@ -73,9 +89,21 @@ const progressPercent = computed(() => {
 <template>
   <section class="folders">
     <h2>Folders</h2>
-    <p v-if="!folders.length" class="empty">No folders added yet.</p>
 
     <ul class="list">
+      <!-- All Images row -->
+      <li
+        :class="['row', 'all-images-row', { active: selectedId === null }]"
+        @click="selectAllImages"
+      >
+        <div class="path">
+          <span class="row-icon">🖼️</span>
+          <span class="name">All Images</span>
+          <span class="folder-count-badge">{{ counts?.total ?? 0 }}</span>
+        </div>
+      </li>
+
+      <!-- Individual folder rows -->
       <li
         v-for="folder in folders"
         :key="folder.id"
@@ -83,7 +111,13 @@ const progressPercent = computed(() => {
         @click="select(folder)"
       >
         <div class="path">
-          <span class="name">{{ displayPath(folder.path) }}</span>
+          <span class="row-icon">📁</span>
+          <span class="name" :title="displayPath(folder.path)">
+            {{ displayPath(folder.path).split(/[\\/]/).pop() || displayPath(folder.path) }}
+          </span>
+          <span class="folder-count-badge">
+            {{ counts?.folders[folder.id] ?? 0 }}
+          </span>
           <button
             class="ghost scan"
             :disabled="isBusy(folder.id)"
@@ -117,6 +151,7 @@ const progressPercent = computed(() => {
       </li>
     </ul>
 
+    <p v-if="!folders.length" class="empty">No folders added yet.</p>
     <p v-if="error" class="error">{{ error }}</p>
   </section>
 </template>
@@ -161,6 +196,37 @@ const progressPercent = computed(() => {
   word-break: break-all;
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.row-icon {
+  font-size: 1.1em;
+  line-height: 1;
+  user-select: none;
+}
+
+.folder-count-badge {
+  font-size: 0.75em;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(128, 128, 128, 0.15);
+  color: #666;
+  margin-right: 0.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .folder-count-badge {
+    background: rgba(255, 255, 255, 0.12);
+    color: #bbb;
+  }
+}
+
+.all-images-row {
+  margin-bottom: 0.75rem;
+  border-left: 3px solid #2f6fed;
 }
 
 button.ghost {

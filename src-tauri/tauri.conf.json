@@ -31,7 +31,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "category": "Graphics",
+    "category": "Graphics and Design",
     "shortDescription": "Metadata indexer and viewer for AI-generated images",
     "longDescription": "Berry AIGC Toolbox is an open-source metadata indexer and viewer for AI-generated images supporting AUTOMATIC1111, ComfyUI, NovelAI, InvokeAI, Fooocus, EasyDiffusion, and Stable Swarm.",
     "copyright": "Copyright © 2026 BerryUIKI",

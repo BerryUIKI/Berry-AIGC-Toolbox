@@ -6,12 +6,15 @@ import type { AppInfo, Folder, ImageFile, ScanProgress } from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
 import FolderList from "./components/FolderList.vue";
 import FileList from "./components/FileList.vue";
+import VirtualGrid from "./components/VirtualGrid.vue";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const selectedFolder = ref<Folder | null>(null);
+const selectedFile = ref<ImageFile | null>(null);
+const viewMode = ref<"grid" | "table">("grid");
 const progress = ref<ScanProgress | null>(null);
 const error = ref("");
 
@@ -41,6 +44,7 @@ async function reloadFolders() {
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
   selectedFolder.value = folder;
+  selectedFile.value = null;
   void loadFiles(folder);
 }
 
@@ -48,12 +52,14 @@ function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
   if (selectedFolder.value?.id === folderId) {
     selectedFolder.value = null;
+    selectedFile.value = null;
     files.value = [];
   }
 }
 
 async function onFolderSelected(folder: Folder) {
   selectedFolder.value = folder;
+  selectedFile.value = null;
   await loadFiles(folder);
 }
 
@@ -62,6 +68,10 @@ async function onFolderScanned(folderId: number) {
   if (selectedFolder.value?.id === folderId) {
     await loadFiles(selectedFolder.value);
   }
+}
+
+function onFileSelected(file: ImageFile) {
+  selectedFile.value = file;
 }
 
 async function loadFiles(folder: Folder) {
@@ -98,7 +108,58 @@ async function loadFiles(folder: Folder) {
       @scanned="onFolderScanned"
     />
 
-    <FileList :files="files" :loading="filesLoading" />
+    <section class="files-view-section">
+      <div class="files-view-header">
+        <div class="header-left">
+          <h2>
+            Files
+            <span v-if="files.length" class="count-badge">({{ files.length }})</span>
+          </h2>
+          <span v-if="selectedFolder" class="folder-badge" :title="selectedFolder.path">
+            {{ selectedFolder.path.split(/[\\/]/).pop() }}
+          </span>
+          <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
+            Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
+          </span>
+        </div>
+
+        <div class="view-mode-toggle">
+          <button
+            type="button"
+            class="toggle-btn"
+            :class="{ active: viewMode === 'grid' }"
+            @click="viewMode = 'grid'"
+            title="Grid View"
+          >
+            ⊞ Grid
+          </button>
+          <button
+            type="button"
+            class="toggle-btn"
+            :class="{ active: viewMode === 'table' }"
+            @click="viewMode = 'table'"
+            title="Table View"
+          >
+            ☰ Table
+          </button>
+        </div>
+      </div>
+
+      <VirtualGrid
+        v-if="viewMode === 'grid'"
+        :files="files"
+        :selected-file="selectedFile"
+        :loading="filesLoading"
+        @select="onFileSelected"
+      />
+      <FileList
+        v-else
+        :files="files"
+        :selected-file="selectedFile"
+        :loading="filesLoading"
+        @select="onFileSelected"
+      />
+    </section>
   </main>
 </template>
 
@@ -121,7 +182,7 @@ async function loadFiles(folder: Folder) {
 }
 
 .shell {
-  max-width: 56rem;
+  max-width: 68rem;
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
@@ -156,5 +217,101 @@ h1 {
 .error {
   color: #d33;
   font-size: 0.85em;
+}
+
+.files-view-section {
+  margin-top: 2rem;
+}
+
+.files-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.header-left h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.count-badge {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: #888;
+}
+
+.folder-badge {
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 500;
+  background: rgba(47, 111, 237, 0.12);
+  color: #2f6fed;
+}
+
+.selection-pill {
+  padding: 0.15rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.78em;
+  background: rgba(0, 0, 0, 0.05);
+  color: #666;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .selection-pill {
+    background: rgba(255, 255, 255, 0.08);
+    color: #aaa;
+  }
+}
+
+.view-mode-toggle {
+  display: inline-flex;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85em;
+  cursor: pointer;
+  color: #666;
+  transition: all 0.15s ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .toggle-btn {
+    color: #aaa;
+  }
+}
+
+.toggle-btn:hover {
+  color: inherit;
+}
+
+.toggle-btn.active {
+  background: #2f6fed;
+  color: #fff;
+  font-weight: 600;
 }
 </style>

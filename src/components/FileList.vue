@@ -11,6 +11,11 @@ import {
 defineProps<{
   files: ImageFile[];
   loading: boolean;
+  selectedFile?: ImageFile | null;
+}>();
+
+const emit = defineEmits<{
+  (e: "select", file: ImageFile): void;
 }>();
 
 /** First `max` chars, with an ellipsis when truncated. */
@@ -28,7 +33,6 @@ function size(meta: ImageFile["metadata"]): string {
 
 <template>
   <section class="files">
-    <h2>Files</h2>
     <p v-if="loading" class="empty">Loading…</p>
     <p v-else-if="!files.length" class="empty">Select a folder to see its indexed files.</p>
 
@@ -48,7 +52,12 @@ function size(meta: ImageFile["metadata"]): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="file in files" :key="file.id ?? file.path">
+          <tr
+            v-for="file in files"
+            :key="file.id ?? file.path"
+            :class="{ 'row-selected': selectedFile?.path === file.path }"
+            @click="emit('select', file)"
+          >
             <td class="preview-cell">
               <img
                 v-if="file.container !== 'mp4' && file.container !== 'txt'"
@@ -184,5 +193,24 @@ function size(meta: ImageFile["metadata"]): string {
 
 .none {
   color: #999;
+}
+
+tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+tbody tr:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  tbody tr:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+tbody tr.row-selected {
+  background: rgba(47, 111, 237, 0.15) !important;
 }
 </style>

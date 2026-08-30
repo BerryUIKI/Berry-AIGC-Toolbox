@@ -31,6 +31,7 @@ pub fn run() {
             commands::list_files,
             commands::query_files,
             commands::set_file_rating,
+            commands::set_files_rating,
             commands::get_library_counts,
             commands::scan_folder,
             commands::rebuild_metadata,

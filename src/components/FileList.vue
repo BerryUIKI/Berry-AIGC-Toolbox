@@ -12,11 +12,14 @@ defineProps<{
   files: ImageFile[];
   loading: boolean;
   selectedFile?: ImageFile | null;
+  selectedFilePaths?: Set<string>;
 }>();
 
 const emit = defineEmits<{
-  (e: "select", file: ImageFile): void;
+  (e: "select", file: ImageFile, event?: MouseEvent): void;
   (e: "activate", file: ImageFile): void;
+  (e: "toggleSelect", file: ImageFile): void;
+  (e: "toggleAll"): void;
 }>();
 
 /** First `max` chars, with an ellipsis when truncated. */
@@ -41,6 +44,14 @@ function size(meta: ImageFile["metadata"]): string {
       <table class="table">
         <thead>
           <tr>
+            <th class="th-checkbox">
+              <input
+                type="checkbox"
+                :checked="files.length > 0 && selectedFilePaths?.size === files.length"
+                title="Select/Deselect All"
+                @click.stop="emit('toggleAll')"
+              />
+            </th>
             <th class="th-preview">Preview</th>
             <th>Name</th>
             <th>Type</th>
@@ -56,10 +67,20 @@ function size(meta: ImageFile["metadata"]): string {
           <tr
             v-for="file in files"
             :key="file.id ?? file.path"
-            :class="{ 'row-selected': selectedFile?.path === file.path }"
-            @click="emit('select', file)"
+            :class="{
+              'row-selected': selectedFile?.path === file.path,
+              'row-multi-selected': selectedFilePaths?.has(file.path),
+            }"
+            @click="emit('select', file, $event)"
             @dblclick="emit('activate', file)"
           >
+            <td class="td-checkbox">
+              <input
+                type="checkbox"
+                :checked="selectedFilePaths?.has(file.path)"
+                @click.stop="emit('toggleSelect', file)"
+              />
+            </td>
             <td class="preview-cell">
               <img
                 v-if="file.container !== 'mp4' && file.container !== 'txt'"
@@ -214,5 +235,22 @@ tbody tr:hover {
 
 tbody tr.row-selected {
   background: rgba(47, 111, 237, 0.15) !important;
+}
+
+tbody tr.row-multi-selected {
+  background: rgba(47, 111, 237, 0.08);
+}
+
+.th-checkbox,
+.td-checkbox {
+  width: 32px;
+  text-align: center !important;
+  padding: 0.4rem 0.2rem !important;
+}
+
+.th-checkbox input,
+.td-checkbox input {
+  cursor: pointer;
+  accent-color: #2f6fed;
 }
 </style>

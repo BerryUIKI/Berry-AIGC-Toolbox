@@ -105,6 +105,18 @@ bumps `user_version` by one.
 - **Navigation & Sorting**: `query_files` handles optional folder filtering and multi-column sorting (date, path, size, rating with NULLs last, aesthetic score with NULLs last).
 - **Preview & Inspector (`PreviewPane.vue`)**: Modal dialog with full-resolution image viewer, keyboard navigation (`←`/`→`/`Esc`), interactive rating widget (1–10 stars), prompt copy buttons, and collapsible metadata inspector toggled by the `I` shortcut.
 
+## Search Engine, Query Syntax & Batch Actions
+
+- **Search Criteria & Engine**: Defined by `SearchCriteria` in `berry-domain` and executed by `search_files` in `berry-storage`. Utilizes parameterized SQL with SQLite `json_extract()` for indexing parameters embedded in JSON text (`prompt`, `negative_prompt`, `model_name`, `model_hash`, `sampler`, `steps`, `cfg_scale`), alongside table columns (`rating`, `aesthetic_score`, `folder_id`).
+- **Query Parser**: `parse_query` in `berry-domain::search_parser` parses free-form strings into structured criteria:
+  - Key-value tokens: `prompt:...`, `neg:...`, `model:...`, `hash:...`, `sampler:...`
+  - Quoted string support: `model:"dreamshaper xl"`, `prompt:"neon cat"`
+  - Numeric ranges: `steps:20..40`, `cfg:5.0..8.5`
+  - Comparison operators: `steps:>=25`, `rating:>=8`, `cfg:<10`
+  - Bare words are automatically aggregated into broad `text` substring matching across prompt, negative prompt, model name, and path.
+- **Visual Filters (`FilterDrawer.vue`)**: Slide-out drawer with dynamic checkpoint and sampler dropdowns queried from `list_distinct_models` and `list_distinct_samplers`, bidirectional synchronization with the search input via `criteriaToQuery`, and active filter count badges.
+- **Batch Selection & Toolbar (`BatchActionBar.vue`)**: Multi-selection via checkboxes, `Cmd+Click`, `Shift+Click` range selection, and `Cmd+A` keyboard shortcut. Provides high-performance batch operations: single-transaction multi-file rating updates (`set_files_rating`), newline-separated path copying, and prompt extraction.
+
 ## Frontend
 
 - Vue 3 `<script setup lang="ts">` single-file components, built with Vite.

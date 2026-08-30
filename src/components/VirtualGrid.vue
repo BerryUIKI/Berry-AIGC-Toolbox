@@ -12,6 +12,7 @@ const props = withDefaults(
   defineProps<{
     files: ImageFile[];
     selectedFile?: ImageFile | null;
+    selectedFilePaths?: Set<string>;
     loading?: boolean;
     itemMinWidth?: number;
     gap?: number;
@@ -27,8 +28,9 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: "select", file: ImageFile): void;
+  (e: "select", file: ImageFile, event?: MouseEvent): void;
   (e: "activate", file: ImageFile): void;
+  (e: "toggleSelect", file: ImageFile): void;
 }>();
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -124,8 +126,12 @@ const visibleFiles = computed(() => {
 
 const translateY = computed(() => startRow.value * rowHeight.value);
 
-function selectFile(file: ImageFile) {
-  emit("select", file);
+function selectFile(file: ImageFile, event?: MouseEvent) {
+  emit("select", file, event);
+}
+
+function toggleSelect(file: ImageFile) {
+  emit("toggleSelect", file);
 }
 
 function activateFile(file: ImageFile) {
@@ -243,11 +249,23 @@ watch(
             v-for="file in visibleFiles"
             :key="file.id ?? file.path"
             class="grid-card"
-            :class="{ active: selectedFile?.path === file.path }"
-            @click="selectFile(file)"
+            :class="{
+              active: selectedFile?.path === file.path,
+              'multi-selected': selectedFilePaths?.has(file.path),
+            }"
+            @click="selectFile(file, $event)"
             @dblclick="activateFile(file)"
           >
             <div class="thumbnail-wrapper">
+              <button
+                type="button"
+                class="card-select-btn"
+                :class="{ checked: selectedFilePaths?.has(file.path) }"
+                :title="selectedFilePaths?.has(file.path) ? 'Deselect image' : 'Select image'"
+                @click.stop="toggleSelect(file)"
+              >
+                {{ selectedFilePaths?.has(file.path) ? "✓" : "" }}
+              </button>
               <img
                 v-if="
                   file.container !== 'mp4' &&
@@ -372,6 +390,43 @@ watch(
 .grid-card.active {
   border-color: #2f6fed;
   box-shadow: 0 0 0 2px #2f6fed, 0 4px 14px rgba(47, 111, 237, 0.25);
+}
+
+.grid-card.multi-selected {
+  border-color: #2f6fed;
+  background: rgba(47, 111, 237, 0.05);
+}
+
+.card-select-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  font-size: 0.8em;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.grid-card:hover .card-select-btn,
+.card-select-btn.checked {
+  opacity: 1;
+}
+
+.card-select-btn.checked {
+  background: #2f6fed;
+  border-color: #2f6fed;
 }
 
 .thumbnail-wrapper {

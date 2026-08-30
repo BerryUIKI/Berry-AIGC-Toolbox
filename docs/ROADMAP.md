@@ -60,15 +60,16 @@ milestone; see the legend below.
 
 ---
 
-### M4: Search — ⬜ Planned
+### M4: Search — ✅ Complete
 
-**Goal**: Find images by metadata.
+**Goal**: Find images by metadata with text queries, visual filters, and batch actions.
 
 **Deliverables**:
-- Metadata search engine: model name/hash, prompts, parameters
-- Reverse hash search against known model list (partial names supported)
-- Visual search builder (parameterized queries)
-- Search result actions (mark for deletion, remove from database, auto-tag)
+- Search domain models (`SearchCriteria`) and dynamic parameterized SQLite search engine (`berry-storage`)
+- Query string parser supporting key-value tokens (`prompt:`, `model:`, `neg:`, `sampler:`), quoted text, comparison operators (`>=`, `<=`), and numeric ranges (`steps:20..40`)
+- Global search bar with 250ms debouncing, hotkey focus (`/`, `Cmd+F`), removable filter chips, and instant matching counts
+- Visual filter drawer (`FilterDrawer.vue`) with dynamic checkpoint model & sampler dropdowns, star rating ranges, and generation parameter ranges
+- Multi-selection grid/table actions with floating toolbar: batch star rating (`set_files_rating`), clipboard copying for paths and prompts, and `Cmd+A` keyboard selection
 
 **Legacy mapping**: Search GUI, reverse hash search, Tools menu actions (v0.9+)
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
@@ -9,6 +9,7 @@ import type {
   ImageFile,
   LibraryCounts,
   ScanProgress,
+  SearchCriteria,
   SortDirection,
 } from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
@@ -17,14 +18,28 @@ import FileList from "./components/FileList.vue";
 import VirtualGrid from "./components/VirtualGrid.vue";
 import SortBar from "./components/SortBar.vue";
 import PreviewPane from "./components/PreviewPane.vue";
+import SearchBar from "./components/SearchBar.vue";
+import FilterDrawer from "./components/FilterDrawer.vue";
+import BatchActionBar from "./components/BatchActionBar.vue";
+import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
 const libraryCounts = ref<LibraryCounts | null>(null);
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
+const searchQuery = ref("");
+const filterDrawerOpen = ref(false);
+const distinctModels = ref<string[]>([]);
+const distinctSamplers = ref<string[]>([]);
+const activeCriteria = ref<SearchCriteria>({});
+const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
+const selectedFilePaths = ref<Set<string>>(new Set());
+const selectedFilesList = computed(() =>
+  files.value.filter((f) => selectedFilePaths.value.has(f.path)),
+);
 const previewingFile = ref<ImageFile | null>(null);
 const viewMode = ref<"grid" | "table">("grid");
 const sortField = ref<FileSortField>("modified_at");
@@ -34,11 +49,30 @@ const error = ref("");
 
 let unlisten: UnlistenFn | null = null;
 
+function handleWindowKeyDown(e: KeyboardEvent) {
+  const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+
+  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+    e.preventDefault();
+    onSelectAll();
+  } else if (
+    e.key === "Escape" &&
+    selectedFilePaths.value.size > 0 &&
+    !previewingFile.value &&
+    !filterDrawerOpen.value
+  ) {
+    onClearSelection();
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("keydown", handleWindowKeyDown);
   try {
     info.value = await invoke<AppInfo>("get_app_info");
     await reloadFolders();
     await refreshCounts();
+    await reloadFiltersMeta();
     await loadFiles();
   } catch (e) {
     error.value = String(e);
@@ -50,6 +84,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", handleWindowKeyDown);
   unlisten?.();
 });
 
@@ -65,9 +100,19 @@ async function refreshCounts() {
   }
 }
 
+async function reloadFiltersMeta() {
+  try {
+    distinctModels.value = await invoke<string[]>("list_distinct_models");
+    distinctSamplers.value = await invoke<string[]>("list_distinct_samplers");
+  } catch (e) {
+    console.error("Failed to load distinct models/samplers:", e);
+  }
+}
+
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
   void refreshCounts();
+  void reloadFiltersMeta();
   selectedFolder.value = folder;
   selectedFile.value = null;
   previewingFile.value = null;
@@ -77,6 +122,7 @@ function onFolderAdded(folder: Folder) {
 function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
   void refreshCounts();
+  void reloadFiltersMeta();
   if (selectedFolder.value?.id === folderId) {
     selectedFolder.value = null;
     selectedFile.value = null;
@@ -94,11 +140,72 @@ async function onFolderSelected(folder: Folder | null) {
 
 async function onFolderScanned(_folderId: number) {
   await refreshCounts();
+  await reloadFiltersMeta();
   await loadFiles();
 }
 
-function onFileSelected(file: ImageFile) {
+function onFileSelected(file: ImageFile, event?: MouseEvent) {
   selectedFile.value = file;
+  if (event?.metaKey || event?.ctrlKey) {
+    toggleSelectFile(file);
+  } else if (event?.shiftKey && selectedFilesList.value.length > 0) {
+    const lastFile = selectedFilesList.value[selectedFilesList.value.length - 1];
+    const idx1 = files.value.findIndex((f) => f.path === lastFile.path);
+    const idx2 = files.value.findIndex((f) => f.path === file.path);
+    if (idx1 !== -1 && idx2 !== -1) {
+      const [start, end] = idx1 < idx2 ? [idx1, idx2] : [idx2, idx1];
+      for (let i = start; i <= end; i++) {
+        selectedFilePaths.value.add(files.value[i].path);
+      }
+    }
+  }
+}
+
+function toggleSelectFile(file: ImageFile) {
+  if (selectedFilePaths.value.has(file.path)) {
+    selectedFilePaths.value.delete(file.path);
+  } else {
+    selectedFilePaths.value.add(file.path);
+  }
+}
+
+function onSelectAll() {
+  selectedFilePaths.value = new Set(files.value.map((f) => f.path));
+}
+
+function onClearSelection() {
+  selectedFilePaths.value.clear();
+}
+
+function onToggleAll() {
+  if (selectedFilePaths.value.size === files.value.length) {
+    selectedFilePaths.value.clear();
+  } else {
+    onSelectAll();
+  }
+}
+
+async function onBatchRate(rating: number | null) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+
+  try {
+    await invoke("set_files_rating", { fileIds: ids, rating });
+    const idSet = new Set(ids);
+    files.value = files.value.map((f) => {
+      if (f.id != null && idSet.has(f.id)) {
+        return { ...f, rating: rating ?? undefined };
+      }
+      return f;
+    });
+    if (selectedFile.value?.id != null && idSet.has(selectedFile.value.id)) {
+      selectedFile.value.rating = rating ?? undefined;
+    }
+  } catch (e) {
+    error.value = String(e);
+  }
 }
 
 function onActivateFile(file: ImageFile) {
@@ -126,17 +233,52 @@ function onFileRated(fileId: number, rating: number | null) {
 
 async function loadFiles() {
   filesLoading.value = true;
+  selectedFilePaths.value.clear();
   try {
-    files.value = await invoke<ImageFile[]>("query_files", {
-      folderId: selectedFolder.value?.id ?? null,
-      sort: sortField.value,
-      direction: sortDirection.value,
-    });
+    const q = searchQuery.value.trim();
+    if (q) {
+      files.value = await invoke<ImageFile[]>("search_files_by_query", {
+        query: q,
+        folderId: selectedFolder.value?.id ?? null,
+        sort: sortField.value,
+        direction: sortDirection.value,
+      });
+    } else {
+      files.value = await invoke<ImageFile[]>("query_files", {
+        folderId: selectedFolder.value?.id ?? null,
+        sort: sortField.value,
+        direction: sortDirection.value,
+      });
+    }
   } catch (e) {
     error.value = String(e);
   } finally {
     filesLoading.value = false;
   }
+}
+
+function onSearch(query: string) {
+  searchQuery.value = query;
+  void loadFiles();
+}
+
+function onClearSearch() {
+  searchQuery.value = "";
+  activeCriteria.value = {};
+  void loadFiles();
+}
+
+function onApplyFilters(criteria: SearchCriteria) {
+  activeCriteria.value = criteria;
+  const q = criteriaToQuery(criteria);
+  searchQuery.value = q;
+  void loadFiles();
+}
+
+function onResetFilters() {
+  activeCriteria.value = {};
+  searchQuery.value = "";
+  void loadFiles();
 }
 </script>
 
@@ -218,25 +360,77 @@ async function loadFiles() {
         </div>
       </div>
 
-      <VirtualGrid
-        v-if="viewMode === 'grid'"
-        :files="files"
-        :selected-file="selectedFile"
-        :loading="filesLoading"
-        @select="onFileSelected"
-        @activate="onActivateFile"
-      />
-      <FileList
-        v-else
-        :files="files"
-        :selected-file="selectedFile"
-        :loading="filesLoading"
-        @select="onFileSelected"
-        @activate="onActivateFile"
-      />
+      <div class="search-toolbar">
+        <SearchBar
+          v-model="searchQuery"
+          :loading="filesLoading"
+          :result-count="searchQuery.trim() ? files.length : null"
+          @search="onSearch"
+          @clear="onClearSearch"
+        />
+        <button
+          type="button"
+          class="filter-toggle-btn"
+          :class="{ active: filterDrawerOpen || activeFilterCount > 0 }"
+          title="Open visual search filters"
+          @click="filterDrawerOpen = true"
+        >
+          <span>⚡ Filters</span>
+          <span v-if="activeFilterCount > 0" class="filter-count-badge">
+            {{ activeFilterCount }}
+          </span>
+        </button>
+      </div>
+
+      <div v-if="searchQuery.trim()" class="search-status-bar">
+        <span>
+          Found <strong>{{ files.length }}</strong> matching {{ files.length === 1 ? "image" : "images" }}
+        </span>
+        <button type="button" class="reset-search-btn" @click="onClearSearch">
+          ✕ Clear Search
+        </button>
+      </div>
+
+      <div
+        v-if="files.length === 0 && searchQuery.trim() && !filesLoading"
+        class="search-empty-state"
+      >
+        <span class="empty-icon">🔍</span>
+        <p class="empty-title">No images match your search</p>
+        <p class="empty-hint">
+          Try adjusting keywords or parameter filters like <code>prompt:cat</code>,
+          <code>model:sdxl</code>, or <code>steps:&gt;=20</code>.
+        </p>
+        <button type="button" class="clear-filters-btn" @click="onClearSearch">
+          Clear Search
+        </button>
+      </div>
+
+      <template v-else>
+        <VirtualGrid
+          v-if="viewMode === 'grid'"
+          :files="files"
+          :selected-file="selectedFile"
+          :selected-file-paths="selectedFilePaths"
+          :loading="filesLoading"
+          @select="onFileSelected"
+          @activate="onActivateFile"
+          @toggle-select="toggleSelectFile"
+        />
+        <FileList
+          v-else
+          :files="files"
+          :selected-file="selectedFile"
+          :selected-file-paths="selectedFilePaths"
+          :loading="filesLoading"
+          @select="onFileSelected"
+          @activate="onActivateFile"
+          @toggle-select="toggleSelectFile"
+          @toggle-all="onToggleAll"
+        />
+      </template>
     </section>
 
-    <!-- Full-screen Preview Modal with Inspector -->
     <PreviewPane
       v-if="previewingFile"
       :file="previewingFile"
@@ -244,6 +438,25 @@ async function loadFiles() {
       @close="previewingFile = null"
       @navigate="onPreviewNavigate"
       @rate="onFileRated"
+    />
+
+    <!-- Visual Search Builder / Filter Drawer -->
+    <FilterDrawer
+      v-model:open="filterDrawerOpen"
+      :models="distinctModels"
+      :samplers="distinctSamplers"
+      :initial-criteria="activeCriteria"
+      @apply="onApplyFilters"
+      @reset="onResetFilters"
+    />
+
+    <!-- Floating Batch Action Bar -->
+    <BatchActionBar
+      :selected-files="selectedFilesList"
+      :total-count="files.length"
+      @select-all="onSelectAll"
+      @clear-selection="onClearSelection"
+      @rate-selected="onBatchRate"
     />
   </main>
 </template>
@@ -434,5 +647,150 @@ h1 {
   background: #2f6fed;
   color: #fff;
   font-weight: 600;
+}
+
+.search-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.filter-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.filter-toggle-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-color: rgba(128, 128, 128, 0.4);
+}
+
+.filter-toggle-btn.active {
+  background: rgba(47, 111, 237, 0.12);
+  border-color: #2f6fed;
+  color: #2f6fed;
+}
+
+@media (prefers-color-scheme: dark) {
+  .filter-toggle-btn.active {
+    background: rgba(47, 111, 237, 0.2);
+    color: #60a5fa;
+  }
+}
+
+.filter-count-badge {
+  background: #2f6fed;
+  color: #fff;
+  font-size: 0.75em;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  line-height: 1.2;
+}
+
+.search-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(47, 111, 237, 0.08);
+  border-left: 3px solid #2f6fed;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+  .search-status-bar {
+    background: rgba(47, 111, 237, 0.15);
+    color: #ddd;
+  }
+}
+
+.reset-search-btn {
+  background: transparent;
+  border: none;
+  color: #2f6fed;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.reset-search-btn:hover {
+  background: rgba(47, 111, 237, 0.15);
+}
+
+.search-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1rem;
+  text-align: center;
+  border: 1px dashed rgba(128, 128, 128, 0.25);
+  border-radius: 10px;
+  background: rgba(128, 128, 128, 0.03);
+}
+
+.empty-icon {
+  font-size: 2.5em;
+  margin-bottom: 0.5rem;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.empty-hint {
+  font-size: 0.85em;
+  color: #888;
+  max-width: 440px;
+  margin: 0 0 1rem;
+  line-height: 1.4;
+}
+
+.empty-hint code {
+  background: rgba(128, 128, 128, 0.12);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.clear-filters-btn {
+  background: #2f6fed;
+  color: #fff;
+  border: none;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+  opacity: 0.9;
 }
 </style>

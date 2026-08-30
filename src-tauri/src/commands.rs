@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
-use berry_domain::{FileSortField, Folder, ImageFile, SortDirection};
+use berry_domain::{FileSortField, Folder, ImageFile, SearchCriteria, SortDirection};
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
 use serde::Serialize;
@@ -118,6 +118,57 @@ pub fn query_files(
         .map_err(|e| e.to_string())
 }
 
+/// Search indexed files using structured criteria.
+#[tauri::command]
+pub fn search_files(
+    criteria: SearchCriteria,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
+    db(&state)?
+        .search_files(&criteria)
+        .map_err(|e| e.to_string())
+}
+
+/// Search indexed files using a parsed query string.
+#[tauri::command]
+pub fn search_files_by_query(
+    query: String,
+    folder_id: Option<i64>,
+    sort: Option<FileSortField>,
+    direction: Option<SortDirection>,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
+    let mut criteria = SearchCriteria::from_query(&query);
+    if folder_id.is_some() {
+        criteria.folder_id = folder_id;
+    }
+    if sort.is_some() {
+        criteria.sort = sort;
+    }
+    if direction.is_some() {
+        criteria.direction = direction;
+    }
+    db(&state)?
+        .search_files(&criteria)
+        .map_err(|e| e.to_string())
+}
+
+/// List distinct model names present in indexed metadata.
+#[tauri::command]
+pub fn list_distinct_models(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    db(&state)?
+        .list_distinct_models()
+        .map_err(|e| e.to_string())
+}
+
+/// List distinct sampler names present in indexed metadata.
+#[tauri::command]
+pub fn list_distinct_samplers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    db(&state)?
+        .list_distinct_samplers()
+        .map_err(|e| e.to_string())
+}
+
 /// Update user rating (1–10, or null to clear) for an image file.
 #[tauri::command]
 pub fn set_file_rating(
@@ -127,6 +178,18 @@ pub fn set_file_rating(
 ) -> Result<(), String> {
     db(&state)?
         .set_file_rating(file_id, rating)
+        .map_err(|e| e.to_string())
+}
+
+/// Update user rating (1–10, or null to clear) for multiple image files.
+#[tauri::command]
+pub fn set_files_rating(
+    file_ids: Vec<i64>,
+    rating: Option<u8>,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .set_files_rating(&file_ids, rating)
         .map_err(|e| e.to_string())
 }
 

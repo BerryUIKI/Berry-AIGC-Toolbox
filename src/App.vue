@@ -2,19 +2,31 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppInfo, Folder, ImageFile, ScanProgress } from "./types";
+import type {
+  AppInfo,
+  FileSortField,
+  Folder,
+  ImageFile,
+  LibraryCounts,
+  ScanProgress,
+  SortDirection,
+} from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
 import FolderList from "./components/FolderList.vue";
 import FileList from "./components/FileList.vue";
 import VirtualGrid from "./components/VirtualGrid.vue";
+import SortBar from "./components/SortBar.vue";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
+const libraryCounts = ref<LibraryCounts | null>(null);
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
 const viewMode = ref<"grid" | "table">("grid");
+const sortField = ref<FileSortField>("modified_at");
+const sortDirection = ref<SortDirection>("desc");
 const progress = ref<ScanProgress | null>(null);
 const error = ref("");
 
@@ -24,6 +36,8 @@ onMounted(async () => {
   try {
     info.value = await invoke<AppInfo>("get_app_info");
     await reloadFolders();
+    await refreshCounts();
+    await loadFiles();
   } catch (e) {
     error.value = String(e);
   }
@@ -41,43 +55,55 @@ async function reloadFolders() {
   folders.value = await invoke<Folder[]>("list_folders");
 }
 
+async function refreshCounts() {
+  try {
+    libraryCounts.value = await invoke<LibraryCounts>("get_library_counts");
+  } catch (e) {
+    console.error("Failed to fetch library counts:", e);
+  }
+}
+
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
+  void refreshCounts();
   selectedFolder.value = folder;
   selectedFile.value = null;
-  void loadFiles(folder);
+  void loadFiles();
 }
 
 function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
+  void refreshCounts();
   if (selectedFolder.value?.id === folderId) {
     selectedFolder.value = null;
     selectedFile.value = null;
-    files.value = [];
   }
+  void loadFiles();
 }
 
-async function onFolderSelected(folder: Folder) {
+async function onFolderSelected(folder: Folder | null) {
   selectedFolder.value = folder;
   selectedFile.value = null;
-  await loadFiles(folder);
+  await loadFiles();
 }
 
-async function onFolderScanned(folderId: number) {
-  // Refresh the file list if the scan finished on the currently selected folder.
-  if (selectedFolder.value?.id === folderId) {
-    await loadFiles(selectedFolder.value);
-  }
+async function onFolderScanned(_folderId: number) {
+  await refreshCounts();
+  await loadFiles();
 }
 
 function onFileSelected(file: ImageFile) {
   selectedFile.value = file;
 }
 
-async function loadFiles(folder: Folder) {
+async function loadFiles() {
   filesLoading.value = true;
   try {
-    files.value = await invoke<ImageFile[]>("list_files", { folderId: folder.id });
+    files.value = await invoke<ImageFile[]>("query_files", {
+      folderId: selectedFolder.value?.id ?? null,
+      sort: sortField.value,
+      direction: sortDirection.value,
+    });
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -102,6 +128,8 @@ async function loadFiles(folder: Folder) {
 
     <FolderList
       :folders="folders"
+      :counts="libraryCounts"
+      :selected-id="selectedFolder?.id ?? null"
       :progress="progress"
       @removed="onFolderRemoved"
       @selected="onFolderSelected"
@@ -116,32 +144,41 @@ async function loadFiles(folder: Folder) {
             <span v-if="files.length" class="count-badge">({{ files.length }})</span>
           </h2>
           <span v-if="selectedFolder" class="folder-badge" :title="selectedFolder.path">
-            {{ selectedFolder.path.split(/[\\/]/).pop() }}
+            {{ selectedFolder.path.split(/[\\/]/).pop() || selectedFolder.path }}
           </span>
+          <span v-else class="folder-badge all-badge">All Images</span>
           <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
             Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
           </span>
         </div>
 
-        <div class="view-mode-toggle">
-          <button
-            type="button"
-            class="toggle-btn"
-            :class="{ active: viewMode === 'grid' }"
-            @click="viewMode = 'grid'"
-            title="Grid View"
-          >
-            ⊞ Grid
-          </button>
-          <button
-            type="button"
-            class="toggle-btn"
-            :class="{ active: viewMode === 'table' }"
-            @click="viewMode = 'table'"
-            title="Table View"
-          >
-            ☰ Table
-          </button>
+        <div class="toolbar-actions">
+          <SortBar
+            v-model:sort-field="sortField"
+            v-model:sort-direction="sortDirection"
+            @change="loadFiles"
+          />
+
+          <div class="view-mode-toggle">
+            <button
+              type="button"
+              class="toggle-btn"
+              :class="{ active: viewMode === 'grid' }"
+              @click="viewMode = 'grid'"
+              title="Grid View"
+            >
+              ⊞ Grid
+            </button>
+            <button
+              type="button"
+              class="toggle-btn"
+              :class="{ active: viewMode === 'table' }"
+              @click="viewMode = 'table'"
+              title="Table View"
+            >
+              ☰ Table
+            </button>
+          </div>
         </div>
       </div>
 
@@ -262,6 +299,17 @@ h1 {
   color: #2f6fed;
 }
 
+.all-badge {
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+}
+
+@media (prefers-color-scheme: dark) {
+  .all-badge {
+    color: #34d399;
+  }
+}
+
 .selection-pill {
   padding: 0.15rem 0.6rem;
   border-radius: 6px;
@@ -279,6 +327,13 @@ h1 {
     background: rgba(255, 255, 255, 0.08);
     color: #aaa;
   }
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .view-mode-toggle {

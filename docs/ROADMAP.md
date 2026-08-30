@@ -45,15 +45,16 @@ milestone; see the legend below.
 
 ---
 
-### M3: Browsing & Metadata View — ⬜ Planned
+### M3: Browsing & Metadata View — ✅ Complete
 
 **Goal**: Browse the indexed library and inspect metadata.
 
 **Deliverables**:
-- Thumbnail grid view with virtualization
-- Preview pane (image + metadata panel, toggle with `I`)
-- Sorting: creation date, aesthetics score, rating
-- Folder view
+- Thumbnail grid view with virtualization (`VirtualGrid.vue`)
+- Preview pane with metadata inspector and prompt copying (toggle with `I`)
+- Multi-criteria sorting: creation date, file name, size, rating, aesthetics score
+- Folder view and "All Images" library navigation with live counts
+- Interactive rating updates preserved across scans
 
 **Legacy mapping**: viewer, preview, sorting (v1.x viewer)
 

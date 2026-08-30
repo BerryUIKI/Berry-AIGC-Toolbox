@@ -16,6 +16,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: "select", file: ImageFile): void;
+  (e: "activate", file: ImageFile): void;
 }>();
 
 /** First `max` chars, with an ellipsis when truncated. */
@@ -57,6 +58,7 @@ function size(meta: ImageFile["metadata"]): string {
             :key="file.id ?? file.path"
             :class="{ 'row-selected': selectedFile?.path === file.path }"
             @click="emit('select', file)"
+            @dblclick="emit('activate', file)"
           >
             <td class="preview-cell">
               <img

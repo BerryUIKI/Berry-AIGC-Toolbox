@@ -98,6 +98,13 @@ bumps `user_version` by one.
 - Every schema change ships with a migration, never ad-hoc `CREATE`/`ALTER`
   statements.
 
+## Browsing, Asset Protocol & Virtualization
+ 
+- **Asset Protocol**: Configured via Tauri 2 `app.security.assetProtocol` (`protocol-asset` feature enabled). Local images are streamed into `<img>` tags via `@tauri-apps/api/core` `convertFileSrc`, with Windows verbatim prefixes (`\\?\`) sanitized before resolution.
+- **Virtualized Grid (`VirtualGrid.vue`)**: Custom responsive virtualization engine. `ResizeObserver` dynamically adapts column count to container width (`minWidth: 180px`). Total height is driven by a phantom element; only rows in the visible viewport (plus 2-row overscan buffer) are rendered in the DOM to ensure smooth 60fps scrolling over thousands of items without memory leaks.
+- **Navigation & Sorting**: `query_files` handles optional folder filtering and multi-column sorting (date, path, size, rating with NULLs last, aesthetic score with NULLs last).
+- **Preview & Inspector (`PreviewPane.vue`)**: Modal dialog with full-resolution image viewer, keyboard navigation (`←`/`→`/`Esc`), interactive rating widget (1–10 stars), prompt copy buttons, and collapsible metadata inspector toggled by the `I` shortcut.
+
 ## Frontend
 
 - Vue 3 `<script setup lang="ts">` single-file components, built with Vite.

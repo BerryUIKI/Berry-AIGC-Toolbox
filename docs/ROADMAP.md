@@ -113,7 +113,7 @@ milestone; see the legend below.
 **Deliverables**:
 - Localization framework + 7 languages (en, fr, es, de, ja, zh-CN, zh-TW) with `LanguageSelector.vue`
 - Windows / macOS / Linux packaging configurations via Tauri bundler
-- Release pipeline, version bump (3.0.0), changelog, and release notes
+- Release pipeline, version bump (0.1.0), changelog, and release notes
 
 **Legacy mapping**: localization, releases (v1.x/v2.0)
 

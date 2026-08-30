@@ -21,6 +21,9 @@ const emit = defineEmits<{
   openAlbumModal: [];
   openTagModal: [];
   openPromptStats: [];
+  moveFilesToFolder: [payload: { filePaths: string[]; folderId: number }];
+  addFilesToAlbum: [payload: { fileIds: number[]; albumId: number }];
+  tagFiles: [payload: { fileIds: number[]; tagId: number }];
 }>();
 
 /** The folder currently being scanned, and whether it is a full scan or a
@@ -83,6 +86,57 @@ const progressPercent = computed(() => {
   if (!props.progress || props.progress.found === 0) return 0;
   return Math.round((props.progress.scanned / props.progress.found) * 100);
 });
+
+function onDropOnFolder(e: DragEvent, folder: Folder) {
+  e.preventDefault();
+  const data = e.dataTransfer?.getData("application/json");
+  if (!data) return;
+  try {
+    const payload = JSON.parse(data);
+    if (payload.file_paths && payload.file_paths.length > 0) {
+      emit("moveFilesToFolder", {
+        filePaths: payload.file_paths,
+        folderId: folder.id,
+      });
+    }
+  } catch (err) {
+    console.error("Drop on folder parse error:", err);
+  }
+}
+
+function onDropOnAlbum(e: DragEvent, album: Album) {
+  e.preventDefault();
+  const data = e.dataTransfer?.getData("application/json");
+  if (!data) return;
+  try {
+    const payload = JSON.parse(data);
+    if (payload.file_ids && payload.file_ids.length > 0) {
+      emit("addFilesToAlbum", {
+        fileIds: payload.file_ids,
+        albumId: album.id,
+      });
+    }
+  } catch (err) {
+    console.error("Drop on album parse error:", err);
+  }
+}
+
+function onDropOnTag(e: DragEvent, tag: Tag) {
+  e.preventDefault();
+  const data = e.dataTransfer?.getData("application/json");
+  if (!data) return;
+  try {
+    const payload = JSON.parse(data);
+    if (payload.file_ids && payload.file_ids.length > 0) {
+      emit("tagFiles", {
+        fileIds: payload.file_ids,
+        tagId: tag.id,
+      });
+    }
+  } catch (err) {
+    console.error("Drop on tag parse error:", err);
+  }
+}
 </script>
 
 <template>
@@ -143,6 +197,8 @@ const progressPercent = computed(() => {
           v-for="folder in folders"
           :key="folder.id"
           :class="['row', { active: isTargetActive({ type: 'folder', folder }) }]"
+          @dragover.prevent
+          @drop="onDropOnFolder($event, folder)"
           @click="emit('selectNav', { type: 'folder', folder })"
         >
           <div class="path">
@@ -209,6 +265,8 @@ const progressPercent = computed(() => {
           v-for="album in albums"
           :key="album.id"
           :class="['row', { active: isTargetActive({ type: 'album', album }) }]"
+          @dragover.prevent
+          @drop="onDropOnAlbum($event, album)"
           @click="emit('selectNav', { type: 'album', album })"
         >
           <div class="path">
@@ -245,6 +303,8 @@ const progressPercent = computed(() => {
           class="tag-nav-chip"
           :class="{ active: isTargetActive({ type: 'tag', tag }) }"
           :style="{ borderColor: tag.color || '#3b82f6' }"
+          @dragover.prevent
+          @drop="onDropOnTag($event, tag)"
           @click="emit('selectNav', { type: 'tag', tag })"
         >
           <span

@@ -167,6 +167,26 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 }
 
+async function revealInFinder() {
+  try {
+    await invoke("reveal_in_file_manager", { path: props.file.path });
+  } catch (e) {
+    console.error("Reveal failed:", e);
+  }
+}
+
+async function trashCurrentFile() {
+  if (!confirm(`Are you sure you want to move "${getFileName(props.file.path)}" to the trash?`)) {
+    return;
+  }
+  try {
+    await invoke("trash_files", { filePaths: [props.file.path] });
+    emit("close");
+  } catch (e) {
+    console.error("Trash failed:", e);
+  }
+}
+
 onMounted(() => {
   window.addEventListener("keydown", handleKeyDown);
 });
@@ -242,11 +262,27 @@ watch(
           <button
             type="button"
             class="header-btn"
+            title="Reveal in File Manager / Finder"
+            @click="revealInFinder"
+          >
+            📁 Reveal
+          </button>
+          <button
+            type="button"
+            class="header-btn"
             :class="{ active: showInspector }"
             title="Toggle Metadata Inspector (Hotkey: I)"
             @click="toggleInspector"
           >
             ℹ Inspector
+          </button>
+          <button
+            type="button"
+            class="header-btn trash-btn"
+            title="Move file to system trash"
+            @click="trashCurrentFile"
+          >
+            🗑
           </button>
           <button
             type="button"

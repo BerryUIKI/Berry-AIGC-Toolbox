@@ -27,6 +27,10 @@ import BatchActionBar from "./components/BatchActionBar.vue";
 import AlbumModal from "./components/AlbumModal.vue";
 import TagModal from "./components/TagModal.vue";
 import PromptStatsModal from "./components/PromptStatsModal.vue";
+import ModelManagerModal from "./components/ModelManagerModal.vue";
+import FileOperationModal from "./components/FileOperationModal.vue";
+import DatabaseManagerModal from "./components/DatabaseManagerModal.vue";
+import ShortcutsHelpModal from "./components/ShortcutsHelpModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -41,6 +45,12 @@ const filesLoading = ref(false);
 const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
 const promptStatsModalOpen = ref(false);
+const modelManagerModalOpen = ref(false);
+const dbManagerModalOpen = ref(false);
+const shortcutsHelpModalOpen = ref(false);
+const fileOpModalOpen = ref(false);
+const fileOpMode = ref<"move" | "copy" | "trash">("move");
+const fileOpTargetFiles = ref<ImageFile[]>([]);
 const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
 const tagModalOpen = ref(false);
@@ -65,19 +75,145 @@ let unlisten: UnlistenFn | null = null;
 
 function handleWindowKeyDown(e: KeyboardEvent) {
   const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-  if (tag === "input" || tag === "textarea") return;
+  if (tag === "input" || tag === "textarea") {
+    if (e.key === "Escape") {
+      (document.activeElement as HTMLElement)?.blur();
+    }
+    return;
+  }
 
+  // Help Modal: ?
+  if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+    e.preventDefault();
+    shortcutsHelpModalOpen.value = !shortcutsHelpModalOpen.value;
+    return;
+  }
+
+  // Focus Search Bar: / or Cmd+F / Ctrl+F
+  if (e.key === "/" || ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F"))) {
+    e.preventDefault();
+    const searchInput = document.querySelector<HTMLInputElement>(".search-bar input");
+    searchInput?.focus();
+    searchInput?.select();
+    return;
+  }
+
+  // Select All: Cmd+A / Ctrl+A
   if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
     e.preventDefault();
     onSelectAll();
-  } else if (
-    e.key === "Escape" &&
-    selectedFilePaths.value.size > 0 &&
-    !previewingFile.value &&
-    !filterDrawerOpen.value &&
-    !promptStatsModalOpen.value
-  ) {
-    onClearSelection();
+    return;
+  }
+
+  // Escape: Close modals or clear selection
+  if (e.key === "Escape") {
+    if (shortcutsHelpModalOpen.value) {
+      shortcutsHelpModalOpen.value = false;
+      return;
+    }
+    if (dbManagerModalOpen.value) {
+      dbManagerModalOpen.value = false;
+      return;
+    }
+    if (modelManagerModalOpen.value) {
+      modelManagerModalOpen.value = false;
+      return;
+    }
+    if (promptStatsModalOpen.value) {
+      promptStatsModalOpen.value = false;
+      return;
+    }
+    if (filterDrawerOpen.value) {
+      filterDrawerOpen.value = false;
+      return;
+    }
+    if (albumModalOpen.value) {
+      albumModalOpen.value = false;
+      return;
+    }
+    if (tagModalOpen.value) {
+      tagModalOpen.value = false;
+      return;
+    }
+    if (fileOpModalOpen.value) {
+      fileOpModalOpen.value = false;
+      return;
+    }
+    if (selectedFilePaths.value.size > 0) {
+      onClearSelection();
+      return;
+    }
+  }
+
+  // Open Preview / Inspector: Space or Enter
+  if (e.key === " " || e.key === "Enter") {
+    if (!previewingFile.value && (selectedFile.value || selectedFilesList.value.length > 0)) {
+      e.preventDefault();
+      previewingFile.value = selectedFile.value || selectedFilesList.value[0];
+      return;
+    }
+  }
+
+  // Star Ratings: 1 - 5 (or 0 to clear)
+  if (["0", "1", "2", "3", "4", "5"].includes(e.key)) {
+    const targetFile =
+      selectedFile.value || (selectedFilesList.value.length > 0 ? selectedFilesList.value[0] : null);
+    if (targetFile && targetFile.id != null) {
+      e.preventDefault();
+      const rating = e.key === "0" ? null : parseInt(e.key, 10);
+      if (selectedFilesList.value.length > 1) {
+        void onBatchRate(rating);
+      } else {
+        void invoke("set_file_rating", { fileId: targetFile.id, rating });
+        onFileRated(targetFile.id, rating);
+      }
+      return;
+    }
+  }
+
+  // Favorite toggle: F
+  if (e.key === "f" || e.key === "F") {
+    const targetFile =
+      selectedFile.value || (selectedFilesList.value.length > 0 ? selectedFilesList.value[0] : null);
+    if (targetFile) {
+      e.preventDefault();
+      if (selectedFilesList.value.length > 1) {
+        const anyUnfav = selectedFilesList.value.some((f) => !f.is_favorite);
+        void onBatchToggleFavorite(anyUnfav);
+      } else {
+        void onBatchToggleFavorite(!targetFile.is_favorite);
+      }
+      return;
+    }
+  }
+
+  // Delete / Trash: Delete or Backspace
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (selectedFilesList.value.length > 0 || selectedFile.value) {
+      e.preventDefault();
+      if (selectedFilesList.value.length === 0 && selectedFile.value) {
+        selectedFilePaths.value.add(selectedFile.value.path);
+      }
+      onBatchTrash();
+      return;
+    }
+  }
+
+  // Arrow Keys Navigation when not in preview
+  if (!previewingFile.value && files.value.length > 0) {
+    const currentIdx = selectedFile.value
+      ? files.value.findIndex((f) => f.path === selectedFile.value?.path)
+      : -1;
+
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const nextIdx = currentIdx < files.value.length - 1 ? currentIdx + 1 : 0;
+      selectedFile.value = files.value[nextIdx];
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const prevIdx = currentIdx > 0 ? currentIdx - 1 : files.value.length - 1;
+      selectedFile.value = files.value[prevIdx];
+    }
   }
 }
 
@@ -343,6 +479,30 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
   }
 }
 
+function onBatchMove() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "move";
+  fileOpModalOpen.value = true;
+}
+
+function onBatchCopy() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "copy";
+  fileOpModalOpen.value = true;
+}
+
+function onBatchTrash() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "trash";
+  fileOpModalOpen.value = true;
+}
+
+async function onFileOpCompleted() {
+  selectedFilePaths.value.clear();
+  await refreshCounts();
+  await loadFiles();
+}
+
 function onUpdateFile(file: ImageFile) {
   const idx = files.value.findIndex((f) => f.id === file.id);
   if (idx !== -1) {
@@ -423,6 +583,62 @@ function onApplyStatsSearch(query: string) {
   activeCriteria.value = {};
   void loadFiles();
 }
+
+function onFilterByModel(modelName: string) {
+  activeCriteria.value = { ...activeCriteria.value, model_name: modelName };
+  searchQuery.value = criteriaToQuery(activeCriteria.value);
+  void loadFiles();
+}
+
+function onFilterByHash(modelHash: string) {
+  activeCriteria.value = { ...activeCriteria.value, model_hash: modelHash };
+  searchQuery.value = criteriaToQuery(activeCriteria.value);
+  void loadFiles();
+}
+async function onDropMoveFiles(payload: { filePaths: string[]; folderId: number }) {
+  try {
+    await invoke("move_files", {
+      filePaths: payload.filePaths,
+      targetFolderId: payload.folderId,
+    });
+    await onFileOpCompleted();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDropAddFilesToAlbum(payload: { fileIds: number[]; albumId: number }) {
+  try {
+    await invoke("add_files_to_album", {
+      albumId: payload.albumId,
+      fileIds: payload.fileIds,
+    });
+    await loadAlbumsAndTags();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
+  try {
+    await invoke("tag_files", {
+      tagId: payload.tagId,
+      fileIds: payload.fileIds,
+    });
+    await loadAlbumsAndTags();
+    await loadFiles();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDatabaseChanged() {
+  await reloadFolders();
+  await refreshCounts();
+  await reloadFiltersMeta();
+  await loadAlbumsAndTags();
+  await loadFiles();
+}
 </script>
 
 <template>
@@ -453,6 +669,9 @@ function onApplyStatsSearch(query: string) {
       @open-album-modal="() => onOpenAlbumModal()"
       @open-tag-modal="() => onOpenTagModal()"
       @open-prompt-stats="promptStatsModalOpen = true"
+      @move-files-to-folder="onDropMoveFiles"
+      @add-files-to-album="onDropAddFilesToAlbum"
+      @tag-files="onDropTagFiles"
     />
 
     <section class="files-view-section">
@@ -535,6 +754,30 @@ function onApplyStatsSearch(query: string) {
           @click="promptStatsModalOpen = true"
         >
           <span>📊 Insights</span>
+        </button>
+        <button
+          type="button"
+          class="models-toggle-btn"
+          title="Open Checkpoint Models Catalog & Hash Cache"
+          @click="modelManagerModalOpen = true"
+        >
+          <span>🧠 Models</span>
+        </button>
+        <button
+          type="button"
+          class="models-toggle-btn"
+          title="Open Database & Storage Maintenance"
+          @click="dbManagerModalOpen = true"
+        >
+          <span>🗄️ Database</span>
+        </button>
+        <button
+          type="button"
+          class="models-toggle-btn"
+          title="Keyboard Shortcuts Cheat Sheet (Hotkey: ?)"
+          @click="shortcutsHelpModalOpen = true"
+        >
+          <span>⌨️ Shortcuts</span>
         </button>
       </div>
 
@@ -620,6 +863,9 @@ function onApplyStatsSearch(query: string) {
       @tag-selected="onBatchTag"
       @toggle-favorite="onBatchToggleFavorite"
       @toggle-nsfw="onBatchToggleNsfw"
+      @move-selected="onBatchMove"
+      @copy-selected="onBatchCopy"
+      @trash-selected="onBatchTrash"
     />
 
     <!-- Album Management & Assignment Modal -->
@@ -641,6 +887,37 @@ function onApplyStatsSearch(query: string) {
     <PromptStatsModal
       v-model:open="promptStatsModalOpen"
       @apply-search="onApplyStatsSearch"
+    />
+
+    <!-- Checkpoint Models & Hash Cache Modal -->
+    <ModelManagerModal
+      :show="modelManagerModalOpen"
+      @close="modelManagerModalOpen = false"
+      @filter-model="onFilterByModel"
+      @filter-hash="onFilterByHash"
+    />
+
+    <!-- File Operations Modal (Move / Copy / Trash) -->
+    <FileOperationModal
+      :open="fileOpModalOpen"
+      :mode="fileOpMode"
+      :files="fileOpTargetFiles"
+      :folders="folders"
+      @close="fileOpModalOpen = false"
+      @completed="onFileOpCompleted"
+    />
+
+    <!-- Database & Storage Maintenance Modal -->
+    <DatabaseManagerModal
+      :show="dbManagerModalOpen"
+      @close="dbManagerModalOpen = false"
+      @database-changed="onDatabaseChanged"
+    />
+
+    <!-- Keyboard Shortcuts Guide Modal -->
+    <ShortcutsHelpModal
+      :show="shortcutsHelpModalOpen"
+      @close="shortcutsHelpModalOpen = false"
     />
   </main>
 </template>
@@ -887,7 +1164,8 @@ h1 {
   line-height: 1.2;
 }
 
-.stats-toggle-btn {
+.stats-toggle-btn,
+.models-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -906,7 +1184,8 @@ h1 {
   box-sizing: border-box;
 }
 
-.stats-toggle-btn:hover {
+.stats-toggle-btn:hover,
+.models-toggle-btn:hover {
   background: rgba(128, 128, 128, 0.15);
   border-color: rgba(128, 128, 128, 0.4);
 }

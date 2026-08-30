@@ -222,6 +222,23 @@ function scrollToIndex(index: number) {
   }
 }
 
+function onDragStart(e: DragEvent, file: ImageFile) {
+  const selectedPaths = props.selectedFilePaths && props.selectedFilePaths.has(file.path)
+    ? Array.from(props.selectedFilePaths)
+    : [file.path];
+
+  const payload = {
+    file_paths: selectedPaths,
+    file_ids: file.id ? [file.id] : [],
+  };
+
+  e.dataTransfer?.setData("application/json", JSON.stringify(payload));
+  e.dataTransfer?.setData("text/plain", selectedPaths.join("\n"));
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "copyMove";
+  }
+}
+
 // When files change or reset, scroll to top if needed
 watch(
   () => props.files,
@@ -262,6 +279,8 @@ watch(
               active: selectedFile?.path === file.path,
               'multi-selected': selectedFilePaths?.has(file.path),
             }"
+            draggable="true"
+            @dragstart="onDragStart($event, file)"
             @click="selectFile(file, $event)"
             @dblclick="activateFile(file)"
           >

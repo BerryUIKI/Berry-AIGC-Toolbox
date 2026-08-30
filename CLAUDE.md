@@ -11,9 +11,9 @@ for search, organization (albums, tags, favorites, ratings, NSFW), and model
 lookup.
 
 This is a **clean-slate rewrite** (v3.0) on the `rewrite`/`dev` branches. The
-legacy C#/.NET codebase is archived read-only on `old/main`. M1 (Scaffolding &
-Foundation) is complete; see [docs/ROADMAP.md](docs/ROADMAP.md) for milestone
-status.
+legacy C#/.NET codebase is archived read-only on `old/main`. Milestones 1 through 6
+(Scaffolding, Scanning, Browsing, Search, Organization, Performance/Polish) are complete;
+see [docs/ROADMAP.md](docs/ROADMAP.md) for milestone status.
 
 ## Build, Test & Lint
 

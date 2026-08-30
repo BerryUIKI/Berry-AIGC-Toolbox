@@ -144,3 +144,29 @@ export interface PromptStats {
   top_samplers: PromptKeywordStat[];
 }
 
+export interface CheckpointModelStat {
+  model_name: string;
+  model_hash?: string | null;
+  count: number;
+}
+
+export interface ModelCacheEntry {
+  hash: string;
+  name: string;
+  title?: string | null;
+  sha256?: string | null;
+}
+
+export interface DatabaseStats {
+  file_count: number;
+  folder_count: number;
+  album_count: number;
+  tag_count: number;
+  model_cache_count: number;
+  db_size_bytes: number;
+  page_size: number;
+  page_count: number;
+  freelist_count: number;
+}
+
+

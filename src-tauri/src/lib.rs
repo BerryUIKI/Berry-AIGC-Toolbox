@@ -64,6 +64,18 @@ pub fn run() {
             commands::set_file_nsfw,
             commands::set_files_nsfw,
             commands::get_prompt_stats,
+            commands::get_checkpoint_models,
+            commands::import_model_cache_file,
+            commands::resolve_model_hash,
+            commands::list_model_cache,
+            commands::move_files,
+            commands::copy_files,
+            commands::trash_files,
+            commands::reveal_in_file_manager,
+            commands::vacuum_database,
+            commands::backup_database,
+            commands::get_database_stats,
+            commands::restore_database,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

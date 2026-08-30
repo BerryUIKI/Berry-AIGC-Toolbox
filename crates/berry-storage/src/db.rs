@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use berry_domain::{
-    Album, Container, ExtractedMetadata, FileSortField, Folder, ImageFile, PromptStat,
-    SearchCriteria, SortDirection, Tag,
+    Album, CheckpointModelStat, Container, DatabaseStats, ExtractedMetadata, FileSortField, Folder,
+    ImageFile, ModelCacheEntry, PromptStat, SearchCriteria, SortDirection, Tag,
 };
 use rusqlite::{params, Connection, OpenFlags};
 
@@ -138,6 +138,67 @@ impl Database {
             Some(row) => Ok(Some(row.get(0)?)),
             None => Ok(None),
         }
+    }
+
+    /// Run SQLite VACUUM and PRAGMA optimize.
+    pub fn vacuum_database(&self) -> Result<(), DatabaseError> {
+        self.conn.execute("VACUUM", [])?;
+        self.conn.execute("PRAGMA optimize", [])?;
+        Ok(())
+    }
+
+    /// Point-in-time database backup using SQLite VACUUM INTO.
+    pub fn backup_database(&self, destination_path: &str) -> Result<(), DatabaseError> {
+        let dest = Path::new(destination_path);
+        if dest.exists() {
+            let _ = std::fs::remove_file(dest);
+        }
+        self.conn.execute("VACUUM INTO ?1", [destination_path])?;
+        Ok(())
+    }
+
+    /// Retrieve database storage and table statistics.
+    pub fn get_database_stats(&self) -> Result<DatabaseStats, DatabaseError> {
+        let file_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |row| row.get(0))?;
+        let folder_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM folders", [], |row| row.get(0))?;
+        let album_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM albums", [], |row| row.get(0))?;
+        let tag_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))?;
+        let model_cache_count: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM model_cache", [], |row| row.get(0))
+            .unwrap_or(0);
+
+        let page_size: i64 = self
+            .conn
+            .query_row("PRAGMA page_size", [], |row| row.get(0))?;
+        let page_count: i64 = self
+            .conn
+            .query_row("PRAGMA page_count", [], |row| row.get(0))?;
+        let freelist_count: i64 = self
+            .conn
+            .query_row("PRAGMA freelist_count", [], |row| row.get(0))?;
+
+        let db_size_bytes = (page_count * page_size) as u64;
+
+        Ok(DatabaseStats {
+            file_count,
+            folder_count,
+            album_count,
+            tag_count,
+            model_cache_count,
+            db_size_bytes,
+            page_size,
+            page_count,
+            freelist_count,
+        })
     }
 
     // --- Folders ---
@@ -347,6 +408,43 @@ impl Database {
             ..Default::default()
         };
         self.search_files(&criteria)
+    }
+
+    /// Retrieve a file by its file path.
+    pub fn get_file_by_path(&self, path: &str) -> Result<Option<ImageFile>, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw
+             FROM files WHERE path = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query_and_then([path], Self::map_row)?;
+        match rows.next() {
+            Some(r) => Ok(Some(r?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Update file path and folder_id when a file is moved.
+    pub fn move_file_record(
+        &self,
+        old_path: &str,
+        new_path: &str,
+        new_folder_id: i64,
+    ) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE files SET path = ?1, folder_id = ?2 WHERE path = ?3",
+            params![new_path, new_folder_id, old_path],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(0));
+        }
+        Ok(())
+    }
+
+    /// Delete a file record by path (e.g. after trashing).
+    pub fn delete_file_by_path(&self, path: &str) -> Result<(), DatabaseError> {
+        self.conn
+            .execute("DELETE FROM files WHERE path = ?1", [path])?;
+        Ok(())
     }
 
     /// Search files matching various criteria (text, parameters, ratings, folders, sorting, pagination).
@@ -1054,6 +1152,112 @@ impl Database {
         }
         Ok(stats)
     }
+
+    // --- Checkpoints and Model Cache ---
+
+    /// Retrieve all distinct checkpoint models and their hashes, counts, sorted by usage descending.
+    pub fn get_checkpoint_models(&self) -> Result<Vec<CheckpointModelStat>, DatabaseError> {
+        let sql = "
+            SELECT
+                json_extract(metadata, '$.model_name') AS m_name,
+                json_extract(metadata, '$.model_hash') AS m_hash,
+                COUNT(*) AS cnt
+            FROM files
+            WHERE json_extract(metadata, '$.model_name') IS NOT NULL
+              AND json_extract(metadata, '$.model_name') != ''
+            GROUP BY m_name, m_hash
+            ORDER BY cnt DESC, m_name ASC
+        ";
+        let mut stmt = self.conn.prepare_cached(sql)?;
+        let rows = stmt.query_map([], |row| {
+            Ok(CheckpointModelStat {
+                model_name: row.get(0)?,
+                model_hash: row.get(1)?,
+                count: row.get::<_, i64>(2)? as usize,
+            })
+        })?;
+        let mut results = Vec::new();
+        for r in rows {
+            results.push(r?);
+        }
+        Ok(results)
+    }
+
+    /// Import entries from an A1111 cache.json or model directory into the `model_cache` table.
+    pub fn import_model_cache(&self, entries: &[ModelCacheEntry]) -> Result<usize, DatabaseError> {
+        if entries.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR REPLACE INTO model_cache (hash, name, title, sha256) VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for entry in entries {
+                count += stmt.execute(params![
+                    entry.hash.trim(),
+                    entry.name.trim(),
+                    entry.title.as_deref().map(|t| t.trim()),
+                    entry.sha256.as_deref().map(|s| s.trim()),
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Lookup a model entry in `model_cache` by short hash or sha256 or name.
+    pub fn resolve_model_hash(
+        &self,
+        hash_or_name: &str,
+    ) -> Result<Option<ModelCacheEntry>, DatabaseError> {
+        let clean = hash_or_name.trim();
+        if clean.is_empty() {
+            return Ok(None);
+        }
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT hash, name, title, sha256 FROM model_cache
+             WHERE hash = ?1
+                OR name = ?1
+                OR sha256 = ?1
+                OR sha256 LIKE (?1 || '%')
+                OR hash LIKE (?1 || '%')
+             LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map([clean], |row| {
+            Ok(ModelCacheEntry {
+                hash: row.get(0)?,
+                name: row.get(1)?,
+                title: row.get(2)?,
+                sha256: row.get(3)?,
+            })
+        })?;
+        match rows.next() {
+            Some(r) => Ok(Some(r?)),
+            None => Ok(None),
+        }
+    }
+
+    /// List all cached model mappings.
+    pub fn list_model_cache(&self) -> Result<Vec<ModelCacheEntry>, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT hash, name, title, sha256 FROM model_cache ORDER BY name ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ModelCacheEntry {
+                hash: row.get(0)?,
+                name: row.get(1)?,
+                title: row.get(2)?,
+                sha256: row.get(3)?,
+            })
+        })?;
+        let mut results = Vec::new();
+        for r in rows {
+            results.push(r?);
+        }
+        Ok(results)
+    }
 }
 
 #[cfg(test)]
@@ -1729,5 +1933,157 @@ mod tests {
         // "blurry" appeared in both images (count 2)
         assert_eq!(neg_stats[0].text, "blurry");
         assert_eq!(neg_stats[0].count, 2);
+    }
+
+    #[test]
+    fn checkpoint_models_and_cache() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+
+        let mut f1 = image(folder.id, "/img/1.png");
+        f1.metadata = Some(sample_meta(
+            "prompt1",
+            "neg1",
+            "v1-5-pruned.safetensors",
+            "Euler",
+            20,
+            7.0,
+            "123",
+        ));
+        db.upsert_file(&f1).unwrap();
+
+        let mut f2 = image(folder.id, "/img/2.png");
+        f2.metadata = Some(sample_meta(
+            "prompt2",
+            "neg2",
+            "v1-5-pruned.safetensors",
+            "Euler",
+            20,
+            7.0,
+            "456",
+        ));
+        db.upsert_file(&f2).unwrap();
+
+        let mut f3 = image(folder.id, "/img/3.png");
+        f3.metadata = Some(sample_meta(
+            "prompt3",
+            "neg3",
+            "sd_xl_base_1.0.safetensors",
+            "Euler",
+            20,
+            7.0,
+            "789",
+        ));
+        db.upsert_file(&f3).unwrap();
+
+        // 1. Checkpoint model stats
+        let models = db.get_checkpoint_models().unwrap();
+        assert_eq!(models.len(), 2);
+        assert_eq!(models[0].model_name, "v1-5-pruned.safetensors");
+        assert_eq!(models[0].count, 2);
+        assert_eq!(models[1].model_name, "sd_xl_base_1.0.safetensors");
+        assert_eq!(models[1].count, 1);
+
+        // 2. Import cache entries
+        let entries = vec![
+            ModelCacheEntry {
+                hash: "e4a30e46".to_string(),
+                name: "v1-5-pruned.safetensors".to_string(),
+                title: Some("Stable Diffusion v1.5".to_string()),
+                sha256: Some(
+                    "e4a30e4620f1c21a4bf600d9f66f3ba7608e0b31ff8c64e9ddda4b57a37e44ec".to_string(),
+                ),
+            },
+            ModelCacheEntry {
+                hash: "31e35c80".to_string(),
+                name: "sd_xl_base_1.0.safetensors".to_string(),
+                title: Some("SDXL Base 1.0".to_string()),
+                sha256: Some(
+                    "31e35c80fc4829d14f90153f40f6cd80c400577640de36d3933cfa1be5d7d84d".to_string(),
+                ),
+            },
+        ];
+        let imported = db.import_model_cache(&entries).unwrap();
+        assert_eq!(imported, 2);
+
+        // 3. Resolve hash
+        let resolved = db.resolve_model_hash("e4a30e46").unwrap().expect("found");
+        assert_eq!(resolved.name, "v1-5-pruned.safetensors");
+        assert_eq!(resolved.title.as_deref(), Some("Stable Diffusion v1.5"));
+
+        let resolved_sha = db
+            .resolve_model_hash("31e35c80fc48")
+            .unwrap()
+            .expect("found prefix");
+        assert_eq!(resolved_sha.name, "sd_xl_base_1.0.safetensors");
+
+        // 4. List cache
+        let list = db.list_model_cache().unwrap();
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn file_move_and_delete_operations() {
+        let db = Database::connect_in_memory().unwrap();
+        let f1 = db.add_folder("/folder1").unwrap();
+        let f2 = db.add_folder("/folder2").unwrap();
+
+        let id = db.upsert_file(&image(f1.id, "/folder1/cat.png")).unwrap();
+
+        let retrieved = db
+            .get_file_by_path("/folder1/cat.png")
+            .unwrap()
+            .expect("exists");
+        assert_eq!(retrieved.id, Some(id));
+        assert_eq!(retrieved.folder_id, f1.id);
+
+        // Move to folder2
+        db.move_file_record("/folder1/cat.png", "/folder2/cat.png", f2.id)
+            .unwrap();
+
+        assert_eq!(db.get_file_by_path("/folder1/cat.png").unwrap(), None);
+        let moved = db
+            .get_file_by_path("/folder2/cat.png")
+            .unwrap()
+            .expect("moved exists");
+        assert_eq!(moved.id, Some(id));
+        assert_eq!(moved.folder_id, f2.id);
+
+        // Delete file
+        db.delete_file_by_path("/folder2/cat.png").unwrap();
+        assert_eq!(db.get_file_by_path("/folder2/cat.png").unwrap(), None);
+    }
+
+    #[test]
+    fn database_stats_and_vacuum_backup() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db = Database::connect(&db_path).unwrap();
+
+        let f = db.add_folder("/test_folder").unwrap();
+        db.upsert_file(&image(f.id, "/test_folder/img1.png"))
+            .unwrap();
+        db.create_album("Test Album", None).unwrap();
+        db.create_tag("Tag1", None).unwrap();
+
+        let stats = db.get_database_stats().unwrap();
+        assert_eq!(stats.file_count, 1);
+        assert_eq!(stats.folder_count, 1);
+        assert_eq!(stats.album_count, 1);
+        assert_eq!(stats.tag_count, 1);
+        assert!(stats.db_size_bytes > 0);
+
+        // Test vacuum
+        db.vacuum_database().unwrap();
+
+        // Test backup
+        let backup_path = temp_dir.path().join("backup.db");
+        db.backup_database(&backup_path.to_string_lossy()).unwrap();
+        assert!(backup_path.exists());
+
+        // Verify backup database is a valid SQLite db
+        let backup_db = Database::connect(&backup_path).unwrap();
+        let backup_stats = backup_db.get_database_stats().unwrap();
+        assert_eq!(backup_stats.file_count, 1);
     }
 }

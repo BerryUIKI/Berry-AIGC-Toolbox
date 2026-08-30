@@ -15,6 +15,9 @@ const emit = defineEmits<{
   (e: "tagSelected"): void;
   (e: "toggleFavorite", isFavorite: boolean): void;
   (e: "toggleNsfw", isNsfw: boolean): void;
+  (e: "moveSelected"): void;
+  (e: "copySelected"): void;
+  (e: "trashSelected"): void;
 }>();
 
 const allFavorites = computed(
@@ -171,6 +174,36 @@ function onSetRating(rating: number | null) {
           @click="copyPrompts"
         >
           {{ copiedPrompts ? "✓ Prompts Copied!" : "💬 Copy Prompts" }}
+        </button>
+
+        <!-- Move to Folder -->
+        <button
+          type="button"
+          class="action-btn"
+          title="Move selected files to another folder"
+          @click="emit('moveSelected')"
+        >
+          📂 Move
+        </button>
+
+        <!-- Copy to Folder -->
+        <button
+          type="button"
+          class="action-btn"
+          title="Copy selected files to another folder"
+          @click="emit('copySelected')"
+        >
+          📄 Copy
+        </button>
+
+        <!-- Trash Selected -->
+        <button
+          type="button"
+          class="action-btn trash-btn"
+          title="Move selected files to system trash"
+          @click="emit('trashSelected')"
+        >
+          🗑 Trash
         </button>
       </div>
     </div>

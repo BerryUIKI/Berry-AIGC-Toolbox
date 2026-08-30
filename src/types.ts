@@ -122,3 +122,11 @@ export interface SearchCriteria {
   offset?: number | null;
 }
 
+export type NavTarget =
+  | { type: "all" }
+  | { type: "favorites" }
+  | { type: "nsfw" }
+  | { type: "folder"; folder: Folder }
+  | { type: "album"; album: Album }
+  | { type: "tag"; tag: Tag };
+

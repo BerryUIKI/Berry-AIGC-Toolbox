@@ -86,6 +86,12 @@ pub struct ImageFile {
     pub rating: Option<u8>,
     /// Calculated or extracted aesthetic score, if available.
     pub aesthetic_score: Option<f64>,
+    /// Whether this file is marked as a favorite.
+    #[serde(default)]
+    pub is_favorite: bool,
+    /// Whether this file is flagged as NSFW.
+    #[serde(default)]
+    pub is_nsfw: bool,
 }
 
 /// Field by which to sort a list of [`ImageFile`]s.

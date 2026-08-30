@@ -3,14 +3,17 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  Album,
   AppInfo,
   FileSortField,
   Folder,
   ImageFile,
   LibraryCounts,
+  NavTarget,
   ScanProgress,
   SearchCriteria,
   SortDirection,
+  Tag,
 } from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
 import FolderList from "./components/FolderList.vue";
@@ -21,20 +24,31 @@ import PreviewPane from "./components/PreviewPane.vue";
 import SearchBar from "./components/SearchBar.vue";
 import FilterDrawer from "./components/FilterDrawer.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
+import AlbumModal from "./components/AlbumModal.vue";
+import TagModal from "./components/TagModal.vue";
+import PromptStatsModal from "./components/PromptStatsModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
 const libraryCounts = ref<LibraryCounts | null>(null);
+const albums = ref<Album[]>([]);
+const albumCounts = ref<Record<number, number>>({});
+const tags = ref<Tag[]>([]);
+const activeTarget = ref<NavTarget>({ type: "all" });
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
+const promptStatsModalOpen = ref(false);
+const albumModalOpen = ref(false);
+const albumTargetFileIds = ref<number[]>([]);
+const tagModalOpen = ref(false);
+const tagTargetFileIds = ref<number[]>([]);
 const distinctModels = ref<string[]>([]);
 const distinctSamplers = ref<string[]>([]);
 const activeCriteria = ref<SearchCriteria>({});
 const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
-const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
 const selectedFilePaths = ref<Set<string>>(new Set());
 const selectedFilesList = computed(() =>
@@ -60,7 +74,8 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     e.key === "Escape" &&
     selectedFilePaths.value.size > 0 &&
     !previewingFile.value &&
-    !filterDrawerOpen.value
+    !filterDrawerOpen.value &&
+    !promptStatsModalOpen.value
   ) {
     onClearSelection();
   }
@@ -73,6 +88,7 @@ onMounted(async () => {
     await reloadFolders();
     await refreshCounts();
     await reloadFiltersMeta();
+    await loadAlbumsAndTags();
     await loadFiles();
   } catch (e) {
     error.value = String(e);
@@ -109,11 +125,27 @@ async function reloadFiltersMeta() {
   }
 }
 
+async function loadAlbumsAndTags() {
+  try {
+    albums.value = await invoke<Album[]>("list_albums");
+    const counts: Record<number, number> = {};
+    for (const album of albums.value) {
+      counts[album.id] = await invoke<number>("count_album_files", {
+        albumId: album.id,
+      });
+    }
+    albumCounts.value = counts;
+    tags.value = await invoke<Tag[]>("list_tags");
+  } catch (e) {
+    console.error("Failed to load albums/tags:", e);
+  }
+}
+
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
   void refreshCounts();
   void reloadFiltersMeta();
-  selectedFolder.value = folder;
+  activeTarget.value = { type: "folder", folder };
   selectedFile.value = null;
   previewingFile.value = null;
   void loadFiles();
@@ -123,24 +155,42 @@ function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
   void refreshCounts();
   void reloadFiltersMeta();
-  if (selectedFolder.value?.id === folderId) {
-    selectedFolder.value = null;
+  if (activeTarget.value.type === "folder" && activeTarget.value.folder.id === folderId) {
+    activeTarget.value = { type: "all" };
     selectedFile.value = null;
     previewingFile.value = null;
   }
   void loadFiles();
 }
 
-async function onFolderSelected(folder: Folder | null) {
-  selectedFolder.value = folder;
+function onSelectNav(target: NavTarget) {
+  activeTarget.value = target;
   selectedFile.value = null;
   previewingFile.value = null;
-  await loadFiles();
+  void loadFiles();
 }
+
+const targetTitle = computed(() => {
+  switch (activeTarget.value.type) {
+    case "all":
+      return "All Images";
+    case "favorites":
+      return "★ Favorites";
+    case "nsfw":
+      return "🔞 Sensitive (18+)";
+    case "folder":
+      return activeTarget.value.folder.path.split(/[\\/]/).pop() || activeTarget.value.folder.path;
+    case "album":
+      return `🗂️ ${activeTarget.value.album.name}`;
+    case "tag":
+      return `🏷 #${activeTarget.value.tag.name}`;
+  }
+});
 
 async function onFolderScanned(_folderId: number) {
   await refreshCounts();
   await reloadFiltersMeta();
+  await loadAlbumsAndTags();
   await loadFiles();
 }
 
@@ -231,24 +281,111 @@ function onFileRated(fileId: number, rating: number | null) {
   }
 }
 
+function onOpenAlbumModal(fileIds?: number[]) {
+  albumTargetFileIds.value = fileIds ?? [];
+  albumModalOpen.value = true;
+}
+
+function onBatchAddToAlbum() {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length > 0) {
+    onOpenAlbumModal(ids);
+  }
+}
+
+function onAddedToAlbum(_album: Album) {
+  selectedFilePaths.value.clear();
+}
+
+function onOpenTagModal(fileIds?: number[]) {
+  tagTargetFileIds.value = fileIds ?? [];
+  tagModalOpen.value = true;
+}
+
+function onBatchTag() {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length > 0) {
+    onOpenTagModal(ids);
+  }
+}
+
+async function onBatchToggleFavorite(isFavorite: boolean) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+  try {
+    await invoke("set_files_favorite", { fileIds: ids, isFavorite });
+    for (const f of selectedFilesList.value) {
+      f.is_favorite = isFavorite;
+    }
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onBatchToggleNsfw(isNsfw: boolean) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+  try {
+    await invoke("set_files_nsfw", { fileIds: ids, isNsfw });
+    for (const f of selectedFilesList.value) {
+      f.is_nsfw = isNsfw;
+    }
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+function onUpdateFile(file: ImageFile) {
+  const idx = files.value.findIndex((f) => f.id === file.id);
+  if (idx !== -1) {
+    files.value[idx] = { ...file };
+  }
+  if (selectedFile.value?.id === file.id) {
+    selectedFile.value = { ...file };
+  }
+  if (previewingFile.value?.id === file.id) {
+    previewingFile.value = { ...file };
+  }
+}
+
 async function loadFiles() {
   filesLoading.value = true;
   selectedFilePaths.value.clear();
   try {
     const q = searchQuery.value.trim();
     if (q) {
+      const folderId = activeTarget.value.type === "folder" ? activeTarget.value.folder.id : null;
       files.value = await invoke<ImageFile[]>("search_files_by_query", {
         query: q,
-        folderId: selectedFolder.value?.id ?? null,
+        folderId,
         sort: sortField.value,
         direction: sortDirection.value,
       });
     } else {
-      files.value = await invoke<ImageFile[]>("query_files", {
-        folderId: selectedFolder.value?.id ?? null,
+      const criteria: SearchCriteria = {
         sort: sortField.value,
         direction: sortDirection.value,
-      });
+      };
+      if (activeTarget.value.type === "folder") {
+        criteria.folder_id = activeTarget.value.folder.id;
+      } else if (activeTarget.value.type === "favorites") {
+        criteria.is_favorite = true;
+      } else if (activeTarget.value.type === "nsfw") {
+        criteria.is_nsfw = true;
+      } else if (activeTarget.value.type === "album") {
+        criteria.album_id = activeTarget.value.album.id;
+      } else if (activeTarget.value.type === "tag") {
+        criteria.tag_id = activeTarget.value.tag.id;
+      }
+      files.value = await invoke<ImageFile[]>("search_files", { criteria });
     }
   } catch (e) {
     error.value = String(e);
@@ -280,6 +417,12 @@ function onResetFilters() {
   searchQuery.value = "";
   void loadFiles();
 }
+
+function onApplyStatsSearch(query: string) {
+  searchQuery.value = query;
+  activeCriteria.value = {};
+  void loadFiles();
+}
 </script>
 
 <template>
@@ -299,11 +442,17 @@ function onResetFilters() {
     <FolderList
       :folders="folders"
       :counts="libraryCounts"
-      :selected-id="selectedFolder?.id ?? null"
+      :albums="albums"
+      :album-counts="albumCounts"
+      :tags="tags"
+      :active-target="activeTarget"
       :progress="progress"
       @removed="onFolderRemoved"
-      @selected="onFolderSelected"
       @scanned="onFolderScanned"
+      @select-nav="onSelectNav"
+      @open-album-modal="() => onOpenAlbumModal()"
+      @open-tag-modal="() => onOpenTagModal()"
+      @open-prompt-stats="promptStatsModalOpen = true"
     />
 
     <section class="files-view-section">
@@ -313,10 +462,9 @@ function onResetFilters() {
             Files
             <span v-if="files.length" class="count-badge">({{ files.length }})</span>
           </h2>
-          <span v-if="selectedFolder" class="folder-badge" :title="selectedFolder.path">
-            {{ selectedFolder.path.split(/[\\/]/).pop() || selectedFolder.path }}
+          <span class="folder-badge" :class="{ 'all-badge': activeTarget.type === 'all' }">
+            {{ targetTitle }}
           </span>
-          <span v-else class="folder-badge all-badge">All Images</span>
           <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
             Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
             <button
@@ -380,6 +528,14 @@ function onResetFilters() {
             {{ activeFilterCount }}
           </span>
         </button>
+        <button
+          type="button"
+          class="stats-toggle-btn"
+          title="Open prompt keyword & metadata insights"
+          @click="promptStatsModalOpen = true"
+        >
+          <span>📊 Insights</span>
+        </button>
       </div>
 
       <div v-if="searchQuery.trim()" class="search-status-bar">
@@ -438,6 +594,9 @@ function onResetFilters() {
       @close="previewingFile = null"
       @navigate="onPreviewNavigate"
       @rate="onFileRated"
+      @update-file="onUpdateFile"
+      @open-tag-modal="(id) => onOpenTagModal([id])"
+      @open-album-modal="(id) => onOpenAlbumModal([id])"
     />
 
     <!-- Visual Search Builder / Filter Drawer -->
@@ -457,6 +616,31 @@ function onResetFilters() {
       @select-all="onSelectAll"
       @clear-selection="onClearSelection"
       @rate-selected="onBatchRate"
+      @add-to-album="onBatchAddToAlbum"
+      @tag-selected="onBatchTag"
+      @toggle-favorite="onBatchToggleFavorite"
+      @toggle-nsfw="onBatchToggleNsfw"
+    />
+
+    <!-- Album Management & Assignment Modal -->
+    <AlbumModal
+      v-model:open="albumModalOpen"
+      :file-ids="albumTargetFileIds"
+      @added-to-album="onAddedToAlbum"
+      @albums-changed="loadAlbumsAndTags"
+    />
+
+    <!-- Tag Management & Assignment Modal -->
+    <TagModal
+      v-model:open="tagModalOpen"
+      :file-ids="tagTargetFileIds"
+      @tags-changed="loadAlbumsAndTags"
+    />
+
+    <!-- Prompt & Metadata Insights Modal -->
+    <PromptStatsModal
+      v-model:open="promptStatsModalOpen"
+      @apply-search="onApplyStatsSearch"
     />
   </main>
 </template>
@@ -701,6 +885,30 @@ h1 {
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
   line-height: 1.2;
+}
+
+.stats-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.stats-toggle-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-color: rgba(128, 128, 128, 0.4);
 }
 
 .search-status-bar {

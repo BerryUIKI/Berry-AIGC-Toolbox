@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use berry_domain::{
-    Container, ExtractedMetadata, FileSortField, Folder, ImageFile, SearchCriteria, SortDirection,
+    Album, Container, ExtractedMetadata, FileSortField, Folder, ImageFile, PromptStat,
+    SearchCriteria, SortDirection, Tag,
 };
 use rusqlite::{params, Connection, OpenFlags};
 
@@ -23,6 +24,10 @@ pub enum DatabaseError {
     FolderNotFound(i64),
     #[error("no file with id {0}")]
     FileNotFound(i64),
+    #[error("no album with id {0}")]
+    AlbumNotFound(i64),
+    #[error("no tag with id {0}")]
+    TagNotFound(i64),
     #[error("rating must be between 1 and 10, got {0}")]
     InvalidRating(u8),
     #[error("failed to open database at {path}: {source}")]
@@ -35,8 +40,8 @@ pub enum DatabaseError {
 
 /// SQL that inserts or updates a file row keyed by its unique path.
 const UPSERT_FILE_SQL: &str =
-    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
      ON CONFLICT(path) DO UPDATE SET
          folder_id       = excluded.folder_id,
          container       = excluded.container,
@@ -44,7 +49,9 @@ const UPSERT_FILE_SQL: &str =
          modified_at     = excluded.modified_at,
          metadata        = excluded.metadata,
          rating          = coalesce(excluded.rating, files.rating),
-         aesthetic_score = coalesce(excluded.aesthetic_score, files.aesthetic_score)";
+         aesthetic_score = coalesce(excluded.aesthetic_score, files.aesthetic_score),
+         is_favorite     = files.is_favorite,
+         is_nsfw         = files.is_nsfw";
 
 /// A SQLite database with a fully migrated schema.
 pub struct Database {
@@ -225,6 +232,8 @@ impl Database {
                 metadata,
                 file.rating.map(|r| r as i64),
                 file.aesthetic_score,
+                file.is_favorite as i64,
+                file.is_nsfw as i64,
             ],
         )?;
         Ok(self.conn.last_insert_rowid())
@@ -259,6 +268,8 @@ impl Database {
                     metadata,
                     file.rating.map(|r| r as i64),
                     file.aesthetic_score,
+                    file.is_favorite as i64,
+                    file.is_nsfw as i64,
                 ])?;
                 count += 1;
             }
@@ -298,6 +309,8 @@ impl Database {
         let metadata: Option<String> = row.get(6)?;
         let rating: Option<i64> = row.get(7)?;
         let aesthetic_score: Option<f64> = row.get(8)?;
+        let is_favorite: i64 = row.get(9).unwrap_or(0);
+        let is_nsfw: i64 = row.get(10).unwrap_or(0);
 
         let container = Container::from_id(&container_id)
             .ok_or_else(|| DatabaseError::UnknownContainer(container_id))?;
@@ -315,6 +328,8 @@ impl Database {
             metadata,
             rating: rating.map(|r| r as u8),
             aesthetic_score,
+            is_favorite: is_favorite != 0,
+            is_nsfw: is_nsfw != 0,
         })
     }
 
@@ -423,6 +438,27 @@ impl Database {
             params.push(rusqlite::types::Value::Real(max_aesthetic));
         }
 
+        if let Some(fav) = criteria.is_favorite {
+            conditions.push("is_favorite = ?".to_string());
+            params.push(rusqlite::types::Value::Integer(if fav { 1 } else { 0 }));
+        }
+
+        if let Some(nsfw) = criteria.is_nsfw {
+            conditions.push("is_nsfw = ?".to_string());
+            params.push(rusqlite::types::Value::Integer(if nsfw { 1 } else { 0 }));
+        }
+
+        if let Some(aid) = criteria.album_id {
+            conditions
+                .push("id IN (SELECT file_id FROM album_files WHERE album_id = ?)".to_string());
+            params.push(rusqlite::types::Value::Integer(aid));
+        }
+
+        if let Some(tid) = criteria.tag_id {
+            conditions.push("id IN (SELECT file_id FROM file_tags WHERE tag_id = ?)".to_string());
+            params.push(rusqlite::types::Value::Integer(tid));
+        }
+
         let sort = criteria.sort.unwrap_or(FileSortField::ModifiedAt);
         let direction = criteria.direction.unwrap_or(SortDirection::Desc);
         let order_clause = match (sort, direction) {
@@ -470,7 +506,7 @@ impl Database {
         };
 
         let sql = format!(
-            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
+            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw
              FROM files{where_clause} ORDER BY {order_clause}{limit_clause}"
         );
 
@@ -597,6 +633,427 @@ impl Database {
         }
         Ok(counts)
     }
+
+    // --- Albums ---
+
+    /// Create a new album with a unique name.
+    pub fn create_album(
+        &self,
+        name: &str,
+        description: Option<&str>,
+    ) -> Result<Album, DatabaseError> {
+        self.conn.execute(
+            "INSERT INTO albums (name, description) VALUES (?1, ?2)",
+            params![name.trim(), description.map(|d| d.trim())],
+        )?;
+        let id = self.conn.last_insert_rowid();
+        self.get_album(id)?
+            .ok_or_else(|| DatabaseError::AlbumNotFound(id))
+    }
+
+    /// Retrieve an album by its ID.
+    pub fn get_album(&self, id: i64) -> Result<Option<Album>, DatabaseError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT id, name, description, created_at FROM albums WHERE id = ?1")?;
+        let mut rows = stmt.query_map([id], |row| {
+            Ok(Album {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    /// List all albums ordered by name.
+    pub fn list_albums(&self) -> Result<Vec<Album>, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, name, description, created_at FROM albums ORDER BY name ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Album {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        let mut albums = Vec::new();
+        for album in rows {
+            albums.push(album?);
+        }
+        Ok(albums)
+    }
+
+    /// Rename an album.
+    pub fn rename_album(&self, id: i64, new_name: &str) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE albums SET name = ?1 WHERE id = ?2",
+            params![new_name.trim(), id],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::AlbumNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Delete an album (associated entries in album_files are automatically deleted via CASCADE).
+    pub fn delete_album(&self, id: i64) -> Result<(), DatabaseError> {
+        let affected = self
+            .conn
+            .execute("DELETE FROM albums WHERE id = ?1", [id])?;
+        if affected == 0 {
+            return Err(DatabaseError::AlbumNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Add a single file to an album.
+    pub fn add_file_to_album(&self, album_id: i64, file_id: i64) -> Result<(), DatabaseError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO album_files (album_id, file_id) VALUES (?1, ?2)",
+            params![album_id, file_id],
+        )?;
+        Ok(())
+    }
+
+    /// Add multiple files to an album in a single transaction.
+    pub fn add_files_to_album(
+        &self,
+        album_id: i64,
+        file_ids: &[i64],
+    ) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR IGNORE INTO album_files (album_id, file_id) VALUES (?1, ?2)",
+            )?;
+            for &fid in file_ids {
+                count += stmt.execute(params![album_id, fid])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Remove a file from an album.
+    pub fn remove_file_from_album(&self, album_id: i64, file_id: i64) -> Result<(), DatabaseError> {
+        self.conn.execute(
+            "DELETE FROM album_files WHERE album_id = ?1 AND file_id = ?2",
+            params![album_id, file_id],
+        )?;
+        Ok(())
+    }
+
+    /// Remove multiple files from an album in a single transaction.
+    pub fn remove_files_from_album(
+        &self,
+        album_id: i64,
+        file_ids: &[i64],
+    ) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt =
+                tx.prepare_cached("DELETE FROM album_files WHERE album_id = ?1 AND file_id = ?2")?;
+            for &fid in file_ids {
+                count += stmt.execute(params![album_id, fid])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Count how many files are in an album.
+    pub fn count_album_files(&self, album_id: i64) -> Result<i64, DatabaseError> {
+        let count = self.conn.query_row(
+            "SELECT COUNT(*) FROM album_files WHERE album_id = ?1",
+            [album_id],
+            |row| row.get(0),
+        )?;
+        Ok(count)
+    }
+
+    /// List all files in an album.
+    pub fn list_album_files(&self, album_id: i64) -> Result<Vec<ImageFile>, DatabaseError> {
+        let criteria = SearchCriteria {
+            album_id: Some(album_id),
+            ..Default::default()
+        };
+        self.search_files(&criteria)
+    }
+
+    // --- Tags ---
+
+    /// Create a new tag with an optional color code.
+    pub fn create_tag(&self, name: &str, color: Option<&str>) -> Result<Tag, DatabaseError> {
+        self.conn.execute(
+            "INSERT INTO tags (name, color) VALUES (?1, ?2)",
+            params![name.trim(), color.map(|c| c.trim())],
+        )?;
+        let id = self.conn.last_insert_rowid();
+        self.get_tag(id)?
+            .ok_or_else(|| DatabaseError::TagNotFound(id))
+    }
+
+    /// Retrieve a tag by its ID.
+    pub fn get_tag(&self, id: i64) -> Result<Option<Tag>, DatabaseError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT id, name, color, created_at FROM tags WHERE id = ?1")?;
+        let mut rows = stmt.query_map([id], |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        match rows.next() {
+            Some(row) => Ok(Some(row?)),
+            None => Ok(None),
+        }
+    }
+
+    /// List all tags ordered by name.
+    pub fn list_tags(&self) -> Result<Vec<Tag>, DatabaseError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT id, name, color, created_at FROM tags ORDER BY name ASC")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        let mut tags = Vec::new();
+        for tag in rows {
+            tags.push(tag?);
+        }
+        Ok(tags)
+    }
+
+    /// Delete a tag (associated entries in file_tags are automatically deleted via CASCADE).
+    pub fn delete_tag(&self, id: i64) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute("DELETE FROM tags WHERE id = ?1", [id])?;
+        if affected == 0 {
+            return Err(DatabaseError::TagNotFound(id));
+        }
+        Ok(())
+    }
+
+    /// Attach a tag to a file.
+    pub fn tag_file(&self, file_id: i64, tag_id: i64) -> Result<(), DatabaseError> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?1, ?2)",
+            params![file_id, tag_id],
+        )?;
+        Ok(())
+    }
+
+    /// Attach a tag to multiple files in a single transaction.
+    pub fn tag_files(&self, file_ids: &[i64], tag_id: i64) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?1, ?2)",
+            )?;
+            for &fid in file_ids {
+                count += stmt.execute(params![fid, tag_id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Remove a tag from a file.
+    pub fn untag_file(&self, file_id: i64, tag_id: i64) -> Result<(), DatabaseError> {
+        self.conn.execute(
+            "DELETE FROM file_tags WHERE file_id = ?1 AND tag_id = ?2",
+            params![file_id, tag_id],
+        )?;
+        Ok(())
+    }
+
+    /// Remove a tag from multiple files in a single transaction.
+    pub fn untag_files(&self, file_ids: &[i64], tag_id: i64) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt =
+                tx.prepare_cached("DELETE FROM file_tags WHERE file_id = ?1 AND tag_id = ?2")?;
+            for &fid in file_ids {
+                count += stmt.execute(params![fid, tag_id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Get all tags attached to a specific file.
+    pub fn get_file_tags(&self, file_id: i64) -> Result<Vec<Tag>, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT t.id, t.name, t.color, t.created_at
+             FROM tags t
+             JOIN file_tags ft ON t.id = ft.tag_id
+             WHERE ft.file_id = ?1
+             ORDER BY t.name ASC",
+        )?;
+        let rows = stmt.query_map([file_id], |row| {
+            Ok(Tag {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        let mut tags = Vec::new();
+        for tag in rows {
+            tags.push(tag?);
+        }
+        Ok(tags)
+    }
+
+    /// List all files that have a specific tag.
+    pub fn list_files_by_tag(&self, tag_id: i64) -> Result<Vec<ImageFile>, DatabaseError> {
+        let criteria = SearchCriteria {
+            tag_id: Some(tag_id),
+            ..Default::default()
+        };
+        self.search_files(&criteria)
+    }
+
+    // --- Favorites and NSFW ---
+
+    /// Set favorite status for a single file.
+    pub fn set_file_favorite(&self, file_id: i64, is_favorite: bool) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE files SET is_favorite = ?1 WHERE id = ?2",
+            params![is_favorite as i64, file_id],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(file_id));
+        }
+        Ok(())
+    }
+
+    /// Set favorite status for multiple files in a single transaction.
+    pub fn set_files_favorite(
+        &self,
+        file_ids: &[i64],
+        is_favorite: bool,
+    ) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached("UPDATE files SET is_favorite = ?1 WHERE id = ?2")?;
+            let val = is_favorite as i64;
+            for &id in file_ids {
+                count += stmt.execute(params![val, id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    /// Set NSFW status for a single file.
+    pub fn set_file_nsfw(&self, file_id: i64, is_nsfw: bool) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE files SET is_nsfw = ?1 WHERE id = ?2",
+            params![is_nsfw as i64, file_id],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(file_id));
+        }
+        Ok(())
+    }
+
+    /// Set NSFW status for multiple files in a single transaction.
+    pub fn set_files_nsfw(&self, file_ids: &[i64], is_nsfw: bool) -> Result<usize, DatabaseError> {
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached("UPDATE files SET is_nsfw = ?1 WHERE id = ?2")?;
+            let val = is_nsfw as i64;
+            for &id in file_ids {
+                count += stmt.execute(params![val, id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
+    // --- Prompt Statistics ---
+
+    /// Extract and rank prompt tags by occurrence across all indexed files.
+    pub fn get_prompt_stats(
+        &self,
+        is_negative: bool,
+        limit: usize,
+    ) -> Result<Vec<PromptStat>, DatabaseError> {
+        let field = if is_negative {
+            "$.negative_prompt"
+        } else {
+            "$.prompt"
+        };
+        let sql = format!(
+            "SELECT json_extract(metadata, '{field}') AS p
+             FROM files
+             WHERE json_extract(metadata, '{field}') IS NOT NULL
+               AND json_extract(metadata, '{field}') != ''"
+        );
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+
+        let mut frequencies: HashMap<String, usize> = HashMap::new();
+        for p in rows {
+            let prompt = p?;
+            for part in prompt.split(',') {
+                let tag = part.trim().trim_matches('"').trim();
+                if !tag.is_empty() && tag.len() > 1 {
+                    *frequencies.entry(tag.to_string()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut stats: Vec<PromptStat> = frequencies
+            .into_iter()
+            .map(|(text, count)| PromptStat { text, count })
+            .collect();
+
+        stats.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.text.cmp(&b.text)));
+        if stats.len() > limit {
+            stats.truncate(limit);
+        }
+        Ok(stats)
+    }
 }
 
 #[cfg(test)]
@@ -659,6 +1116,8 @@ mod tests {
             metadata: None,
             rating: None,
             aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
         }
     }
 
@@ -1107,5 +1566,168 @@ mod tests {
         let files = db.list_files(folder.id).unwrap();
         assert_eq!(files[0].rating, None);
         assert_eq!(files[1].rating, None);
+    }
+
+    #[test]
+    fn album_crud_and_association() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let id1 = db.upsert_file(&image(folder.id, "/img/1.png")).unwrap();
+        let id2 = db.upsert_file(&image(folder.id, "/img/2.png")).unwrap();
+        let id3 = db.upsert_file(&image(folder.id, "/img/3.png")).unwrap();
+
+        // 1. Create album
+        let album = db
+            .create_album("Cyberpunk", Some("Sci-fi aesthetic collection"))
+            .unwrap();
+        assert_eq!(album.name, "Cyberpunk");
+        assert_eq!(
+            album.description.as_deref(),
+            Some("Sci-fi aesthetic collection")
+        );
+
+        // 2. Add files to album
+        db.add_file_to_album(album.id, id1).unwrap();
+        db.add_files_to_album(album.id, &[id2, id3]).unwrap();
+        assert_eq!(db.count_album_files(album.id).unwrap(), 3);
+
+        // 3. List album files
+        let album_files = db.list_album_files(album.id).unwrap();
+        assert_eq!(album_files.len(), 3);
+
+        // 4. Remove a file from album
+        db.remove_file_from_album(album.id, id2).unwrap();
+        assert_eq!(db.count_album_files(album.id).unwrap(), 2);
+
+        // 5. Rename album
+        db.rename_album(album.id, "Cyberpunk 2077").unwrap();
+        let renamed = db.get_album(album.id).unwrap().unwrap();
+        assert_eq!(renamed.name, "Cyberpunk 2077");
+
+        // 6. Delete album (cascades)
+        db.delete_album(album.id).unwrap();
+        assert_eq!(db.get_album(album.id).unwrap(), None);
+        assert_eq!(db.count_album_files(album.id).unwrap(), 0);
+    }
+
+    #[test]
+    fn tag_crud_and_association() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let id1 = db.upsert_file(&image(folder.id, "/img/1.png")).unwrap();
+        let id2 = db.upsert_file(&image(folder.id, "/img/2.png")).unwrap();
+
+        // 1. Create tag
+        let tag1 = db.create_tag("featured", Some("#3b82f6")).unwrap();
+        let tag2 = db.create_tag("wallpaper", None).unwrap();
+        assert_eq!(tag1.name, "featured");
+        assert_eq!(tag1.color.as_deref(), Some("#3b82f6"));
+
+        let all_tags = db.list_tags().unwrap();
+        assert_eq!(all_tags.len(), 2);
+
+        // 2. Tag files
+        db.tag_file(id1, tag1.id).unwrap();
+        db.tag_files(&[id1, id2], tag2.id).unwrap();
+
+        let id1_tags = db.get_file_tags(id1).unwrap();
+        assert_eq!(id1_tags.len(), 2);
+
+        let tagged_with_wallpaper = db.list_files_by_tag(tag2.id).unwrap();
+        assert_eq!(tagged_with_wallpaper.len(), 2);
+
+        // 3. Untag file
+        db.untag_file(id1, tag1.id).unwrap();
+        let id1_tags = db.get_file_tags(id1).unwrap();
+        assert_eq!(id1_tags.len(), 1);
+
+        // 4. Delete tag (cascades)
+        db.delete_tag(tag2.id).unwrap();
+        let id1_tags = db.get_file_tags(id1).unwrap();
+        assert_eq!(id1_tags.len(), 0);
+    }
+
+    #[test]
+    fn favorites_and_nsfw_flags() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let id1 = db.upsert_file(&image(folder.id, "/img/1.png")).unwrap();
+        let id2 = db.upsert_file(&image(folder.id, "/img/2.png")).unwrap();
+        let id3 = db.upsert_file(&image(folder.id, "/img/3.png")).unwrap();
+
+        // Initially both false
+        let f1 = db.list_files(folder.id).unwrap();
+        assert!(!f1[0].is_favorite);
+        assert!(!f1[0].is_nsfw);
+
+        // Set favorite
+        db.set_file_favorite(id1, true).unwrap();
+        db.set_files_favorite(&[id2, id3], true).unwrap();
+        let favs = db
+            .search_files(&SearchCriteria {
+                is_favorite: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(favs.len(), 3);
+
+        // Set NSFW
+        db.set_file_nsfw(id3, true).unwrap();
+        let nsfw_files = db
+            .search_files(&SearchCriteria {
+                is_nsfw: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(nsfw_files.len(), 1);
+        assert_eq!(nsfw_files[0].id, Some(id3));
+
+        let sfw_files = db
+            .search_files(&SearchCriteria {
+                is_nsfw: Some(false),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(sfw_files.len(), 2);
+    }
+
+    #[test]
+    fn prompt_statistics() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+
+        let mut f1 = image(folder.id, "/img/1.png");
+        f1.metadata = Some(sample_meta(
+            "masterpiece, 1girl, solo, cherry blossoms",
+            "blurry, low quality",
+            "model_a",
+            "Euler",
+            20,
+            7.0,
+            "123",
+        ));
+        db.upsert_file(&f1).unwrap();
+
+        let mut f2 = image(folder.id, "/img/2.png");
+        f2.metadata = Some(sample_meta(
+            "masterpiece, 1girl, futuristic city",
+            "blurry, watermark",
+            "model_a",
+            "Euler",
+            20,
+            7.0,
+            "456",
+        ));
+        db.upsert_file(&f2).unwrap();
+
+        let stats = db.get_prompt_stats(false, 10).unwrap();
+        // "masterpiece" and "1girl" appeared in both images (count 2)
+        assert_eq!(stats[0].count, 2);
+        assert_eq!(stats[1].count, 2);
+
+        let neg_stats = db.get_prompt_stats(true, 10).unwrap();
+        // "blurry" appeared in both images (count 2)
+        assert_eq!(neg_stats[0].text, "blurry");
+        assert_eq!(neg_stats[0].count, 2);
     }
 }

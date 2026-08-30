@@ -55,8 +55,28 @@ export interface ImageFile {
   metadata: ExtractedMetadata | null;
   rating?: number | null;
   aesthetic_score?: number | null;
+  is_favorite?: boolean;
+  is_nsfw?: boolean;
 }
 
+export interface Album {
+  id: number;
+  name: string;
+  description?: string | null;
+  created_at: string;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  color?: string | null;
+  created_at: string;
+}
+
+export interface PromptStat {
+  text: string;
+  count: number;
+}
 
 export interface ScanProgress {
   folder_id: number;
@@ -91,10 +111,36 @@ export interface SearchCriteria {
   max_rating?: number | null;
   min_aesthetic?: number | null;
   max_aesthetic?: number | null;
+  is_favorite?: boolean | null;
+  is_nsfw?: boolean | null;
+  album_id?: number | null;
+  tag_id?: number | null;
   folder_id?: number | null;
   sort?: FileSortField | null;
   direction?: SortDirection | null;
   limit?: number | null;
   offset?: number | null;
+}
+
+export type NavTarget =
+  | { type: "all" }
+  | { type: "favorites" }
+  | { type: "nsfw" }
+  | { type: "folder"; folder: Folder }
+  | { type: "album"; album: Album }
+  | { type: "tag"; tag: Tag };
+
+export interface PromptKeywordStat {
+  keyword: string;
+  count: number;
+  avg_rating?: number | null;
+}
+
+export interface PromptStats {
+  total_analyzed: number;
+  top_positive_words: PromptKeywordStat[];
+  top_negative_words: PromptKeywordStat[];
+  top_models: PromptKeywordStat[];
+  top_samplers: PromptKeywordStat[];
 }
 

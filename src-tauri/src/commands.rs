@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
-use berry_domain::{FileSortField, Folder, ImageFile, SearchCriteria, SortDirection};
+use berry_domain::{
+    Album, FileSortField, Folder, ImageFile, PromptStat, SearchCriteria, SortDirection, Tag,
+};
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
 use serde::Serialize;
@@ -190,6 +192,262 @@ pub fn set_files_rating(
 ) -> Result<usize, String> {
     db(&state)?
         .set_files_rating(&file_ids, rating)
+        .map_err(|e| e.to_string())
+}
+
+// --- Albums ---
+
+/// Create a new album.
+#[tauri::command]
+pub fn create_album(
+    name: String,
+    description: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Album, String> {
+    db(&state)?
+        .create_album(&name, description.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// Retrieve an album by ID.
+#[tauri::command]
+pub fn get_album(id: i64, state: State<'_, AppState>) -> Result<Option<Album>, String> {
+    db(&state)?.get_album(id).map_err(|e| e.to_string())
+}
+
+/// List all albums.
+#[tauri::command]
+pub fn list_albums(state: State<'_, AppState>) -> Result<Vec<Album>, String> {
+    db(&state)?.list_albums().map_err(|e| e.to_string())
+}
+
+/// Rename an album.
+#[tauri::command]
+pub fn rename_album(id: i64, new_name: String, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?
+        .rename_album(id, &new_name)
+        .map_err(|e| e.to_string())
+}
+
+/// Delete an album.
+#[tauri::command]
+pub fn delete_album(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?.delete_album(id).map_err(|e| e.to_string())
+}
+
+/// Add a file to an album.
+#[tauri::command]
+pub fn add_file_to_album(
+    album_id: i64,
+    file_id: i64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    db(&state)?
+        .add_file_to_album(album_id, file_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Add multiple files to an album.
+#[tauri::command]
+pub fn add_files_to_album(
+    album_id: i64,
+    file_ids: Vec<i64>,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .add_files_to_album(album_id, &file_ids)
+        .map_err(|e| e.to_string())
+}
+
+/// Remove a file from an album.
+#[tauri::command]
+pub fn remove_file_from_album(
+    album_id: i64,
+    file_id: i64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    db(&state)?
+        .remove_file_from_album(album_id, file_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Remove multiple files from an album.
+#[tauri::command]
+pub fn remove_files_from_album(
+    album_id: i64,
+    file_ids: Vec<i64>,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .remove_files_from_album(album_id, &file_ids)
+        .map_err(|e| e.to_string())
+}
+
+/// Count files in an album.
+#[tauri::command]
+pub fn count_album_files(album_id: i64, state: State<'_, AppState>) -> Result<i64, String> {
+    db(&state)?
+        .count_album_files(album_id)
+        .map_err(|e| e.to_string())
+}
+
+/// List files in an album.
+#[tauri::command]
+pub fn list_album_files(
+    album_id: i64,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
+    db(&state)?
+        .list_album_files(album_id)
+        .map_err(|e| e.to_string())
+}
+
+// --- Tags ---
+
+/// Create a tag.
+#[tauri::command]
+pub fn create_tag(
+    name: String,
+    color: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Tag, String> {
+    db(&state)?
+        .create_tag(&name, color.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+/// List all tags.
+#[tauri::command]
+pub fn list_tags(state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
+    db(&state)?.list_tags().map_err(|e| e.to_string())
+}
+
+/// Delete a tag.
+#[tauri::command]
+pub fn delete_tag(id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?.delete_tag(id).map_err(|e| e.to_string())
+}
+
+/// Tag a single file.
+#[tauri::command]
+pub fn tag_file(file_id: i64, tag_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?
+        .tag_file(file_id, tag_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Tag multiple files.
+#[tauri::command]
+pub fn tag_files(
+    file_ids: Vec<i64>,
+    tag_id: i64,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .tag_files(&file_ids, tag_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Untag a file.
+#[tauri::command]
+pub fn untag_file(file_id: i64, tag_id: i64, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?
+        .untag_file(file_id, tag_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Untag multiple files.
+#[tauri::command]
+pub fn untag_files(
+    file_ids: Vec<i64>,
+    tag_id: i64,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .untag_files(&file_ids, tag_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Get tags attached to a file.
+#[tauri::command]
+pub fn get_file_tags(file_id: i64, state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
+    db(&state)?
+        .get_file_tags(file_id)
+        .map_err(|e| e.to_string())
+}
+
+/// List files with a specific tag.
+#[tauri::command]
+pub fn list_files_by_tag(
+    tag_id: i64,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
+    db(&state)?
+        .list_files_by_tag(tag_id)
+        .map_err(|e| e.to_string())
+}
+
+// --- Favorites & NSFW ---
+
+/// Set favorite status for a single file.
+#[tauri::command]
+pub fn set_file_favorite(
+    file_id: i64,
+    is_favorite: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    db(&state)?
+        .set_file_favorite(file_id, is_favorite)
+        .map_err(|e| e.to_string())
+}
+
+/// Set favorite status for multiple files.
+#[tauri::command]
+pub fn set_files_favorite(
+    file_ids: Vec<i64>,
+    is_favorite: bool,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .set_files_favorite(&file_ids, is_favorite)
+        .map_err(|e| e.to_string())
+}
+
+/// Set NSFW status for a single file.
+#[tauri::command]
+pub fn set_file_nsfw(
+    file_id: i64,
+    is_nsfw: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    db(&state)?
+        .set_file_nsfw(file_id, is_nsfw)
+        .map_err(|e| e.to_string())
+}
+
+/// Set NSFW status for multiple files.
+#[tauri::command]
+pub fn set_files_nsfw(
+    file_ids: Vec<i64>,
+    is_nsfw: bool,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .set_files_nsfw(&file_ids, is_nsfw)
+        .map_err(|e| e.to_string())
+}
+
+// --- Prompt Stats ---
+
+/// Get frequency statistics for prompt tags.
+#[tauri::command]
+pub fn get_prompt_stats(
+    is_negative: bool,
+    limit: usize,
+    state: State<'_, AppState>,
+) -> Result<Vec<PromptStat>, String> {
+    db(&state)?
+        .get_prompt_stats(is_negative, limit)
         .map_err(|e| e.to_string())
 }
 

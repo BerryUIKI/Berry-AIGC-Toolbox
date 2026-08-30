@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { t } from "../i18n";
 import type { ImageFile } from "../types";
 
 const props = defineProps<{
@@ -63,7 +64,7 @@ function onSetRating(rating: number | null) {
     <div class="batch-bar" role="toolbar" aria-label="Batch Actions">
       <div class="batch-info">
         <span class="batch-badge">
-          {{ selectedFiles.length }} of {{ totalCount }} selected
+          {{ selectedFiles.length }} {{ t.batch.selectedOf }} {{ totalCount }} {{ t.batch.selectedCount }}
         </span>
         <button
           v-if="selectedFiles.length < totalCount"
@@ -71,14 +72,14 @@ function onSetRating(rating: number | null) {
           class="btn-text"
           @click="emit('selectAll')"
         >
-          Select All
+          {{ t.view.selectAll }}
         </button>
         <button
           type="button"
           class="btn-text"
           @click="emit('clearSelection')"
         >
-          Deselect
+          {{ t.view.deselect }}
         </button>
       </div>
 
@@ -91,7 +92,7 @@ function onSetRating(rating: number | null) {
             :class="{ active: ratingMenuOpen }"
             @click="ratingMenuOpen = !ratingMenuOpen"
           >
-            ★ Set Rating
+            ★ {{ t.batch.setRating }}
           </button>
           <div v-if="ratingMenuOpen" class="rating-menu">
             <button
@@ -109,7 +110,7 @@ function onSetRating(rating: number | null) {
               class="rating-opt clear-opt"
               @click="onSetRating(null)"
             >
-              Clear Rating
+              {{ t.batch.clearRating }}
             </button>
           </div>
         </div>
@@ -121,7 +122,7 @@ function onSetRating(rating: number | null) {
           title="Add selected images to album"
           @click="emit('addToAlbum')"
         >
-          📁 Album
+          📁 {{ t.batch.album }}
         </button>
 
         <!-- Tag -->
@@ -131,7 +132,7 @@ function onSetRating(rating: number | null) {
           title="Add tags to selected images"
           @click="emit('tagSelected')"
         >
-          🏷 Tag
+          🏷 {{ t.batch.tag }}
         </button>
 
         <!-- Favorite -->
@@ -142,7 +143,7 @@ function onSetRating(rating: number | null) {
           :title="allFavorites ? 'Remove favorite from selected' : 'Mark selected as favorite'"
           @click="emit('toggleFavorite', !allFavorites)"
         >
-          {{ allFavorites ? "★ Favorited" : "☆ Favorite" }}
+          {{ allFavorites ? t.batch.favorited : t.batch.favorite }}
         </button>
 
         <!-- NSFW -->
@@ -153,7 +154,7 @@ function onSetRating(rating: number | null) {
           :title="allNsfw ? 'Mark selected as SFW' : 'Mark selected as NSFW'"
           @click="emit('toggleNsfw', !allNsfw)"
         >
-          {{ allNsfw ? "🔞 NSFW" : "🛡 SFW" }}
+          {{ allNsfw ? t.batch.nsfw : t.batch.sfw }}
         </button>
 
         <!-- Copy Paths -->
@@ -163,7 +164,7 @@ function onSetRating(rating: number | null) {
           title="Copy file paths to clipboard"
           @click="copyPaths"
         >
-          {{ copiedPaths ? "✓ Paths Copied!" : "📋 Copy Paths" }}
+          {{ copiedPaths ? t.batch.pathsCopied : t.batch.copyPaths }}
         </button>
 
         <!-- Copy Prompts -->
@@ -173,7 +174,7 @@ function onSetRating(rating: number | null) {
           title="Copy prompts to clipboard"
           @click="copyPrompts"
         >
-          {{ copiedPrompts ? "✓ Prompts Copied!" : "💬 Copy Prompts" }}
+          {{ copiedPrompts ? t.batch.promptsCopied : t.batch.copyPrompts }}
         </button>
 
         <!-- Move to Folder -->
@@ -183,7 +184,7 @@ function onSetRating(rating: number | null) {
           title="Move selected files to another folder"
           @click="emit('moveSelected')"
         >
-          📂 Move
+          {{ t.batch.move }}
         </button>
 
         <!-- Copy to Folder -->
@@ -193,17 +194,17 @@ function onSetRating(rating: number | null) {
           title="Copy selected files to another folder"
           @click="emit('copySelected')"
         >
-          📄 Copy
+          {{ t.batch.copy }}
         </button>
 
         <!-- Trash Selected -->
         <button
           type="button"
           class="action-btn trash-btn"
-          title="Move selected files to system trash"
+          title="Move selected files to Trash"
           @click="emit('trashSelected')"
         >
-          🗑 Trash
+          {{ t.batch.trash }}
         </button>
       </div>
     </div>

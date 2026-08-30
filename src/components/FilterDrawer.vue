@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
+import { t } from "../i18n";
 import type { SearchCriteria } from "../types";
 
 const props = defineProps<{
@@ -109,7 +110,7 @@ function reset() {
       <header class="drawer-header">
         <div class="header-title">
           <span class="header-icon">⚙</span>
-          <h3>Search Filters</h3>
+          <h3>{{ t.filterDrawer.title }}</h3>
         </div>
         <button type="button" class="close-btn" title="Close (Esc)" @click="close">
           ✕
@@ -119,9 +120,9 @@ function reset() {
       <div class="drawer-body">
         <!-- Model Checkpoint -->
         <div class="filter-group">
-          <label class="group-label">Model Checkpoint</label>
+          <label class="group-label">{{ t.filterDrawer.modelLabel }}</label>
           <select v-model="selectedModel" class="form-select">
-            <option value="">Any model</option>
+            <option value="">{{ t.filterDrawer.anyModel }}</option>
             <option v-for="m in models" :key="m" :value="m">
               {{ m }}
             </option>
@@ -130,9 +131,9 @@ function reset() {
 
         <!-- Sampler -->
         <div class="filter-group">
-          <label class="group-label">Sampler</label>
+          <label class="group-label">{{ t.filterDrawer.samplerLabel }}</label>
           <select v-model="selectedSampler" class="form-select">
-            <option value="">Any sampler</option>
+            <option value="">{{ t.filterDrawer.anySampler }}</option>
             <option v-for="s in samplers" :key="s" :value="s">
               {{ s }}
             </option>
@@ -141,7 +142,7 @@ function reset() {
 
         <!-- Rating Range -->
         <div class="filter-group">
-          <label class="group-label">User Rating (1–10)</label>
+          <label class="group-label">{{ t.filterDrawer.ratingLabel }}</label>
           <div class="range-inputs">
             <div class="input-col">
               <span class="sub-label">Min</span>
@@ -163,7 +164,7 @@ function reset() {
 
         <!-- Steps Range -->
         <div class="filter-group">
-          <label class="group-label">Sampling Steps</label>
+          <label class="group-label">{{ t.filterDrawer.stepsLabel }}</label>
           <div class="range-inputs">
             <input
               v-model.number="minSteps"
@@ -192,7 +193,7 @@ function reset() {
 
         <!-- CFG Scale -->
         <div class="filter-group">
-          <label class="group-label">CFG Scale</label>
+          <label class="group-label">{{ t.filterDrawer.cfgLabel }}</label>
           <div class="range-inputs">
             <input
               v-model.number="minCfg"
@@ -286,7 +287,7 @@ function reset() {
 
         <!-- Prompt Substring -->
         <div class="filter-group">
-          <label class="group-label">Prompt Contains</label>
+          <label class="group-label">{{ t.preview.prompt }}</label>
           <input
             v-model="prompt"
             type="text"
@@ -297,7 +298,7 @@ function reset() {
 
         <!-- Negative Prompt Substring -->
         <div class="filter-group">
-          <label class="group-label">Negative Prompt Contains</label>
+          <label class="group-label">{{ t.preview.negativePrompt }}</label>
           <input
             v-model="negativePrompt"
             type="text"
@@ -309,10 +310,10 @@ function reset() {
 
       <footer class="drawer-footer">
         <button type="button" class="btn-reset" @click="reset">
-          Reset All
+          {{ t.filterDrawer.reset }}
         </button>
         <button type="button" class="btn-apply" @click="apply">
-          Apply Filters
+          {{ t.filterDrawer.apply }}
         </button>
       </footer>
     </div>

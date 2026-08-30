@@ -31,6 +31,8 @@ import ModelManagerModal from "./components/ModelManagerModal.vue";
 import FileOperationModal from "./components/FileOperationModal.vue";
 import DatabaseManagerModal from "./components/DatabaseManagerModal.vue";
 import ShortcutsHelpModal from "./components/ShortcutsHelpModal.vue";
+import LanguageSelector from "./components/LanguageSelector.vue";
+import { t } from "./i18n";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -644,10 +646,15 @@ async function onDatabaseChanged() {
 <template>
   <main class="shell">
     <header class="header">
-      <h1>Berry AIGC Toolbox</h1>
-      <p class="tagline">Metadata indexer and viewer for AI-generated images</p>
+      <div class="header-main-row">
+        <div class="header-titles">
+          <h1>{{ t.app.title }}</h1>
+          <p class="tagline">{{ t.app.tagline }}</p>
+        </div>
+        <LanguageSelector />
+      </div>
       <p v-if="info" class="meta">
-        v{{ info.app_version }} · schema v{{ info.schema_version }}
+        {{ t.app.version }}{{ info.app_version }} · {{ t.app.schema }}{{ info.schema_version }}
         <span class="db-path" :title="info.database_path">{{ info.database_path }}</span>
       </p>
       <p v-else-if="error" class="error">{{ error }}</p>
@@ -678,14 +685,14 @@ async function onDatabaseChanged() {
       <div class="files-view-header">
         <div class="header-left">
           <h2>
-            Files
+            {{ t.view.files }}
             <span v-if="files.length" class="count-badge">({{ files.length }})</span>
           </h2>
           <span class="folder-badge" :class="{ 'all-badge': activeTarget.type === 'all' }">
             {{ targetTitle }}
           </span>
           <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
-            Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
+            {{ selectedFile.path.split(/[\\/]/).pop() }}
             <button
               type="button"
               class="preview-trigger-btn"
@@ -710,18 +717,18 @@ async function onDatabaseChanged() {
               class="toggle-btn"
               :class="{ active: viewMode === 'grid' }"
               @click="viewMode = 'grid'"
-              title="Grid View"
+              :title="t.view.grid"
             >
-              ⊞ Grid
+              ⊞ {{ t.view.grid }}
             </button>
             <button
               type="button"
               class="toggle-btn"
               :class="{ active: viewMode === 'table' }"
               @click="viewMode = 'table'"
-              title="Table View"
+              :title="t.view.table"
             >
-              ☰ Table
+              ☰ {{ t.view.table }}
             </button>
           </div>
         </div>
@@ -739,10 +746,10 @@ async function onDatabaseChanged() {
           type="button"
           class="filter-toggle-btn"
           :class="{ active: filterDrawerOpen || activeFilterCount > 0 }"
-          title="Open visual search filters"
+          :title="t.search.filters"
           @click="filterDrawerOpen = true"
         >
-          <span>⚡ Filters</span>
+          <span>⚡ {{ t.search.filters }}</span>
           <span v-if="activeFilterCount > 0" class="filter-count-badge">
             {{ activeFilterCount }}
           </span>
@@ -750,43 +757,43 @@ async function onDatabaseChanged() {
         <button
           type="button"
           class="stats-toggle-btn"
-          title="Open prompt keyword & metadata insights"
+          :title="t.search.insights"
           @click="promptStatsModalOpen = true"
         >
-          <span>📊 Insights</span>
+          <span>📊 {{ t.search.insights }}</span>
         </button>
         <button
           type="button"
           class="models-toggle-btn"
-          title="Open Checkpoint Models Catalog & Hash Cache"
+          :title="t.search.models"
           @click="modelManagerModalOpen = true"
         >
-          <span>🧠 Models</span>
+          <span>🧠 {{ t.search.models }}</span>
         </button>
         <button
           type="button"
           class="models-toggle-btn"
-          title="Open Database & Storage Maintenance"
+          :title="t.search.database"
           @click="dbManagerModalOpen = true"
         >
-          <span>🗄️ Database</span>
+          <span>🗄️ {{ t.search.database }}</span>
         </button>
         <button
           type="button"
           class="models-toggle-btn"
-          title="Keyboard Shortcuts Cheat Sheet (Hotkey: ?)"
+          :title="t.search.shortcuts"
           @click="shortcutsHelpModalOpen = true"
         >
-          <span>⌨️ Shortcuts</span>
+          <span>⌨️ {{ t.search.shortcuts }}</span>
         </button>
       </div>
 
       <div v-if="searchQuery.trim()" class="search-status-bar">
         <span>
-          Found <strong>{{ files.length }}</strong> matching {{ files.length === 1 ? "image" : "images" }}
+          {{ t.search.found }} <strong>{{ files.length }}</strong> {{ files.length === 1 ? t.search.image : t.search.images }}
         </span>
         <button type="button" class="reset-search-btn" @click="onClearSearch">
-          ✕ Clear Search
+          ✕ {{ t.search.clearSearch }}
         </button>
       </div>
 
@@ -795,13 +802,12 @@ async function onDatabaseChanged() {
         class="search-empty-state"
       >
         <span class="empty-icon">🔍</span>
-        <p class="empty-title">No images match your search</p>
+        <p class="empty-title">{{ t.search.noMatchTitle }}</p>
         <p class="empty-hint">
-          Try adjusting keywords or parameter filters like <code>prompt:cat</code>,
-          <code>model:sdxl</code>, or <code>steps:&gt;=20</code>.
+          {{ t.search.noMatchHint }}
         </p>
         <button type="button" class="clear-filters-btn" @click="onClearSearch">
-          Clear Search
+          {{ t.search.clearSearch }}
         </button>
       </div>
 
@@ -948,6 +954,17 @@ async function onDatabaseChanged() {
 
 .header {
   margin-bottom: 1.5rem;
+}
+
+.header-main-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header-titles {
+  flex: 1;
 }
 
 h1 {

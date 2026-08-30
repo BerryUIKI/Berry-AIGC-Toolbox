@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { PromptKeywordStat, PromptStats } from "../types";
 
 const props = defineProps<{
@@ -111,7 +112,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
       <header class="stats-header">
         <div class="header-left">
           <span class="header-icon">📊</span>
-          <h2>Prompt & Metadata Insights</h2>
+          <h2>{{ t.promptStatsModal.title }}</h2>
         </div>
         <div class="header-actions">
           <button
@@ -121,7 +122,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
             :disabled="loading"
             @click="loadStats"
           >
-            {{ loading ? "Analyzing…" : "↻ Refresh" }}
+            {{ loading ? "..." : "↻ Refresh" }}
           </button>
           <button
             type="button"
@@ -137,38 +138,38 @@ function onSelectKeyword(item: PromptKeywordStat) {
       <!-- KPI Summary Cards -->
       <div v-if="stats" class="kpi-grid">
         <div class="kpi-card">
-          <div class="kpi-title">Analyzed Files</div>
+          <div class="kpi-title">{{ t.promptStatsModal.totalAnalyzed }}</div>
           <div class="kpi-value">{{ stats.total_analyzed.toLocaleString() }}</div>
-          <div class="kpi-sub">Total with parsed metadata</div>
+          <div class="kpi-sub">{{ t.view.files }}</div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-title">Top Prompt Keyword</div>
+          <div class="kpi-title">{{ t.promptStatsModal.topPositive }}</div>
           <div class="kpi-value highlight-blue">
             {{ stats.top_positive_words[0]?.keyword || "—" }}
           </div>
           <div class="kpi-sub">
-            {{ stats.top_positive_words[0]?.count ? `${stats.top_positive_words[0].count} occurrences` : "None" }}
+            {{ stats.top_positive_words[0]?.count ? `${stats.top_positive_words[0].count} ${t.promptStatsModal.occurrences}` : "—" }}
           </div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-title">Top Negative Keyword</div>
+          <div class="kpi-title">{{ t.promptStatsModal.topNegative }}</div>
           <div class="kpi-value highlight-red">
             {{ stats.top_negative_words[0]?.keyword || "—" }}
           </div>
           <div class="kpi-sub">
-            {{ stats.top_negative_words[0]?.count ? `${stats.top_negative_words[0].count} occurrences` : "None" }}
+            {{ stats.top_negative_words[0]?.count ? `${stats.top_negative_words[0].count} ${t.promptStatsModal.occurrences}` : "—" }}
           </div>
         </div>
 
         <div class="kpi-card">
-          <div class="kpi-title">Primary Model</div>
+          <div class="kpi-title">{{ t.promptStatsModal.topModels }}</div>
           <div class="kpi-value highlight-green" :title="stats.top_models[0]?.keyword">
             {{ stats.top_models[0]?.keyword || "—" }}
           </div>
           <div class="kpi-sub">
-            {{ stats.top_models[0]?.count ? `${stats.top_models[0].count} files` : "None" }}
+            {{ stats.top_models[0]?.count ? `${stats.top_models[0].count} ${t.view.files}` : "—" }}
           </div>
         </div>
       </div>
@@ -181,7 +182,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
           :class="{ active: activeTab === 'positive' }"
           @click="activeTab = 'positive'"
         >
-          🌟 Positive Keywords
+          🌟 {{ t.promptStatsModal.topPositive }}
           <span v-if="stats?.top_positive_words.length" class="tab-badge">
             {{ stats.top_positive_words.length }}
           </span>
@@ -192,7 +193,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
           :class="{ active: activeTab === 'negative' }"
           @click="activeTab = 'negative'"
         >
-          🚫 Negative Keywords
+          🚫 {{ t.promptStatsModal.topNegative }}
           <span v-if="stats?.top_negative_words.length" class="tab-badge">
             {{ stats.top_negative_words.length }}
           </span>
@@ -203,7 +204,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
           :class="{ active: activeTab === 'models' }"
           @click="activeTab = 'models'"
         >
-          🤖 Models
+          🤖 {{ t.promptStatsModal.topModels }}
           <span v-if="stats?.top_models.length" class="tab-badge">
             {{ stats.top_models.length }}
           </span>
@@ -214,7 +215,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
           :class="{ active: activeTab === 'samplers' }"
           @click="activeTab = 'samplers'"
         >
-          ⚙️ Samplers
+          ⚙️ {{ t.promptStatsModal.topSamplers }}
           <span v-if="stats?.top_samplers.length" class="tab-badge">
             {{ stats.top_samplers.length }}
           </span>

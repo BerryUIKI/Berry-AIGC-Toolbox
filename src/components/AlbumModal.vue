@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { Album } from "../types";
 
 const props = defineProps<{
@@ -127,7 +128,7 @@ function startEditing(album: Album) {
     <div class="modal-dialog" role="dialog" aria-modal="true" @click.stop>
       <div class="modal-header">
         <h2>
-          {{ fileIds && fileIds.length > 0 ? `Add ${fileIds.length} ${fileIds.length === 1 ? 'image' : 'images'} to Album` : "Manage Albums" }}
+          {{ fileIds && fileIds.length > 0 ? `${t.batch.album} (${fileIds.length})` : t.albumsModal.title }}
         </h2>
         <button
           type="button"
@@ -146,31 +147,31 @@ function startEditing(album: Album) {
       <div class="modal-body">
         <!-- New Album Form -->
         <div v-if="isCreating" class="create-form">
-          <h3>Create New Album</h3>
+          <h3>{{ t.albumsModal.createBtn }}</h3>
           <div class="form-group">
-            <label for="album-name">Album Name *</label>
+            <label for="album-name">{{ t.albumsModal.createPlaceholder }}</label>
             <input
               id="album-name"
               v-model="newAlbumName"
               type="text"
-              placeholder="e.g. Cyberpunk Wallpapers"
+              :placeholder="t.albumsModal.createPlaceholder"
               autofocus
               @keydown.enter.prevent="onCreateAlbum"
             />
           </div>
           <div class="form-group">
-            <label for="album-desc">Description (optional)</label>
+            <label for="album-desc">Description</label>
             <input
               id="album-desc"
               v-model="newAlbumDesc"
               type="text"
-              placeholder="Brief description..."
+              placeholder="..."
               @keydown.enter.prevent="onCreateAlbum"
             />
           </div>
           <div class="form-actions">
             <button type="button" class="btn-cancel" @click="isCreating = false">
-              Cancel
+              {{ t.fileOpModal.cancel }}
             </button>
             <button
               type="button"
@@ -178,21 +179,21 @@ function startEditing(album: Album) {
               :disabled="!newAlbumName.trim()"
               @click="onCreateAlbum"
             >
-              Create
+              {{ t.albumsModal.createBtn }}
             </button>
           </div>
         </div>
 
         <div v-else class="header-action">
           <button type="button" class="btn-create" @click="isCreating = true">
-            + New Album
+            + {{ t.nav.newAlbum }}
           </button>
         </div>
 
         <!-- Album list -->
-        <div v-if="loading" class="album-loading">Loading albums…</div>
+        <div v-if="loading" class="album-loading">Loading...</div>
         <div v-else-if="albums.length === 0" class="album-empty">
-          No albums created yet. Click "+ New Album" above to create one!
+          {{ t.albumsModal.noAlbums }}
         </div>
         <div v-else class="album-list">
           <div

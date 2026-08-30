@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from "../i18n";
+
 defineProps<{
   show: boolean;
 }>();
@@ -28,17 +30,17 @@ const shortcuts = [
       <div class="modal-header">
         <div class="header-left">
           <span class="header-icon">⌨️</span>
-          <h2>Keyboard Shortcuts Guide</h2>
+          <h2>{{ t.shortcutsModal.title }}</h2>
         </div>
-        <button class="close-btn" @click="emit('close')" title="Close">✕</button>
+        <button class="close-btn" @click="emit('close')" :title="t.shortcutsModal.close">✕</button>
       </div>
 
       <div class="modal-body">
         <table class="shortcuts-table">
           <thead>
             <tr>
-              <th>Shortcut</th>
-              <th>Action</th>
+              <th>{{ t.shortcutsModal.shortcut }}</th>
+              <th>{{ t.shortcutsModal.action }}</th>
             </tr>
           </thead>
           <tbody>
@@ -54,7 +56,7 @@ const shortcuts = [
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" @click="emit('close')">
-          Close
+          {{ t.shortcutsModal.close }}
         </button>
       </div>
     </div>

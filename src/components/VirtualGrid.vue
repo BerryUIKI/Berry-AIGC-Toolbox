@@ -40,9 +40,18 @@ const containerHeight = ref(600);
 
 // Image loading error tracker
 const failedImages = ref<Set<string>>(new Set());
+const revealedNsfw = ref<Set<string>>(new Set());
 
 function onImageError(path: string) {
   failedImages.value.add(path);
+}
+
+function toggleNsfwReveal(path: string) {
+  if (revealedNsfw.value.has(path)) {
+    revealedNsfw.value.delete(path);
+  } else {
+    revealedNsfw.value.add(path);
+  }
 }
 
 // Update container dimensions
@@ -275,12 +284,44 @@ watch(
                 :src="assetUrl(file.path)"
                 :alt="getFileName(file.path)"
                 class="thumbnail-img"
+                :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw.has(file.path) }"
                 loading="lazy"
                 @error="onImageError(file.path)"
               />
               <div v-else class="thumbnail-fallback">
                 <span class="fallback-text">{{ file.container.toUpperCase() }}</span>
               </div>
+
+              <!-- NSFW blur overlay -->
+              <div
+                v-if="file.is_nsfw && !revealedNsfw.has(file.path)"
+                class="nsfw-overlay"
+                title="Click to reveal NSFW content"
+                @click.stop="toggleNsfwReveal(file.path)"
+              >
+                <div class="nsfw-overlay-content">
+                  <span class="nsfw-icon">🔞</span>
+                  <span class="nsfw-text">NSFW</span>
+                </div>
+              </div>
+
+              <!-- Favorite badge -->
+              <span
+                v-if="file.is_favorite"
+                class="card-badge badge-fav"
+                title="Favorite"
+              >
+                ★
+              </span>
+
+              <!-- NSFW badge -->
+              <span
+                v-if="file.is_nsfw"
+                class="card-badge badge-nsfw"
+                title="18+ NSFW Content"
+              >
+                18+
+              </span>
 
               <!-- Format badge -->
               <span
@@ -487,6 +528,68 @@ watch(
   right: 6px;
   background: rgba(234, 179, 8, 0.9);
   color: #000;
+}
+
+.badge-fav {
+  bottom: 6px;
+  right: 6px;
+  background: rgba(234, 179, 8, 0.9);
+  color: #000;
+  font-size: 0.85em;
+  padding: 0.05rem 0.35rem;
+}
+
+.badge-nsfw {
+  bottom: 6px;
+  left: 6px;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.65em;
+  padding: 0.05rem 0.35rem;
+}
+
+.thumbnail-img.nsfw-blurred {
+  filter: blur(24px) brightness(0.7);
+  transform: scale(1.1);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.nsfw-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  z-index: 1;
+  transition: background 0.15s ease;
+}
+
+.nsfw-overlay:hover {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.nsfw-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  color: #fff;
+}
+
+.nsfw-icon {
+  font-size: 1.5em;
+}
+
+.nsfw-text {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  background: #dc2626;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
 }
 
 .card-info {

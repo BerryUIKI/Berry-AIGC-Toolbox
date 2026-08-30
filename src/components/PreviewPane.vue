@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { ImageFile } from "../types";
+import type { ImageFile, Tag } from "../types";
 import {
   assetUrl,
   formatBytes,
@@ -19,6 +19,9 @@ const emit = defineEmits<{
   (e: "close"): void;
   (e: "navigate", file: ImageFile): void;
   (e: "rate", fileId: number, rating: number | null): void;
+  (e: "updateFile", file: ImageFile): void;
+  (e: "openTagModal", fileId: number): void;
+  (e: "openAlbumModal", fileId: number): void;
 }>();
 
 const showInspector = ref(true);
@@ -26,6 +29,63 @@ const promptCopied = ref(false);
 const negativePromptCopied = ref(false);
 const showRaw = ref(false);
 const ratingSaving = ref(false);
+const fileTags = ref<Tag[]>([]);
+const revealedNsfw = ref(false);
+
+watch(
+  () => props.file.path,
+  () => {
+    revealedNsfw.value = false;
+    loadTags();
+  },
+  { immediate: true },
+);
+
+async function loadTags() {
+  if (!props.file.id) {
+    fileTags.value = [];
+    return;
+  }
+  try {
+    fileTags.value = await invoke<Tag[]>("get_file_tags", { fileId: props.file.id });
+  } catch (err) {
+    console.error("Failed to load tags:", err);
+  }
+}
+
+async function toggleFavorite() {
+  if (!props.file.id) return;
+  const nextVal = !props.file.is_favorite;
+  try {
+    await invoke("set_file_favorite", { fileId: props.file.id, isFavorite: nextVal });
+    props.file.is_favorite = nextVal;
+    emit("updateFile", props.file);
+  } catch (err) {
+    console.error("Failed to toggle favorite:", err);
+  }
+}
+
+async function toggleNsfw() {
+  if (!props.file.id) return;
+  const nextVal = !props.file.is_nsfw;
+  try {
+    await invoke("set_file_nsfw", { fileId: props.file.id, isNsfw: nextVal });
+    props.file.is_nsfw = nextVal;
+    emit("updateFile", props.file);
+  } catch (err) {
+    console.error("Failed to toggle nsfw:", err);
+  }
+}
+
+async function removeTag(tagId: number) {
+  if (!props.file.id) return;
+  try {
+    await invoke("untag_file", { fileId: props.file.id, tagId });
+    await loadTags();
+  } catch (err) {
+    console.error("Failed to untag:", err);
+  }
+}
 
 const currentIndex = computed(() =>
   props.files.findIndex((f) => f.path === props.file.path),
@@ -154,6 +214,28 @@ watch(
             </button>
             <span v-if="file.rating" class="rating-text">{{ file.rating }}/10</span>
           </div>
+
+          <!-- Favorite toggle -->
+          <button
+            type="button"
+            class="header-btn"
+            :class="{ 'fav-active': file.is_favorite }"
+            :title="file.is_favorite ? 'Favorited (Click to remove)' : 'Mark as Favorite'"
+            @click="toggleFavorite"
+          >
+            {{ file.is_favorite ? "★ Favorite" : "☆ Favorite" }}
+          </button>
+
+          <!-- NSFW toggle -->
+          <button
+            type="button"
+            class="header-btn"
+            :class="{ 'nsfw-btn-active': file.is_nsfw }"
+            :title="file.is_nsfw ? 'Marked as NSFW (Click to unmark)' : 'Mark as NSFW'"
+            @click="toggleNsfw"
+          >
+            {{ file.is_nsfw ? "🔞 NSFW" : "🛡 SFW" }}
+          </button>
         </div>
 
         <div class="header-right">
@@ -196,11 +278,31 @@ watch(
               :src="assetUrl(file.path)"
               :alt="getFileName(file.path)"
               class="main-image"
+              :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw }"
             />
-            <div v-else class="non-image-placeholder">
-              <span class="placeholder-icon">📄</span>
-              <span class="placeholder-text">{{ file.container.toUpperCase() }} File</span>
-              <span class="placeholder-path">{{ normalizePath(file.path) }}</span>
+
+            <!-- NSFW Preview Overlay -->
+            <div
+              v-if="file.is_nsfw && !revealedNsfw"
+              class="preview-nsfw-overlay"
+              @click="revealedNsfw = true"
+            >
+              <div class="preview-nsfw-card">
+                <span class="preview-nsfw-icon">🔞</span>
+                <h3>Sensitive Content (18+ NSFW)</h3>
+                <p>Click anywhere or tap below to reveal this image.</p>
+                <button
+                  type="button"
+                  class="btn-reveal"
+                  @click.stop="revealedNsfw = true"
+                >
+                  Reveal Image
+                </button>
+              </div>
+            </div>
+            <div v-else-if="file.container === 'mp4' || file.container === 'txt'" class="non-image-placeholder">
+              <span class="placeholder-icon">{{ file.container.toUpperCase() }}</span>
+              <p>Preview not available for this container type.</p>
             </div>
           </div>
 
@@ -225,6 +327,58 @@ watch(
           </div>
 
           <div class="inspector-content">
+            <!-- Organization & Tags -->
+            <div class="meta-section">
+              <div class="section-heading">
+                <h4>Organization</h4>
+                <div class="org-actions">
+                  <button
+                    type="button"
+                    class="copy-btn"
+                    title="Add to Album"
+                    @click="file.id && emit('openAlbumModal', file.id)"
+                  >
+                    📁 + Album
+                  </button>
+                  <button
+                    type="button"
+                    class="copy-btn"
+                    title="Manage Tags"
+                    @click="file.id && emit('openTagModal', file.id)"
+                  >
+                    🏷 + Tag
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tags chips -->
+              <div v-if="fileTags.length > 0" class="tag-chips-list">
+                <span
+                  v-for="t in fileTags"
+                  :key="t.id"
+                  class="preview-tag-chip"
+                  :style="{ borderColor: t.color || '#3b82f6' }"
+                >
+                  <span
+                    class="preview-tag-dot"
+                    :style="{ backgroundColor: t.color || '#3b82f6' }"
+                  />
+                  {{ t.name }}
+                  <button
+                    type="button"
+                    class="preview-tag-remove"
+                    title="Remove tag from file"
+                    @click="removeTag(t.id)"
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+              <div v-else class="no-tags-text">
+                No tags assigned. Click "+ Tag" to add.
+              </div>
+            </div>
+
             <!-- Basic file specs -->
             <div class="spec-grid">
               <div class="spec-item">
@@ -782,5 +936,131 @@ watch(
   font-size: 0.75em;
   word-break: break-all;
   color: #888;
+}
+
+.header-btn.fav-active {
+  background: rgba(234, 179, 8, 0.2);
+  border-color: #eab308;
+  color: #eab308;
+}
+
+.header-btn.nsfw-btn-active {
+  background: rgba(220, 38, 38, 0.2);
+  border-color: #dc2626;
+  color: #ef4444;
+}
+
+.main-image.nsfw-blurred {
+  filter: blur(36px) brightness(0.6);
+  transform: scale(1.05);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.preview-nsfw-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  z-index: 5;
+}
+
+.preview-nsfw-card {
+  background: #202020;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  border-radius: 12px;
+  padding: 1.5rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 320px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.preview-nsfw-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.preview-nsfw-card h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: #ef4444;
+}
+
+.preview-nsfw-card p {
+  margin: 0 0 1rem 0;
+  font-size: 0.82rem;
+  color: #aaa;
+}
+
+.btn-reveal {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-reveal:hover {
+  background: #b91c1c;
+}
+
+.org-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tag-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.preview-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  font-size: 0.78em;
+  color: #eee;
+}
+
+.preview-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.preview-tag-remove {
+  background: transparent;
+  border: none;
+  color: #888;
+  font-size: 0.75em;
+  cursor: pointer;
+  padding: 0 0.1rem;
+  line-height: 1;
+}
+
+.preview-tag-remove:hover {
+  color: #ef4444;
+}
+
+.no-tags-text {
+  font-size: 0.8em;
+  color: #666;
+  font-style: italic;
+  margin-top: 0.2rem;
 }
 </style>

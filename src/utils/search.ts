@@ -78,6 +78,20 @@ export function criteriaToQuery(c: SearchCriteria): string {
     parts.push(`aesthetic:<=${c.max_aesthetic}`);
   }
 
+  // Favorite
+  if (c.is_favorite === true) {
+    parts.push("fav:true");
+  } else if (c.is_favorite === false) {
+    parts.push("fav:false");
+  }
+
+  // NSFW
+  if (c.is_nsfw === true) {
+    parts.push("is:nsfw");
+  } else if (c.is_nsfw === false) {
+    parts.push("is:sfw");
+  }
+
   return parts.join(" ");
 }
 
@@ -94,5 +108,7 @@ export function countActiveFilters(c: SearchCriteria): number {
   if (c.min_cfg != null || c.max_cfg != null) count++;
   if (c.min_rating != null || c.max_rating != null) count++;
   if (c.min_aesthetic != null || c.max_aesthetic != null) count++;
+  if (c.is_favorite != null) count++;
+  if (c.is_nsfw != null) count++;
   return count;
 }

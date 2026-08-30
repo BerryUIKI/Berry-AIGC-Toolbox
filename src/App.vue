@@ -23,6 +23,7 @@ import SearchBar from "./components/SearchBar.vue";
 import FilterDrawer from "./components/FilterDrawer.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
 import AlbumModal from "./components/AlbumModal.vue";
+import TagModal from "./components/TagModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -34,6 +35,8 @@ const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
 const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
+const tagModalOpen = ref(false);
+const tagTargetFileIds = ref<number[]>([]);
 const distinctModels = ref<string[]>([]);
 const distinctSamplers = ref<string[]>([]);
 const activeCriteria = ref<SearchCriteria>({});
@@ -253,6 +256,63 @@ function onAddedToAlbum(_album: Album) {
   selectedFilePaths.value.clear();
 }
 
+function onOpenTagModal(fileIds?: number[]) {
+  tagTargetFileIds.value = fileIds ?? [];
+  tagModalOpen.value = true;
+}
+
+function onBatchTag() {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length > 0) {
+    onOpenTagModal(ids);
+  }
+}
+
+async function onBatchToggleFavorite(isFavorite: boolean) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+  try {
+    await invoke("set_files_favorite", { fileIds: ids, isFavorite });
+    for (const f of selectedFilesList.value) {
+      f.is_favorite = isFavorite;
+    }
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onBatchToggleNsfw(isNsfw: boolean) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+  try {
+    await invoke("set_files_nsfw", { fileIds: ids, isNsfw });
+    for (const f of selectedFilesList.value) {
+      f.is_nsfw = isNsfw;
+    }
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+function onUpdateFile(file: ImageFile) {
+  const idx = files.value.findIndex((f) => f.id === file.id);
+  if (idx !== -1) {
+    files.value[idx] = { ...file };
+  }
+  if (selectedFile.value?.id === file.id) {
+    selectedFile.value = { ...file };
+  }
+  if (previewingFile.value?.id === file.id) {
+    previewingFile.value = { ...file };
+  }
+}
+
 async function loadFiles() {
   filesLoading.value = true;
   selectedFilePaths.value.clear();
@@ -460,6 +520,9 @@ function onResetFilters() {
       @close="previewingFile = null"
       @navigate="onPreviewNavigate"
       @rate="onFileRated"
+      @update-file="onUpdateFile"
+      @open-tag-modal="(id) => onOpenTagModal([id])"
+      @open-album-modal="(id) => onOpenAlbumModal([id])"
     />
 
     <!-- Visual Search Builder / Filter Drawer -->
@@ -480,6 +543,9 @@ function onResetFilters() {
       @clear-selection="onClearSelection"
       @rate-selected="onBatchRate"
       @add-to-album="onBatchAddToAlbum"
+      @tag-selected="onBatchTag"
+      @toggle-favorite="onBatchToggleFavorite"
+      @toggle-nsfw="onBatchToggleNsfw"
     />
 
     <!-- Album Management & Assignment Modal -->
@@ -487,6 +553,12 @@ function onResetFilters() {
       v-model:open="albumModalOpen"
       :file-ids="albumTargetFileIds"
       @added-to-album="onAddedToAlbum"
+    />
+
+    <!-- Tag Management & Assignment Modal -->
+    <TagModal
+      v-model:open="tagModalOpen"
+      :file-ids="tagTargetFileIds"
     />
   </main>
 </template>

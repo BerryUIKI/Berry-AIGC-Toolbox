@@ -17,12 +17,14 @@ import FileList from "./components/FileList.vue";
 import VirtualGrid from "./components/VirtualGrid.vue";
 import SortBar from "./components/SortBar.vue";
 import PreviewPane from "./components/PreviewPane.vue";
+import SearchBar from "./components/SearchBar.vue";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
 const libraryCounts = ref<LibraryCounts | null>(null);
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
+const searchQuery = ref("");
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
 const previewingFile = ref<ImageFile | null>(null);
@@ -127,16 +129,36 @@ function onFileRated(fileId: number, rating: number | null) {
 async function loadFiles() {
   filesLoading.value = true;
   try {
-    files.value = await invoke<ImageFile[]>("query_files", {
-      folderId: selectedFolder.value?.id ?? null,
-      sort: sortField.value,
-      direction: sortDirection.value,
-    });
+    const q = searchQuery.value.trim();
+    if (q) {
+      files.value = await invoke<ImageFile[]>("search_files_by_query", {
+        query: q,
+        folderId: selectedFolder.value?.id ?? null,
+        sort: sortField.value,
+        direction: sortDirection.value,
+      });
+    } else {
+      files.value = await invoke<ImageFile[]>("query_files", {
+        folderId: selectedFolder.value?.id ?? null,
+        sort: sortField.value,
+        direction: sortDirection.value,
+      });
+    }
   } catch (e) {
     error.value = String(e);
   } finally {
     filesLoading.value = false;
   }
+}
+
+function onSearch(query: string) {
+  searchQuery.value = query;
+  void loadFiles();
+}
+
+function onClearSearch() {
+  searchQuery.value = "";
+  void loadFiles();
 }
 </script>
 
@@ -218,22 +240,58 @@ async function loadFiles() {
         </div>
       </div>
 
-      <VirtualGrid
-        v-if="viewMode === 'grid'"
-        :files="files"
-        :selected-file="selectedFile"
-        :loading="filesLoading"
-        @select="onFileSelected"
-        @activate="onActivateFile"
-      />
-      <FileList
-        v-else
-        :files="files"
-        :selected-file="selectedFile"
-        :loading="filesLoading"
-        @select="onFileSelected"
-        @activate="onActivateFile"
-      />
+      <div class="search-toolbar">
+        <SearchBar
+          v-model="searchQuery"
+          :loading="filesLoading"
+          :result-count="searchQuery.trim() ? files.length : null"
+          @search="onSearch"
+          @clear="onClearSearch"
+        />
+      </div>
+
+      <div v-if="searchQuery.trim()" class="search-status-bar">
+        <span>
+          Found <strong>{{ files.length }}</strong> matching {{ files.length === 1 ? "image" : "images" }}
+        </span>
+        <button type="button" class="reset-search-btn" @click="onClearSearch">
+          ✕ Clear Search
+        </button>
+      </div>
+
+      <div
+        v-if="files.length === 0 && searchQuery.trim() && !filesLoading"
+        class="search-empty-state"
+      >
+        <span class="empty-icon">🔍</span>
+        <p class="empty-title">No images match your search</p>
+        <p class="empty-hint">
+          Try adjusting keywords or parameter filters like <code>prompt:cat</code>,
+          <code>model:sdxl</code>, or <code>steps:&gt;=20</code>.
+        </p>
+        <button type="button" class="clear-filters-btn" @click="onClearSearch">
+          Clear Search
+        </button>
+      </div>
+
+      <template v-else>
+        <VirtualGrid
+          v-if="viewMode === 'grid'"
+          :files="files"
+          :selected-file="selectedFile"
+          :loading="filesLoading"
+          @select="onFileSelected"
+          @activate="onActivateFile"
+        />
+        <FileList
+          v-else
+          :files="files"
+          :selected-file="selectedFile"
+          :loading="filesLoading"
+          @select="onFileSelected"
+          @activate="onActivateFile"
+        />
+      </template>
     </section>
 
     <!-- Full-screen Preview Modal with Inspector -->
@@ -434,5 +492,100 @@ h1 {
   background: #2f6fed;
   color: #fff;
   font-weight: 600;
+}
+
+.search-toolbar {
+  margin-bottom: 0.75rem;
+}
+
+.search-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.75rem;
+  margin-bottom: 0.75rem;
+  background: rgba(47, 111, 237, 0.08);
+  border-left: 3px solid #2f6fed;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+  .search-status-bar {
+    background: rgba(47, 111, 237, 0.15);
+    color: #ddd;
+  }
+}
+
+.reset-search-btn {
+  background: transparent;
+  border: none;
+  color: #2f6fed;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.reset-search-btn:hover {
+  background: rgba(47, 111, 237, 0.15);
+}
+
+.search-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 1rem;
+  text-align: center;
+  border: 1px dashed rgba(128, 128, 128, 0.25);
+  border-radius: 10px;
+  background: rgba(128, 128, 128, 0.03);
+}
+
+.empty-icon {
+  font-size: 2.5em;
+  margin-bottom: 0.5rem;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.empty-hint {
+  font-size: 0.85em;
+  color: #888;
+  max-width: 440px;
+  margin: 0 0 1rem;
+  line-height: 1.4;
+}
+
+.empty-hint code {
+  background: rgba(128, 128, 128, 0.12);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.clear-filters-btn {
+  background: #2f6fed;
+  color: #fff;
+  border: none;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.clear-filters-btn:hover {
+  opacity: 0.9;
 }
 </style>

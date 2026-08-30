@@ -181,6 +181,18 @@ pub fn set_file_rating(
         .map_err(|e| e.to_string())
 }
 
+/// Update user rating (1–10, or null to clear) for multiple image files.
+#[tauri::command]
+pub fn set_files_rating(
+    file_ids: Vec<i64>,
+    rating: Option<u8>,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    db(&state)?
+        .set_files_rating(&file_ids, rating)
+        .map_err(|e| e.to_string())
+}
+
 /// Aggregated file counts across the library and per folder.
 #[derive(Serialize)]
 pub struct LibraryCounts {

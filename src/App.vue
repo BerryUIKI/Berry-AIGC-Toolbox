@@ -20,6 +20,7 @@ import SortBar from "./components/SortBar.vue";
 import PreviewPane from "./components/PreviewPane.vue";
 import SearchBar from "./components/SearchBar.vue";
 import FilterDrawer from "./components/FilterDrawer.vue";
+import BatchActionBar from "./components/BatchActionBar.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -35,6 +36,10 @@ const activeCriteria = ref<SearchCriteria>({});
 const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
 const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
+const selectedFilePaths = ref<Set<string>>(new Set());
+const selectedFilesList = computed(() =>
+  files.value.filter((f) => selectedFilePaths.value.has(f.path)),
+);
 const previewingFile = ref<ImageFile | null>(null);
 const viewMode = ref<"grid" | "table">("grid");
 const sortField = ref<FileSortField>("modified_at");
@@ -44,7 +49,25 @@ const error = ref("");
 
 let unlisten: UnlistenFn | null = null;
 
+function handleWindowKeyDown(e: KeyboardEvent) {
+  const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+
+  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+    e.preventDefault();
+    onSelectAll();
+  } else if (
+    e.key === "Escape" &&
+    selectedFilePaths.value.size > 0 &&
+    !previewingFile.value &&
+    !filterDrawerOpen.value
+  ) {
+    onClearSelection();
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener("keydown", handleWindowKeyDown);
   try {
     info.value = await invoke<AppInfo>("get_app_info");
     await reloadFolders();
@@ -61,6 +84,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("keydown", handleWindowKeyDown);
   unlisten?.();
 });
 
@@ -120,8 +144,68 @@ async function onFolderScanned(_folderId: number) {
   await loadFiles();
 }
 
-function onFileSelected(file: ImageFile) {
+function onFileSelected(file: ImageFile, event?: MouseEvent) {
   selectedFile.value = file;
+  if (event?.metaKey || event?.ctrlKey) {
+    toggleSelectFile(file);
+  } else if (event?.shiftKey && selectedFilesList.value.length > 0) {
+    const lastFile = selectedFilesList.value[selectedFilesList.value.length - 1];
+    const idx1 = files.value.findIndex((f) => f.path === lastFile.path);
+    const idx2 = files.value.findIndex((f) => f.path === file.path);
+    if (idx1 !== -1 && idx2 !== -1) {
+      const [start, end] = idx1 < idx2 ? [idx1, idx2] : [idx2, idx1];
+      for (let i = start; i <= end; i++) {
+        selectedFilePaths.value.add(files.value[i].path);
+      }
+    }
+  }
+}
+
+function toggleSelectFile(file: ImageFile) {
+  if (selectedFilePaths.value.has(file.path)) {
+    selectedFilePaths.value.delete(file.path);
+  } else {
+    selectedFilePaths.value.add(file.path);
+  }
+}
+
+function onSelectAll() {
+  selectedFilePaths.value = new Set(files.value.map((f) => f.path));
+}
+
+function onClearSelection() {
+  selectedFilePaths.value.clear();
+}
+
+function onToggleAll() {
+  if (selectedFilePaths.value.size === files.value.length) {
+    selectedFilePaths.value.clear();
+  } else {
+    onSelectAll();
+  }
+}
+
+async function onBatchRate(rating: number | null) {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length === 0) return;
+
+  try {
+    await invoke("set_files_rating", { fileIds: ids, rating });
+    const idSet = new Set(ids);
+    files.value = files.value.map((f) => {
+      if (f.id != null && idSet.has(f.id)) {
+        return { ...f, rating: rating ?? undefined };
+      }
+      return f;
+    });
+    if (selectedFile.value?.id != null && idSet.has(selectedFile.value.id)) {
+      selectedFile.value.rating = rating ?? undefined;
+    }
+  } catch (e) {
+    error.value = String(e);
+  }
 }
 
 function onActivateFile(file: ImageFile) {
@@ -149,6 +233,7 @@ function onFileRated(fileId: number, rating: number | null) {
 
 async function loadFiles() {
   filesLoading.value = true;
+  selectedFilePaths.value.clear();
   try {
     const q = searchQuery.value.trim();
     if (q) {
@@ -326,17 +411,22 @@ function onResetFilters() {
           v-if="viewMode === 'grid'"
           :files="files"
           :selected-file="selectedFile"
+          :selected-file-paths="selectedFilePaths"
           :loading="filesLoading"
           @select="onFileSelected"
           @activate="onActivateFile"
+          @toggle-select="toggleSelectFile"
         />
         <FileList
           v-else
           :files="files"
           :selected-file="selectedFile"
+          :selected-file-paths="selectedFilePaths"
           :loading="filesLoading"
           @select="onFileSelected"
           @activate="onActivateFile"
+          @toggle-select="toggleSelectFile"
+          @toggle-all="onToggleAll"
         />
       </template>
     </section>
@@ -358,6 +448,15 @@ function onResetFilters() {
       :initial-criteria="activeCriteria"
       @apply="onApplyFilters"
       @reset="onResetFilters"
+    />
+
+    <!-- Floating Batch Action Bar -->
+    <BatchActionBar
+      :selected-files="selectedFilesList"
+      :total-count="files.length"
+      @select-all="onSelectAll"
+      @clear-selection="onClearSelection"
+      @rate-selected="onBatchRate"
     />
   </main>
 </template>

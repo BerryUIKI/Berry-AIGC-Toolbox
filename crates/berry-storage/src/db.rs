@@ -538,6 +538,34 @@ impl Database {
         Ok(())
     }
 
+    /// Update user rating (1–10, or None to clear) for multiple image files in a single transaction.
+    pub fn set_files_rating(
+        &self,
+        file_ids: &[i64],
+        rating: Option<u8>,
+    ) -> Result<usize, DatabaseError> {
+        if let Some(r) = rating {
+            if !(1..=10).contains(&r) {
+                return Err(DatabaseError::InvalidRating(r));
+            }
+        }
+        if file_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let tx = self.conn.unchecked_transaction()?;
+        let mut count = 0;
+        {
+            let mut stmt = tx.prepare_cached("UPDATE files SET rating = ?1 WHERE id = ?2")?;
+            let r_val = rating.map(|r| r as i64);
+            for &id in file_ids {
+                count += stmt.execute(params![r_val, id])?;
+            }
+        }
+        tx.commit()?;
+        Ok(count)
+    }
+
     /// Number of indexed files in a folder.
     pub fn count_files(&self, folder_id: i64) -> Result<i64, DatabaseError> {
         let count = self.conn.query_row(
@@ -1054,5 +1082,30 @@ mod tests {
 
         let samplers = db.list_distinct_samplers().unwrap();
         assert_eq!(samplers, vec!["DPM++ 2M Karras", "Euler a"]);
+    }
+
+    #[test]
+    fn set_files_rating_batch() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let id1 = db.upsert_file(&image(folder.id, "/img/1.png")).unwrap();
+        let id2 = db.upsert_file(&image(folder.id, "/img/2.png")).unwrap();
+        let _id3 = db.upsert_file(&image(folder.id, "/img/3.png")).unwrap();
+
+        // Batch update id1 and id2 to rating 9
+        let updated = db.set_files_rating(&[id1, id2], Some(9)).unwrap();
+        assert_eq!(updated, 2);
+
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, Some(9));
+        assert_eq!(files[1].rating, Some(9));
+        assert_eq!(files[2].rating, None);
+
+        // Batch clear ratings
+        let cleared = db.set_files_rating(&[id1, id2], None).unwrap();
+        assert_eq!(cleared, 2);
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files[0].rating, None);
+        assert_eq!(files[1].rating, None);
     }
 }

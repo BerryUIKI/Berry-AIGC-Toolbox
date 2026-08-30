@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { CheckpointModelStat, ModelCacheEntry } from "../types";
 
 const props = defineProps<{
@@ -63,16 +64,16 @@ const filteredModels = computed(() => {
 });
 
 async function handleImport() {
-  if (!importPath.value.trim()) return;
+  if (!importPath.value.trim() || isImporting.value) return;
   isImporting.value = true;
   message.value = null;
   try {
     const count = await invoke<number>("import_model_cache_file", {
-      path: importPath.value.trim(),
+      filePath: importPath.value.trim(),
     });
     message.value = {
       type: "success",
-      text: `Successfully imported ${count} model mappings!`,
+      text: `${t.value.modelsModal.importedSuccess} (${count} entries)`,
     };
     importPath.value = "";
     await loadData();
@@ -97,7 +98,7 @@ function handleFilterHash(model: CheckpointModelStat) {
 
 onMounted(() => {
   if (props.show) {
-    loadData();
+    void loadData();
   }
 });
 </script>
@@ -106,25 +107,23 @@ onMounted(() => {
   <div v-if="show" class="modal-backdrop" @click.self="emit('close')">
     <div class="modal-container">
       <div class="modal-header">
-        <div class="modal-title-wrap">
-          <svg class="modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-          <h2>Checkpoint Models & Hash Cache</h2>
+        <div class="header-left">
+          <span class="header-icon">🧠</span>
+          <h2>{{ t.modelsModal.title }}</h2>
         </div>
-        <button class="close-btn" @click="emit('close')" title="Close (Esc)">✕</button>
+        <button class="close-btn" @click="emit('close')" title="Close">✕</button>
       </div>
 
       <div class="modal-body">
-        <!-- Import Bar -->
+        <!-- Import A1111 Cache bar -->
         <div class="import-card">
-          <div class="import-label">Import A1111 cache.json / Model Hash Mappings:</div>
+          <div class="import-label">{{ t.modelsModal.importCacheBtn }}:</div>
           <div class="import-input-row">
             <input
               v-model="importPath"
               type="text"
               class="import-input"
-              placeholder="/path/to/cache.json or model_hashes.json"
+              placeholder="/path/to/cache.json"
               @keydown.enter="handleImport"
             />
             <button
@@ -132,7 +131,7 @@ onMounted(() => {
               :disabled="!importPath.trim() || isImporting"
               @click="handleImport"
             >
-              {{ isImporting ? "Importing..." : "Import" }}
+              {{ isImporting ? "..." : t.modelsModal.importCacheBtn }}
             </button>
           </div>
         </div>
@@ -147,17 +146,17 @@ onMounted(() => {
             v-model="searchQuery"
             type="text"
             class="filter-input"
-            placeholder="Search models by name, title, or hash..."
+            :placeholder="t.modelsModal.searchPlaceholder"
           />
           <div class="model-count-tag">
-            {{ filteredModels.length }} / {{ models.length }} Models
+            {{ filteredModels.length }} / {{ models.length }} {{ t.search.models }}
           </div>
         </div>
 
         <!-- Models List -->
         <div v-if="loading" class="loading-state">Loading model library...</div>
         <div v-else-if="filteredModels.length === 0" class="empty-state">
-          No checkpoint models match the search criteria.
+          {{ t.search.noMatchTitle }}
         </div>
         <div v-else class="models-grid">
           <div
@@ -171,7 +170,7 @@ onMounted(() => {
                   {{ model.model_name }}
                 </span>
                 <span class="badge-count" title="Number of indexed images">
-                  {{ model.count }} {{ model.count === 1 ? 'image' : 'images' }}
+                  {{ model.count }} {{ t.modelsModal.imagesCount }}
                 </span>
               </div>
 
@@ -199,10 +198,10 @@ onMounted(() => {
             <div class="model-actions">
               <button
                 class="action-btn"
-                title="Filter gallery by this model"
+                :title="t.modelsModal.filterModel"
                 @click="handleFilterModel(model)"
               >
-                Filter
+                {{ t.modelsModal.filterModel }}
               </button>
             </div>
           </div>

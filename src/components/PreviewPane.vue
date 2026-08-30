@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { ImageFile, Tag } from "../types";
 import {
   assetUrl,
   formatBytes,
-  formatDateTime,
   getFileName,
   normalizePath,
 } from "../utils/image";
@@ -243,7 +243,7 @@ watch(
             :title="file.is_favorite ? 'Favorited (Click to remove)' : 'Mark as Favorite'"
             @click="toggleFavorite"
           >
-            {{ file.is_favorite ? "★ Favorite" : "☆ Favorite" }}
+            {{ file.is_favorite ? t.batch.favorited : t.batch.favorite }}
           </button>
 
           <!-- NSFW toggle -->
@@ -254,7 +254,7 @@ watch(
             :title="file.is_nsfw ? 'Marked as NSFW (Click to unmark)' : 'Mark as NSFW'"
             @click="toggleNsfw"
           >
-            {{ file.is_nsfw ? "🔞 NSFW" : "🛡 SFW" }}
+            {{ file.is_nsfw ? t.batch.nsfw : t.batch.sfw }}
           </button>
         </div>
 
@@ -265,7 +265,7 @@ watch(
             title="Reveal in File Manager / Finder"
             @click="revealInFinder"
           >
-            📁 Reveal
+            📁 {{ t.preview.reveal }}
           </button>
           <button
             type="button"
@@ -274,7 +274,7 @@ watch(
             title="Toggle Metadata Inspector (Hotkey: I)"
             @click="toggleInspector"
           >
-            ℹ Inspector
+            ℹ {{ t.preview.inspector }}
           </button>
           <button
             type="button"
@@ -356,17 +356,22 @@ watch(
         <!-- Metadata Inspector Sidebar -->
         <aside v-if="showInspector" class="inspector-sidebar">
           <div class="inspector-header">
-            <h3>Metadata Inspector</h3>
-            <span v-if="file.metadata?.format" class="format-pill">
-              {{ file.metadata.format }}
-            </span>
+            <h3>{{ t.preview.inspector }}</h3>
+            <button
+              type="button"
+              class="close-inspector-btn"
+              title="Hide Inspector"
+              @click="toggleInspector"
+            >
+              ✕
+            </button>
           </div>
 
-          <div class="inspector-content">
-            <!-- Organization & Tags -->
-            <div class="meta-section">
+          <div class="inspector-body">
+            <!-- Albums & Tags Section -->
+            <div class="meta-section org-section">
               <div class="section-heading">
-                <h4>Organization</h4>
+                <h4>{{ t.nav.albums }} & {{ t.nav.tags }}</h4>
                 <div class="org-actions">
                   <button
                     type="button"
@@ -374,7 +379,7 @@ watch(
                     title="Add to Album"
                     @click="file.id && emit('openAlbumModal', file.id)"
                   >
-                    📁 + Album
+                    📁 + {{ t.batch.album }}
                   </button>
                   <button
                     type="button"
@@ -382,7 +387,7 @@ watch(
                     title="Manage Tags"
                     @click="file.id && emit('openTagModal', file.id)"
                   >
-                    🏷 + Tag
+                    🏷 + {{ t.batch.tag }}
                   </button>
                 </div>
               </div>
@@ -390,35 +395,35 @@ watch(
               <!-- Tags chips -->
               <div v-if="fileTags.length > 0" class="tag-chips-list">
                 <span
-                  v-for="t in fileTags"
-                  :key="t.id"
+                  v-for="t_tag in fileTags"
+                  :key="t_tag.id"
                   class="preview-tag-chip"
-                  :style="{ borderColor: t.color || '#3b82f6' }"
+                  :style="{ borderColor: t_tag.color || '#3b82f6' }"
                 >
                   <span
                     class="preview-tag-dot"
-                    :style="{ backgroundColor: t.color || '#3b82f6' }"
+                    :style="{ backgroundColor: t_tag.color || '#3b82f6' }"
                   />
-                  {{ t.name }}
+                  {{ t_tag.name }}
                   <button
                     type="button"
                     class="preview-tag-remove"
                     title="Remove tag from file"
-                    @click="removeTag(t.id)"
+                    @click="removeTag(t_tag.id)"
                   >
                     ✕
                   </button>
                 </span>
               </div>
               <div v-else class="no-tags-text">
-                No tags assigned. Click "+ Tag" to add.
+                {{ t.nav.noTags }}
               </div>
             </div>
 
             <!-- Basic file specs -->
             <div class="spec-grid">
               <div class="spec-item">
-                <span class="spec-label">Dimensions</span>
+                <span class="spec-label">{{ t.preview.dimensions }}</span>
                 <span class="spec-value">
                   {{
                     file.metadata?.width && file.metadata?.height
@@ -428,29 +433,29 @@ watch(
                 </span>
               </div>
               <div class="spec-item">
-                <span class="spec-label">File Size</span>
+                <span class="spec-label">{{ t.view.files }}</span>
                 <span class="spec-value">{{ formatBytes(file.size_bytes) }}</span>
               </div>
               <div class="spec-item">
-                <span class="spec-label">Format</span>
+                <span class="spec-label">{{ t.preview.format }}</span>
                 <span class="spec-value">{{ file.container.toUpperCase() }}</span>
               </div>
               <div class="spec-item">
-                <span class="spec-label">Modified</span>
-                <span class="spec-value">{{ formatDateTime(file.modified_at) }}</span>
+                <span class="spec-label">{{ t.preview.rating }}</span>
+                <span class="spec-value">{{ file.rating ? `${file.rating} ★` : t.preview.unrated }}</span>
               </div>
             </div>
 
             <!-- Prompt section -->
             <div v-if="file.metadata?.prompt" class="meta-section">
               <div class="section-heading">
-                <h4>Prompt</h4>
+                <h4>{{ t.preview.prompt }}</h4>
                 <button
                   type="button"
                   class="copy-btn"
                   @click="copyPrompt(file.metadata?.prompt, 'prompt')"
                 >
-                  {{ promptCopied ? "✓ Copied!" : "Copy" }}
+                  {{ promptCopied ? "✓ " + t.preview.copied : t.preview.copyPrompt }}
                 </button>
               </div>
               <div class="text-block prompt-text">
@@ -461,13 +466,13 @@ watch(
             <!-- Negative Prompt section -->
             <div v-if="file.metadata?.negative_prompt" class="meta-section">
               <div class="section-heading">
-                <h4>Negative Prompt</h4>
+                <h4>{{ t.preview.negativePrompt }}</h4>
                 <button
                   type="button"
                   class="copy-btn"
                   @click="copyPrompt(file.metadata?.negative_prompt, 'negative')"
                 >
-                  {{ negativePromptCopied ? "✓ Copied!" : "Copy" }}
+                  {{ negativePromptCopied ? "✓ " + t.preview.copied : t.preview.copyNegative }}
                 </button>
               </div>
               <div class="text-block negative-text">
@@ -478,11 +483,11 @@ watch(
             <!-- Generation parameters -->
             <div v-if="file.metadata" class="meta-section">
               <div class="section-heading">
-                <h4>Generation Parameters</h4>
+                <h4>{{ t.preview.generationParams }}</h4>
               </div>
               <div class="params-table">
                 <div v-if="file.metadata.model_name" class="param-row">
-                  <span class="param-key">Model</span>
+                  <span class="param-key">{{ t.preview.modelName }}</span>
                   <span class="param-val" :title="file.metadata.model_name">
                     {{ file.metadata.model_name }}
                     <span v-if="file.metadata.model_hash" class="hash-tag">
@@ -491,24 +496,20 @@ watch(
                   </span>
                 </div>
                 <div v-if="file.metadata.sampler" class="param-row">
-                  <span class="param-key">Sampler</span>
+                  <span class="param-key">{{ t.preview.sampler }}</span>
                   <span class="param-val">{{ file.metadata.sampler }}</span>
                 </div>
                 <div v-if="file.metadata.steps" class="param-row">
-                  <span class="param-key">Steps</span>
+                  <span class="param-key">{{ t.preview.steps }}</span>
                   <span class="param-val">{{ file.metadata.steps }}</span>
                 </div>
                 <div v-if="file.metadata.cfg_scale" class="param-row">
-                  <span class="param-key">CFG Scale</span>
+                  <span class="param-key">{{ t.preview.cfgScale }}</span>
                   <span class="param-val">{{ file.metadata.cfg_scale }}</span>
                 </div>
                 <div v-if="file.metadata.seed" class="param-row">
-                  <span class="param-key">Seed</span>
+                  <span class="param-key">{{ t.preview.seed }}</span>
                   <span class="param-val selectable">{{ file.metadata.seed }}</span>
-                </div>
-                <div v-if="file.aesthetic_score" class="param-row">
-                  <span class="param-key">Aesthetic Score</span>
-                  <span class="param-val">{{ file.aesthetic_score }}</span>
                 </div>
               </div>
             </div>

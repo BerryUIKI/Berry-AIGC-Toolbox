@@ -2,6 +2,7 @@
 import { ref, watch, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
+import { t } from "../i18n";
 import type { DatabaseStats } from "../types";
 import { formatBytes } from "../utils/image";
 
@@ -55,7 +56,7 @@ async function handleBackup() {
     const destination = await save({
       defaultPath: defaultName,
       filters: [{ name: "SQLite Database", extensions: ["db", "sqlite"] }],
-      title: "Save Database Backup",
+      title: t.value.dbModal.backupTitle,
     });
 
     if (!destination) return;
@@ -65,7 +66,7 @@ async function handleBackup() {
 
     await invoke("backup_database", { destinationPath: destination });
     statusMessage.value = {
-      text: `Backup saved successfully to ${destination}`,
+      text: `Backup exported successfully to: ${destination}`,
       type: "success",
     };
   } catch (err: any) {
@@ -81,7 +82,7 @@ async function handleRestore() {
       multiple: false,
       directory: false,
       filters: [{ name: "SQLite Database", extensions: ["db", "sqlite"] }],
-      title: "Select Database Backup to Restore",
+      title: t.value.dbModal.restoreTitle,
     });
 
     if (!selected || typeof selected !== "string") return;
@@ -133,9 +134,9 @@ onMounted(() => {
       <div class="modal-header">
         <div class="header-left">
           <span class="header-icon">🗄️</span>
-          <h2>Database & Storage Maintenance</h2>
+          <h2>{{ t.dbModal.title }}</h2>
         </div>
-        <button class="close-btn" @click="emit('close')" title="Close">✕</button>
+        <button class="close-btn" @click="emit('close')" :title="t.dbModal.close">✕</button>
       </div>
 
       <div class="modal-body">
@@ -145,54 +146,54 @@ onMounted(() => {
 
         <!-- Metrics Overview Grid -->
         <section class="section">
-          <div class="section-title">Database Storage & Table Metrics</div>
+          <div class="section-title">{{ t.dbModal.metricsTitle }}</div>
           <div v-if="loading" class="loading-state">Loading database statistics...</div>
           <div v-else-if="stats" class="stats-grid">
             <div class="stat-card">
               <span class="stat-value">{{ formatBytes(stats.db_size_bytes) }}</span>
-              <span class="stat-label">Database Size</span>
+              <span class="stat-label">{{ t.dbModal.dbSize }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.file_count.toLocaleString() }}</span>
-              <span class="stat-label">Indexed Images</span>
+              <span class="stat-label">{{ t.dbModal.indexedImages }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.folder_count }}</span>
-              <span class="stat-label">Root Folders</span>
+              <span class="stat-label">{{ t.dbModal.rootFolders }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.album_count }}</span>
-              <span class="stat-label">Albums</span>
+              <span class="stat-label">{{ t.dbModal.albums }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.tag_count }}</span>
-              <span class="stat-label">Tags</span>
+              <span class="stat-label">{{ t.dbModal.tags }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.model_cache_count.toLocaleString() }}</span>
-              <span class="stat-label">Cached Model Hashes</span>
+              <span class="stat-label">{{ t.dbModal.cachedHashes }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.page_count }}</span>
-              <span class="stat-label">SQLite Pages</span>
+              <span class="stat-label">{{ t.dbModal.sqlitePages }}</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ stats.freelist_count }}</span>
-              <span class="stat-label">Free Pages</span>
+              <span class="stat-label">{{ t.dbModal.freePages }}</span>
             </div>
           </div>
         </section>
 
         <!-- Actions -->
         <section class="section">
-          <div class="section-title">Maintenance Operations</div>
+          <div class="section-title">{{ t.dbModal.maintenanceTitle }}</div>
           <div class="action-cards">
             <!-- Vacuum & Optimize -->
             <div class="action-card">
               <div class="action-info">
-                <div class="action-name">⚡ Compact & Optimize Database</div>
+                <div class="action-name">⚡ {{ t.dbModal.compactTitle }}</div>
                 <div class="action-desc">
-                  Rebuilds database file structure, reclaims free page blocks, and optimizes SQLite query planner statistics.
+                  {{ t.dbModal.compactDesc }}
                 </div>
               </div>
               <button
@@ -201,16 +202,16 @@ onMounted(() => {
                 :disabled="processingAction || loading"
                 @click="handleVacuum"
               >
-                {{ processingAction ? "Processing..." : "Run VACUUM" }}
+                {{ processingAction ? "Processing..." : t.dbModal.compactBtn }}
               </button>
             </div>
 
             <!-- Backup Database -->
             <div class="action-card">
               <div class="action-info">
-                <div class="action-name">💾 Export Database Backup</div>
+                <div class="action-name">💾 {{ t.dbModal.backupTitle }}</div>
                 <div class="action-desc">
-                  Creates a safe point-in-time snapshot of the database without interrupting ongoing operations.
+                  {{ t.dbModal.backupDesc }}
                 </div>
               </div>
               <button
@@ -219,16 +220,16 @@ onMounted(() => {
                 :disabled="processingAction || loading"
                 @click="handleBackup"
               >
-                Export Backup…
+                {{ t.dbModal.backupBtn }}
               </button>
             </div>
 
             <!-- Restore Database -->
             <div class="action-card danger-card">
               <div class="action-info">
-                <div class="action-name">🔄 Restore from Backup</div>
+                <div class="action-name">🔄 {{ t.dbModal.restoreTitle }}</div>
                 <div class="action-desc">
-                  Replaces current application database with an existing backup snapshot.
+                  {{ t.dbModal.restoreDesc }}
                 </div>
               </div>
               <button
@@ -237,7 +238,7 @@ onMounted(() => {
                 :disabled="processingAction || loading"
                 @click="handleRestore"
               >
-                Restore…
+                {{ t.dbModal.restoreBtn }}
               </button>
             </div>
           </div>
@@ -246,7 +247,7 @@ onMounted(() => {
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" @click="emit('close')">
-          Close
+          {{ t.dbModal.close }}
         </button>
       </div>
     </div>

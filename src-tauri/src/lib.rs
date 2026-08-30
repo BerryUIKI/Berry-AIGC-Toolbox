@@ -68,6 +68,10 @@ pub fn run() {
             commands::import_model_cache_file,
             commands::resolve_model_hash,
             commands::list_model_cache,
+            commands::move_files,
+            commands::copy_files,
+            commands::trash_files,
+            commands::reveal_in_file_manager,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

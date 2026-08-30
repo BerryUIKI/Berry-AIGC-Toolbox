@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { Folder, ImageFile } from "../types";
 
 const props = defineProps<{
@@ -22,11 +23,11 @@ const errorMessage = ref<string | null>(null);
 const modalTitle = computed(() => {
   switch (props.mode) {
     case "move":
-      return `Move ${props.files.length} ${props.files.length === 1 ? "File" : "Files"}`;
+      return `${t.value.fileOpModal.moveTitle} (${props.files.length})`;
     case "copy":
-      return `Copy ${props.files.length} ${props.files.length === 1 ? "File" : "Files"}`;
+      return `${t.value.fileOpModal.copyTitle} (${props.files.length})`;
     case "trash":
-      return `Move ${props.files.length} ${props.files.length === 1 ? "File" : "Files"} to Trash`;
+      return `${t.value.fileOpModal.trashTitle} (${props.files.length})`;
   }
 });
 
@@ -71,7 +72,7 @@ async function handleConfirm() {
           <span class="modal-icon">{{ mode === 'trash' ? '🗑' : mode === 'move' ? '📂' : '📄' }}</span>
           <h2>{{ modalTitle }}</h2>
         </div>
-        <button class="close-btn" @click="emit('close')" title="Close">✕</button>
+        <button class="close-btn" @click="emit('close')" :title="t.fileOpModal.cancel">✕</button>
       </div>
 
       <div class="modal-body">
@@ -80,15 +81,12 @@ async function handleConfirm() {
         </div>
 
         <div v-if="mode === 'trash'" class="trash-warning">
-          <p>
-            Are you sure you want to move <strong>{{ files.length }}</strong>
-            {{ files.length === 1 ? "file" : "files" }} (and any associated sidecars) to the system trash?
-          </p>
-          <p class="trash-subtext">You can restore them from your OS Recycle Bin / Trash if needed.</p>
+          <p>{{ t.fileOpModal.trashWarning }}</p>
+          <p class="trash-subtext">{{ t.fileOpModal.trashSubtext }}</p>
         </div>
 
         <div v-else class="folder-select-section">
-          <label class="section-label">Select Destination Folder:</label>
+          <label class="section-label">{{ t.fileOpModal.selectDest }}</label>
           <div class="folder-options">
             <div
               v-for="folder in folders"
@@ -106,7 +104,7 @@ async function handleConfirm() {
                 />
               </div>
               <div class="folder-text">
-                <div class="folder-name">{{ folder.path.split('/').pop() || folder.path }}</div>
+                <div class="folder-name">{{ folder.path.split(/[\\/]/).pop() || folder.path }}</div>
                 <div class="folder-path" :title="folder.path">{{ folder.path }}</div>
               </div>
             </div>
@@ -115,10 +113,10 @@ async function handleConfirm() {
 
         <!-- Files Preview List -->
         <div class="file-list-preview">
-          <div class="preview-header">Files ({{ files.length }}):</div>
+          <div class="preview-header">{{ t.view.files }} ({{ files.length }}):</div>
           <div class="file-chips">
             <span v-for="f in files.slice(0, 10)" :key="f.path" class="file-chip" :title="f.path">
-              {{ f.path.split('/').pop() }}
+              {{ f.path.split(/[\\/]/).pop() }}
             </span>
             <span v-if="files.length > 10" class="file-chip more-chip">
               +{{ files.length - 10 }} more
@@ -129,7 +127,7 @@ async function handleConfirm() {
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" :disabled="isProcessing" @click="emit('close')">
-          Cancel
+          {{ t.fileOpModal.cancel }}
         </button>
         <button
           type="button"
@@ -138,7 +136,7 @@ async function handleConfirm() {
           :disabled="isProcessing || (mode !== 'trash' && selectedFolderId === null)"
           @click="handleConfirm"
         >
-          {{ isProcessing ? "Processing..." : mode === 'trash' ? "Move to Trash" : mode === 'move' ? "Move Files" : "Copy Files" }}
+          {{ isProcessing ? t.fileOpModal.processing : mode === 'trash' ? t.fileOpModal.trashBtn : mode === 'move' ? t.fileOpModal.moveBtn : t.fileOpModal.copyBtn }}
         </button>
       </div>
     </div>

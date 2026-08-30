@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { Tag } from "../types";
 
 const props = defineProps<{
@@ -71,7 +72,7 @@ async function onCreateTag() {
 }
 
 async function onDeleteTag(tagId: number) {
-  if (!confirm("Are you sure you want to delete this tag?")) {
+  if (!confirm(t.value.tagsModal.deleteConfirm)) {
     return;
   }
   try {
@@ -105,7 +106,7 @@ async function onApplyTag(tag: Tag) {
     <div class="modal-dialog" role="dialog" aria-modal="true" @click.stop>
       <div class="modal-header">
         <h2>
-          {{ fileIds && fileIds.length > 0 ? `Tag ${fileIds.length} ${fileIds.length === 1 ? 'image' : 'images'}` : "Manage Tags" }}
+          {{ fileIds && fileIds.length > 0 ? `${t.batch.tag} (${fileIds.length})` : t.tagsModal.title }}
         </h2>
         <button
           type="button"
@@ -124,21 +125,21 @@ async function onApplyTag(tag: Tag) {
       <div class="modal-body">
         <!-- New Tag Form -->
         <div v-if="isCreating" class="create-form">
-          <h3>Create New Tag</h3>
+          <h3>{{ t.tagsModal.createBtn }}</h3>
           <div class="form-group">
-            <label for="tag-name">Tag Name *</label>
+            <label for="tag-name">{{ t.tagsModal.createPlaceholder }}</label>
             <input
               id="tag-name"
               v-model="newTagName"
               type="text"
-              placeholder="e.g. Favorite, Concept Art..."
+              :placeholder="t.tagsModal.createPlaceholder"
               autofocus
               @keydown.enter.prevent="onCreateTag"
             />
           </div>
 
           <div class="form-group">
-            <label>Tag Color</label>
+            <label>Color</label>
             <div class="color-presets">
               <button
                 v-for="color in PRESET_COLORS"
@@ -154,7 +155,7 @@ async function onApplyTag(tag: Tag) {
 
           <div class="form-actions">
             <button type="button" class="btn-cancel" @click="isCreating = false">
-              Cancel
+              {{ t.fileOpModal.cancel }}
             </button>
             <button
               type="button"
@@ -162,21 +163,21 @@ async function onApplyTag(tag: Tag) {
               :disabled="!newTagName.trim()"
               @click="onCreateTag"
             >
-              Create
+              {{ t.tagsModal.createBtn }}
             </button>
           </div>
         </div>
 
         <div v-else class="header-action">
           <button type="button" class="btn-create" @click="isCreating = true">
-            + New Tag
+            + {{ t.nav.newTag }}
           </button>
         </div>
 
         <!-- Tag list -->
-        <div v-if="loading" class="tag-loading">Loading tags…</div>
+        <div v-if="loading" class="tag-loading">Loading...</div>
         <div v-else-if="tags.length === 0" class="tag-empty">
-          No tags created yet. Click "+ New Tag" to create one!
+          {{ t.tagsModal.noTags }}
         </div>
         <div v-else class="tag-chips-container">
           <div

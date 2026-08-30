@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { t } from "../i18n";
 import type { Album, Folder, LibraryCounts, NavTarget, ScanProgress, ScanStats, Tag } from "../types";
 
 const props = defineProps<{
@@ -143,7 +144,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   <nav class="sidebar-nav" aria-label="Organization navigation">
     <!-- Library Section -->
     <div class="nav-section">
-      <div class="section-title">Library</div>
+      <div class="section-title">{{ t.nav.library }}</div>
       <ul class="list">
         <li
           :class="['row', { active: isTargetActive({ type: 'all' }) }]"
@@ -151,7 +152,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
         >
           <div class="path">
             <span class="row-icon">🖼️</span>
-            <span class="name">All Images</span>
+            <span class="name">{{ t.nav.allImages }}</span>
             <span class="count-badge">{{ counts?.total ?? 0 }}</span>
           </div>
         </li>
@@ -162,7 +163,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
         >
           <div class="path">
             <span class="row-icon">★</span>
-            <span class="name">Favorites</span>
+            <span class="name">{{ t.nav.favorites }}</span>
           </div>
         </li>
 
@@ -172,7 +173,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
         >
           <div class="path">
             <span class="row-icon">🔞</span>
-            <span class="name">Sensitive (18+)</span>
+            <span class="name">{{ t.nav.sensitive }}</span>
           </div>
         </li>
 
@@ -183,7 +184,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
         >
           <div class="path">
             <span class="row-icon">📊</span>
-            <span class="name">Prompt Insights</span>
+            <span class="name">{{ t.nav.promptInsights }}</span>
           </div>
         </li>
       </ul>
@@ -191,7 +192,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 
     <!-- Folders Section -->
     <div class="nav-section">
-      <div class="section-title">Folders</div>
+      <div class="section-title">{{ t.nav.folders }}</div>
       <ul class="list">
         <li
           v-for="folder in folders"
@@ -215,7 +216,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               title="Incremental scan"
               @click.stop="scan(folder, 'scan')"
             >
-              {{ running?.id === folder.id && running?.action === "scan" ? "Scanning…" : "Scan" }}
+              {{ running?.id === folder.id && running?.action === "scan" ? t.nav.scanning : t.nav.scan }}
             </button>
             <button
               class="ghost rebuild"
@@ -223,7 +224,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               title="Force rebuild metadata"
               @click.stop="scan(folder, 'rebuild')"
             >
-              {{ running?.id === folder.id && running?.action === "rebuild" ? "Rebuilding…" : "Rebuild" }}
+              {{ running?.id === folder.id && running?.action === "rebuild" ? t.nav.rebuilding : t.nav.rebuild }}
             </button>
             <button class="ghost remove" title="Remove folder from library" @click.stop="remove(folder)">×</button>
           </div>
@@ -243,20 +244,20 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           </p>
         </li>
       </ul>
-      <p v-if="!folders.length" class="empty">No folders added yet.</p>
+      <p v-if="!folders.length" class="empty">{{ t.nav.noFolders }}</p>
     </div>
 
     <!-- Albums Section -->
     <div class="nav-section">
       <div class="section-header-row">
-        <div class="section-title">Albums</div>
+        <div class="section-title">{{ t.nav.albums }}</div>
         <button
           type="button"
           class="section-add-btn"
           title="Manage or Create Albums"
           @click="emit('openAlbumModal')"
         >
-          + New
+          {{ t.nav.newAlbum }}
         </button>
       </div>
 
@@ -278,20 +279,20 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           </div>
         </li>
       </ul>
-      <p v-else class="empty">No albums yet.</p>
+      <p v-else class="empty">{{ t.nav.noAlbums }}</p>
     </div>
 
     <!-- Tags Section -->
     <div class="nav-section">
       <div class="section-header-row">
-        <div class="section-title">Tags</div>
+        <div class="section-title">{{ t.nav.tags }}</div>
         <button
           type="button"
           class="section-add-btn"
           title="Manage or Create Tags"
           @click="emit('openTagModal')"
         >
-          + New
+          {{ t.nav.newTag }}
         </button>
       </div>
 
@@ -314,7 +315,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           <span class="tag-nav-name">{{ tag.name }}</span>
         </button>
       </div>
-      <p v-else class="empty">No tags yet.</p>
+      <p v-else class="empty">{{ t.nav.noTags }}</p>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>

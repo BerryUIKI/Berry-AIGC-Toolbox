@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use berry_domain::{Container, ExtractedMetadata, FileSortField, Folder, ImageFile, SortDirection};
+use berry_domain::{
+    Container, ExtractedMetadata, FileSortField, Folder, ImageFile, SearchCriteria, SortDirection,
+};
 use rusqlite::{params, Connection, OpenFlags};
 
 use crate::migrations::{LATEST_VERSION, MIGRATIONS};
@@ -285,6 +287,37 @@ impl Database {
         Ok(affected as u64)
     }
 
+    /// Helper to deserialize an image file row.
+    fn map_row(row: &rusqlite::Row<'_>) -> Result<ImageFile, DatabaseError> {
+        let id: i64 = row.get(0)?;
+        let folder_id: i64 = row.get(1)?;
+        let path: String = row.get(2)?;
+        let container_id: String = row.get(3)?;
+        let size_bytes: i64 = row.get(4)?;
+        let modified_at: i64 = row.get(5)?;
+        let metadata: Option<String> = row.get(6)?;
+        let rating: Option<i64> = row.get(7)?;
+        let aesthetic_score: Option<f64> = row.get(8)?;
+
+        let container = Container::from_id(&container_id)
+            .ok_or_else(|| DatabaseError::UnknownContainer(container_id))?;
+        let metadata = metadata
+            .map(|json| serde_json::from_str::<ExtractedMetadata>(&json))
+            .transpose()?;
+
+        Ok(ImageFile {
+            id: Some(id),
+            folder_id,
+            path,
+            size_bytes: size_bytes as u64,
+            modified_at,
+            container,
+            metadata,
+            rating: rating.map(|r| r as u8),
+            aesthetic_score,
+        })
+    }
+
     /// Query files with optional folder filtering and multi-criteria sorting.
     pub fn query_files(
         &self,
@@ -292,6 +325,106 @@ impl Database {
         sort: FileSortField,
         direction: SortDirection,
     ) -> Result<Vec<ImageFile>, DatabaseError> {
+        let criteria = SearchCriteria {
+            folder_id,
+            sort: Some(sort),
+            direction: Some(direction),
+            ..Default::default()
+        };
+        self.search_files(&criteria)
+    }
+
+    /// Search files matching various criteria (text, parameters, ratings, folders, sorting, pagination).
+    pub fn search_files(&self, criteria: &SearchCriteria) -> Result<Vec<ImageFile>, DatabaseError> {
+        let mut conditions = Vec::new();
+        let mut params: Vec<rusqlite::types::Value> = Vec::new();
+
+        if let Some(fid) = criteria.folder_id {
+            conditions.push("folder_id = ?".to_string());
+            params.push(rusqlite::types::Value::Integer(fid));
+        }
+
+        if let Some(text) = &criteria.text {
+            let pattern = format!("%{}%", text);
+            conditions.push(
+                "(path LIKE ? OR json_extract(metadata, '$.prompt') LIKE ? OR json_extract(metadata, '$.negative_prompt') LIKE ? OR json_extract(metadata, '$.model_name') LIKE ?)".to_string(),
+            );
+            params.push(rusqlite::types::Value::Text(pattern.clone()));
+            params.push(rusqlite::types::Value::Text(pattern.clone()));
+            params.push(rusqlite::types::Value::Text(pattern.clone()));
+            params.push(rusqlite::types::Value::Text(pattern));
+        }
+
+        if let Some(prompt) = &criteria.prompt {
+            conditions.push("json_extract(metadata, '$.prompt') LIKE ?".to_string());
+            params.push(rusqlite::types::Value::Text(format!("%{}%", prompt)));
+        }
+
+        if let Some(negative_prompt) = &criteria.negative_prompt {
+            conditions.push("json_extract(metadata, '$.negative_prompt') LIKE ?".to_string());
+            params.push(rusqlite::types::Value::Text(format!(
+                "%{}%",
+                negative_prompt
+            )));
+        }
+
+        if let Some(model_name) = &criteria.model_name {
+            conditions.push("json_extract(metadata, '$.model_name') LIKE ?".to_string());
+            params.push(rusqlite::types::Value::Text(format!("%{}%", model_name)));
+        }
+
+        if let Some(model_hash) = &criteria.model_hash {
+            conditions.push("json_extract(metadata, '$.model_hash') LIKE ?".to_string());
+            params.push(rusqlite::types::Value::Text(format!("%{}%", model_hash)));
+        }
+
+        if let Some(sampler) = &criteria.sampler {
+            conditions.push("json_extract(metadata, '$.sampler') LIKE ?".to_string());
+            params.push(rusqlite::types::Value::Text(format!("%{}%", sampler)));
+        }
+
+        if let Some(min_steps) = criteria.min_steps {
+            conditions.push("CAST(json_extract(metadata, '$.steps') AS INTEGER) >= ?".to_string());
+            params.push(rusqlite::types::Value::Integer(min_steps as i64));
+        }
+
+        if let Some(max_steps) = criteria.max_steps {
+            conditions.push("CAST(json_extract(metadata, '$.steps') AS INTEGER) <= ?".to_string());
+            params.push(rusqlite::types::Value::Integer(max_steps as i64));
+        }
+
+        if let Some(min_cfg) = criteria.min_cfg {
+            conditions.push("CAST(json_extract(metadata, '$.cfg_scale') AS REAL) >= ?".to_string());
+            params.push(rusqlite::types::Value::Real(min_cfg));
+        }
+
+        if let Some(max_cfg) = criteria.max_cfg {
+            conditions.push("CAST(json_extract(metadata, '$.cfg_scale') AS REAL) <= ?".to_string());
+            params.push(rusqlite::types::Value::Real(max_cfg));
+        }
+
+        if let Some(min_rating) = criteria.min_rating {
+            conditions.push("rating >= ?".to_string());
+            params.push(rusqlite::types::Value::Integer(min_rating as i64));
+        }
+
+        if let Some(max_rating) = criteria.max_rating {
+            conditions.push("rating <= ?".to_string());
+            params.push(rusqlite::types::Value::Integer(max_rating as i64));
+        }
+
+        if let Some(min_aesthetic) = criteria.min_aesthetic {
+            conditions.push("aesthetic_score >= ?".to_string());
+            params.push(rusqlite::types::Value::Real(min_aesthetic));
+        }
+
+        if let Some(max_aesthetic) = criteria.max_aesthetic {
+            conditions.push("aesthetic_score <= ?".to_string());
+            params.push(rusqlite::types::Value::Real(max_aesthetic));
+        }
+
+        let sort = criteria.sort.unwrap_or(FileSortField::ModifiedAt);
+        let direction = criteria.direction.unwrap_or(SortDirection::Desc);
         let order_clause = match (sort, direction) {
             (FileSortField::ModifiedAt, SortDirection::Asc) => "modified_at ASC, id ASC",
             (FileSortField::ModifiedAt, SortDirection::Desc) => "modified_at DESC, id DESC",
@@ -313,59 +446,74 @@ impl Database {
             }
         };
 
-        let map_row = |row: &rusqlite::Row<'_>| -> Result<ImageFile, DatabaseError> {
-            let id: i64 = row.get(0)?;
-            let folder_id: i64 = row.get(1)?;
-            let path: String = row.get(2)?;
-            let container_id: String = row.get(3)?;
-            let size_bytes: i64 = row.get(4)?;
-            let modified_at: i64 = row.get(5)?;
-            let metadata: Option<String> = row.get(6)?;
-            let rating: Option<i64> = row.get(7)?;
-            let aesthetic_score: Option<f64> = row.get(8)?;
-
-            let container = Container::from_id(&container_id)
-                .ok_or_else(|| DatabaseError::UnknownContainer(container_id))?;
-            let metadata = metadata
-                .map(|json| serde_json::from_str::<ExtractedMetadata>(&json))
-                .transpose()?;
-
-            Ok(ImageFile {
-                id: Some(id),
-                folder_id,
-                path,
-                size_bytes: size_bytes as u64,
-                modified_at,
-                container,
-                metadata,
-                rating: rating.map(|r| r as u8),
-                aesthetic_score,
-            })
+        let limit_clause = match (criteria.limit, criteria.offset) {
+            (Some(limit), Some(offset)) => {
+                params.push(rusqlite::types::Value::Integer(limit as i64));
+                params.push(rusqlite::types::Value::Integer(offset as i64));
+                " LIMIT ? OFFSET ?"
+            }
+            (Some(limit), None) => {
+                params.push(rusqlite::types::Value::Integer(limit as i64));
+                " LIMIT ?"
+            }
+            (None, Some(offset)) => {
+                params.push(rusqlite::types::Value::Integer(offset as i64));
+                " LIMIT -1 OFFSET ?"
+            }
+            (None, None) => "",
         };
 
-        let mut files = Vec::new();
-        if let Some(fid) = folder_id {
-            let sql = format!(
-                "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
-                 FROM files WHERE folder_id = ?1 ORDER BY {order_clause}"
-            );
-            let mut stmt = self.conn.prepare_cached(&sql)?;
-            let rows = stmt.query_and_then([fid], map_row)?;
-            for file in rows {
-                files.push(file?);
-            }
+        let where_clause = if conditions.is_empty() {
+            String::new()
         } else {
-            let sql = format!(
-                "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
-                 FROM files ORDER BY {order_clause}"
-            );
-            let mut stmt = self.conn.prepare_cached(&sql)?;
-            let rows = stmt.query_and_then([], map_row)?;
-            for file in rows {
-                files.push(file?);
-            }
+            format!(" WHERE {}", conditions.join(" AND "))
+        };
+
+        let sql = format!(
+            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score
+             FROM files{where_clause} ORDER BY {order_clause}{limit_clause}"
+        );
+
+        let mut stmt = self.conn.prepare(&sql)?;
+        let rows = stmt.query_and_then(rusqlite::params_from_iter(&params), Self::map_row)?;
+
+        let mut files = Vec::new();
+        for file in rows {
+            files.push(file?);
         }
         Ok(files)
+    }
+
+    /// List distinct non-empty model names present in indexed metadata.
+    pub fn list_distinct_models(&self) -> Result<Vec<String>, DatabaseError> {
+        let sql = "SELECT DISTINCT json_extract(metadata, '$.model_name') AS model
+                   FROM files
+                   WHERE json_extract(metadata, '$.model_name') IS NOT NULL
+                     AND json_extract(metadata, '$.model_name') != ''
+                   ORDER BY model ASC";
+        let mut stmt = self.conn.prepare_cached(sql)?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut models = Vec::new();
+        for model in rows {
+            models.push(model?);
+        }
+        Ok(models)
+    }
+
+    /// List distinct non-empty sampler names present in indexed metadata.
+    pub fn list_distinct_samplers(&self) -> Result<Vec<String>, DatabaseError> {
+        let sql = "SELECT DISTINCT json_extract(metadata, '$.sampler') AS sampler
+                   FROM files
+                   WHERE json_extract(metadata, '$.sampler') IS NOT NULL
+                     AND json_extract(metadata, '$.sampler') != ''
+                   ORDER BY sampler ASC";
+        let mut stmt = self.conn.prepare_cached(sql)?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut samplers = Vec::new();
+        for sampler in rows {
+            samplers.push(sampler?);
+        }
+        Ok(samplers)
     }
 
     /// Files of a folder, ordered by path, with `metadata` deserialized.
@@ -745,5 +893,166 @@ mod tests {
         let counts = db.get_folder_file_counts().unwrap();
         assert_eq!(counts.get(&f1.id), Some(&2));
         assert_eq!(counts.get(&f2.id), Some(&1));
+    }
+
+    fn sample_meta(
+        prompt: &str,
+        neg: &str,
+        model: &str,
+        sampler: &str,
+        steps: u32,
+        cfg: f64,
+        seed: &str,
+    ) -> ExtractedMetadata {
+        ExtractedMetadata {
+            format: berry_domain::MetadataFormat::A1111,
+            parameters: None,
+            raw: None,
+            prompt: Some(prompt.to_string()),
+            negative_prompt: Some(neg.to_string()),
+            width: Some(512),
+            height: Some(768),
+            seed: Some(seed.to_string()),
+            steps: Some(steps),
+            cfg_scale: Some(cfg),
+            sampler: Some(sampler.to_string()),
+            model_name: Some(model.to_string()),
+            model_hash: Some("abc12345".to_string()),
+        }
+    }
+
+    #[test]
+    fn search_files_multi_criteria() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/library").unwrap();
+
+        let mut file1 = image(folder.id, "/library/cyberpunk_cat.png");
+        file1.rating = Some(9);
+        file1.aesthetic_score = Some(8.5);
+        file1.metadata = Some(sample_meta(
+            "a neon cyberpunk cat, 8k resolution, photorealistic",
+            "blurry, low quality",
+            "dreamshaper_xl",
+            "Euler a",
+            25,
+            7.0,
+            "12345",
+        ));
+
+        let mut file2 = image(folder.id, "/library/nature_forest.png");
+        file2.rating = Some(6);
+        file2.aesthetic_score = Some(6.2);
+        file2.metadata = Some(sample_meta(
+            "serene green forest, river stream, sunlight",
+            "ugly, artifacts",
+            "realisticVision_v5",
+            "DPM++ 2M Karras",
+            30,
+            5.5,
+            "67890",
+        ));
+
+        let mut file3 = image(folder.id, "/library/anime_portrait.png");
+        file3.rating = Some(8);
+        file3.aesthetic_score = Some(7.8);
+        file3.metadata = Some(sample_meta(
+            "anime girl in city, colorful lights",
+            "bad anatomy",
+            "dreamshaper_xl",
+            "Euler a",
+            20,
+            8.0,
+            "99999",
+        ));
+
+        db.upsert_files(&[file1, file2, file3]).unwrap();
+
+        // 1. Broad text search for "cyberpunk"
+        let res = db
+            .search_files(&SearchCriteria {
+                text: Some("cyberpunk".to_string()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].path, "/library/cyberpunk_cat.png");
+
+        // 2. Broad text search matching model name "dreamshaper"
+        let res = db
+            .search_files(&SearchCriteria {
+                text: Some("dreamshaper".to_string()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 2);
+
+        // 3. Prompt specific search
+        let res = db
+            .search_files(&SearchCriteria {
+                prompt: Some("forest".to_string()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].path, "/library/nature_forest.png");
+
+        // 4. Rating range >= 8
+        let res = db
+            .search_files(&SearchCriteria {
+                min_rating: Some(8),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 2);
+
+        // 5. Steps between 22 and 35
+        let res = db
+            .search_files(&SearchCriteria {
+                min_steps: Some(22),
+                max_steps: Some(35),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 2); // file1 (25) and file2 (30)
+
+        // 6. CFG scale >= 7.0 and model_name dreamshaper_xl
+        let res = db
+            .search_files(&SearchCriteria {
+                model_name: Some("dreamshaper_xl".to_string()),
+                min_cfg: Some(7.0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 2);
+
+        // 7. Sampler filter
+        let res = db
+            .search_files(&SearchCriteria {
+                sampler: Some("DPM++".to_string()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].path, "/library/nature_forest.png");
+
+        // 8. Pagination (limit 1, offset 1) sorted by rating DESC
+        let res = db
+            .search_files(&SearchCriteria {
+                sort: Some(FileSortField::Rating),
+                direction: Some(SortDirection::Desc),
+                limit: Some(1),
+                offset: Some(1),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].rating, Some(8)); // 2nd highest rating (after 9)
+
+        // 9. Distinct models and samplers
+        let models = db.list_distinct_models().unwrap();
+        assert_eq!(models, vec!["dreamshaper_xl", "realisticVision_v5"]);
+
+        let samplers = db.list_distinct_samplers().unwrap();
+        assert_eq!(samplers, vec!["DPM++ 2M Karras", "Euler a"]);
     }
 }

@@ -109,7 +109,7 @@ deliverables, and status tracking.
 
 | Branch      | Purpose                                                             |
 |-------------|---------------------------------------------------------------------|
-| `rewrite`   | Protected default branch — production-ready code (PR-only)          |
+| `main`      | Protected default branch — production-ready code (PR-only)          |
 | `dev`       | Development integration branch — feature work lands here first      |
 | `old/main`  | Read-only archive of the legacy C#/.NET codebase                    |
 

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [dev, rewrite, "epic/**"]
+    branches: [dev, main, "epic/**"]
   pull_request:
-    branches: [dev, "epic/**"]
+    branches: [dev, main, "epic/**"]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

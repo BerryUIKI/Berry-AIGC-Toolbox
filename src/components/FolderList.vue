@@ -20,6 +20,7 @@ const emit = defineEmits<{
   selectNav: [target: NavTarget];
   openAlbumModal: [];
   openTagModal: [];
+  openPromptStats: [];
 }>();
 
 /** The folder currently being scanned, and whether it is a full scan or a
@@ -118,6 +119,17 @@ const progressPercent = computed(() => {
           <div class="path">
             <span class="row-icon">🔞</span>
             <span class="name">Sensitive (18+)</span>
+          </div>
+        </li>
+
+        <li
+          class="row stats-nav-row"
+          title="Analyze prompt keywords, models, samplers, and ratings"
+          @click="emit('openPromptStats')"
+        >
+          <div class="path">
+            <span class="row-icon">📊</span>
+            <span class="name">Prompt Insights</span>
           </div>
         </li>
       </ul>

@@ -26,6 +26,7 @@ import FilterDrawer from "./components/FilterDrawer.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
 import AlbumModal from "./components/AlbumModal.vue";
 import TagModal from "./components/TagModal.vue";
+import PromptStatsModal from "./components/PromptStatsModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -39,6 +40,7 @@ const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
+const promptStatsModalOpen = ref(false);
 const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
 const tagModalOpen = ref(false);
@@ -72,7 +74,8 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     e.key === "Escape" &&
     selectedFilePaths.value.size > 0 &&
     !previewingFile.value &&
-    !filterDrawerOpen.value
+    !filterDrawerOpen.value &&
+    !promptStatsModalOpen.value
   ) {
     onClearSelection();
   }
@@ -414,6 +417,12 @@ function onResetFilters() {
   searchQuery.value = "";
   void loadFiles();
 }
+
+function onApplyStatsSearch(query: string) {
+  searchQuery.value = query;
+  activeCriteria.value = {};
+  void loadFiles();
+}
 </script>
 
 <template>
@@ -443,6 +452,7 @@ function onResetFilters() {
       @select-nav="onSelectNav"
       @open-album-modal="() => onOpenAlbumModal()"
       @open-tag-modal="() => onOpenTagModal()"
+      @open-prompt-stats="promptStatsModalOpen = true"
     />
 
     <section class="files-view-section">
@@ -517,6 +527,14 @@ function onResetFilters() {
           <span v-if="activeFilterCount > 0" class="filter-count-badge">
             {{ activeFilterCount }}
           </span>
+        </button>
+        <button
+          type="button"
+          class="stats-toggle-btn"
+          title="Open prompt keyword & metadata insights"
+          @click="promptStatsModalOpen = true"
+        >
+          <span>📊 Insights</span>
         </button>
       </div>
 
@@ -617,6 +635,12 @@ function onResetFilters() {
       v-model:open="tagModalOpen"
       :file-ids="tagTargetFileIds"
       @tags-changed="loadAlbumsAndTags"
+    />
+
+    <!-- Prompt & Metadata Insights Modal -->
+    <PromptStatsModal
+      v-model:open="promptStatsModalOpen"
+      @apply-search="onApplyStatsSearch"
     />
   </main>
 </template>
@@ -861,6 +885,30 @@ h1 {
   border-radius: 999px;
   padding: 0.05rem 0.45rem;
   line-height: 1.2;
+}
+
+.stats-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font: inherit;
+  font-size: 0.88em;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.stats-toggle-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  border-color: rgba(128, 128, 128, 0.4);
 }
 
 .search-status-bar {

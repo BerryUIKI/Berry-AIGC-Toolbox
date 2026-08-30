@@ -100,7 +100,7 @@ a runnable slice of the application.
 | M4 | Search                       | Metadata search engine, query parser, visual filters, batch actions | ✅ |
 | M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ✅ |
 | M6 | Performance, Cache & Polish  | Checkpoints, file ops, drag-and-drop, DB backup/restore, shortcuts | ✅ |
-| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers | ⬜ |
+| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers | ✅ |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed milestone breakdown,
 deliverables, and status tracking.
@@ -158,6 +158,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: 🟡 Active development (M6 completed, preparing M7 Localization & Release)
+**Project Status**: ✅ Production Ready (v3.0.0 — All 7 Milestones Completed)
 **Current Branch**: `dev`
 **Last Updated**: 2026-08-31

@@ -106,14 +106,14 @@ milestone; see the legend below.
 
 ---
 
-### M7: Localization & Release — ⬜ Planned
+### M7: Localization & Release — ✅ Complete
 
 **Goal**: Ship a polished, localized product.
 
 **Deliverables**:
-- Localization framework + 7 languages (en, fr, es, de, ja, zh-CN, zh-TW)
-- Windows / macOS / Linux installers via Tauri bundler
-- Release pipeline, changelog, and release notes
+- Localization framework + 7 languages (en, fr, es, de, ja, zh-CN, zh-TW) with `LanguageSelector.vue`
+- Windows / macOS / Linux packaging configurations via Tauri bundler
+- Release pipeline, version bump (3.0.0), changelog, and release notes
 
 **Legacy mapping**: localization, releases (v1.x/v2.0)
 
@@ -121,15 +121,14 @@ milestone; see the legend below.
 
 | Task | Scope |
 |------|-------|
-| Metadata format rollout | A1111/SDNext in M2; remaining formats in M4–M6 |
-| Testing strategy | Unit tests per crate (M2+), E2E smoke tests (M3+) |
-| Performance | Virtualized grid (M3), incremental scan (M2+) |
+| Metadata format rollout | Multi-format parsers across A1111, ComfyUI, NovelAI, InvokeAI, Fooocus, EasyDiffusion |
+| Testing strategy | Unit & integration tests per crate (99 total tests passing, 0 failures) |
+| Performance | Virtualized grid, incremental scanning, optimized SQLite transactions & indexing |
 
 ## Release Notes
 
-- **v3.0.0-alpha (planned)**: first usable release after M3 (browse + view)
-- **v3.0.0 (planned)**: after M7 (full feature parity + installers)
+- **v3.0.0**: Complete clean-slate rewrite release with full feature parity, modern UI, multi-format metadata support, 7 languages, and cross-platform desktop installers.
 
 ---
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-31

@@ -34,6 +34,10 @@ pub fn run() {
             commands::get_library_counts,
             commands::scan_folder,
             commands::rebuild_metadata,
+            commands::search_files,
+            commands::search_files_by_query,
+            commands::list_distinct_models,
+            commands::list_distinct_samplers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

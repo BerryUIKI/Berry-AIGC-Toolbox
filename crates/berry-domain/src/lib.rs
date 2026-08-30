@@ -9,9 +9,11 @@ mod folder;
 mod image_file;
 mod metadata_format;
 mod search;
+mod search_parser;
 
 pub use extracted_metadata::ExtractedMetadata;
 pub use folder::Folder;
 pub use image_file::{Container, FileSortField, ImageFile, SortDirection};
 pub use metadata_format::MetadataFormat;
 pub use search::SearchCriteria;
+pub use search_parser::parse_query;

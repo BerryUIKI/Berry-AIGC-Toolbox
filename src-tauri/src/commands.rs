@@ -645,3 +645,194 @@ pub fn resolve_model_hash(
 pub fn list_model_cache(state: State<'_, AppState>) -> Result<Vec<ModelCacheEntry>, String> {
     db(&state)?.list_model_cache().map_err(|e| e.to_string())
 }
+
+// --- File Operations & Drag-and-Drop ---
+
+/// Move files and their sidecars to a target indexed folder, updating database paths.
+#[tauri::command]
+pub fn move_files(
+    file_paths: Vec<String>,
+    target_folder_id: i64,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let target_folder = {
+        let database = db(&state)?;
+        database
+            .list_folders()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|f| f.id == target_folder_id)
+            .ok_or_else(|| format!("Target folder {target_folder_id} not found"))?
+    };
+
+    let target_dir = Path::new(&target_folder.path);
+    let mut moved_count = 0;
+
+    let database = db(&state)?;
+    for src_str in file_paths {
+        let src_path = Path::new(&src_str);
+        if !src_path.exists() {
+            continue;
+        }
+        let file_name = match src_path.file_name() {
+            Some(name) => name,
+            None => continue,
+        };
+        let dest_path = target_dir.join(file_name);
+        if dest_path == src_path {
+            continue;
+        }
+
+        // Rename main file
+        if std::fs::rename(src_path, &dest_path).is_err() {
+            // Cross-device fallback: copy then remove
+            std::fs::copy(src_path, &dest_path)
+                .map_err(|e| format!("Failed to move file to {}: {e}", dest_path.display()))?;
+            let _ = std::fs::remove_file(src_path);
+        }
+
+        // Check and move sibling sidecars (.txt, .json)
+        let sidecar_txt = src_path.with_extension("txt");
+        if sidecar_txt.exists() {
+            let dest_txt = dest_path.with_extension("txt");
+            let _ = std::fs::rename(&sidecar_txt, &dest_txt).or_else(|_| {
+                std::fs::copy(&sidecar_txt, &dest_txt).map(|_| {
+                    let _ = std::fs::remove_file(&sidecar_txt);
+                })
+            });
+        }
+
+        // Update database record
+        let new_path_str = dest_path.to_string_lossy().to_string();
+        let _ = database.move_file_record(&src_str, &new_path_str, target_folder_id);
+        moved_count += 1;
+    }
+
+    Ok(moved_count)
+}
+
+/// Copy files and their sidecars to a target indexed folder, inserting new database rows.
+#[tauri::command]
+pub fn copy_files(
+    file_paths: Vec<String>,
+    target_folder_id: i64,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    let target_folder = {
+        let database = db(&state)?;
+        database
+            .list_folders()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|f| f.id == target_folder_id)
+            .ok_or_else(|| format!("Target folder {target_folder_id} not found"))?
+    };
+
+    let target_dir = Path::new(&target_folder.path);
+    let mut copied_count = 0;
+
+    let database = db(&state)?;
+    for src_str in file_paths {
+        let src_path = Path::new(&src_str);
+        if !src_path.exists() {
+            continue;
+        }
+        let file_name = match src_path.file_name() {
+            Some(name) => name,
+            None => continue,
+        };
+        let dest_path = target_dir.join(file_name);
+        if dest_path == src_path {
+            continue;
+        }
+
+        // Copy main file
+        std::fs::copy(src_path, &dest_path)
+            .map_err(|e| format!("Failed to copy file to {}: {e}", dest_path.display()))?;
+
+        // Copy sidecars if present
+        let sidecar_txt = src_path.with_extension("txt");
+        if sidecar_txt.exists() {
+            let dest_txt = dest_path.with_extension("txt");
+            let _ = std::fs::copy(&sidecar_txt, &dest_txt);
+        }
+
+        // Copy database record with new path
+        if let Ok(Some(mut orig)) = database.get_file_by_path(&src_str) {
+            orig.id = None;
+            orig.folder_id = target_folder_id;
+            orig.path = dest_path.to_string_lossy().to_string();
+            let _ = database.upsert_file(&orig);
+        }
+        copied_count += 1;
+    }
+
+    Ok(copied_count)
+}
+
+/// Safely move files and sidecars to the system Trash / Recycle Bin and remove from DB.
+#[tauri::command]
+pub fn trash_files(file_paths: Vec<String>, state: State<'_, AppState>) -> Result<usize, String> {
+    let mut trashed_count = 0;
+    let database = db(&state)?;
+
+    for path_str in file_paths {
+        let path = Path::new(&path_str);
+        if path.exists() {
+            if let Err(e) = trash::delete(path) {
+                // If trash fails (e.g. headless/external), fallback to permanent remove
+                std::fs::remove_file(path).map_err(|rem_e| {
+                    format!(
+                        "Failed to trash or remove {}: trash error: {e}, remove error: {rem_e}",
+                        path.display()
+                    )
+                })?;
+            }
+            let sidecar_txt = path.with_extension("txt");
+            if sidecar_txt.exists() {
+                let _ = trash::delete(&sidecar_txt).or_else(|_| std::fs::remove_file(&sidecar_txt));
+            }
+        }
+        let _ = database.delete_file_by_path(&path_str);
+        trashed_count += 1;
+    }
+
+    Ok(trashed_count)
+}
+
+/// Reveal the selected file in the system file manager (Finder / Explorer / Files).
+#[tauri::command]
+pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    if !p.exists() {
+        return Err(format!("File does not exist: {path}"));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to open Finder: {e}"))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,\"{path}\""))
+            .spawn()
+            .map_err(|e| format!("Failed to open Explorer: {e}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = p.parent().unwrap_or(p);
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| format!("Failed to open file manager: {e}"))?;
+    }
+
+    Ok(())
+}

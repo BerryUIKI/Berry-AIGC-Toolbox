@@ -28,6 +28,7 @@ import AlbumModal from "./components/AlbumModal.vue";
 import TagModal from "./components/TagModal.vue";
 import PromptStatsModal from "./components/PromptStatsModal.vue";
 import ModelManagerModal from "./components/ModelManagerModal.vue";
+import FileOperationModal from "./components/FileOperationModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -43,6 +44,9 @@ const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
 const promptStatsModalOpen = ref(false);
 const modelManagerModalOpen = ref(false);
+const fileOpModalOpen = ref(false);
+const fileOpMode = ref<"move" | "copy" | "trash">("move");
+const fileOpTargetFiles = ref<ImageFile[]>([]);
 const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
 const tagModalOpen = ref(false);
@@ -345,6 +349,30 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
   }
 }
 
+function onBatchMove() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "move";
+  fileOpModalOpen.value = true;
+}
+
+function onBatchCopy() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "copy";
+  fileOpModalOpen.value = true;
+}
+
+function onBatchTrash() {
+  fileOpTargetFiles.value = [...selectedFilesList.value];
+  fileOpMode.value = "trash";
+  fileOpModalOpen.value = true;
+}
+
+async function onFileOpCompleted() {
+  selectedFilePaths.value.clear();
+  await refreshCounts();
+  await loadFiles();
+}
+
 function onUpdateFile(file: ImageFile) {
   const idx = files.value.findIndex((f) => f.id === file.id);
   if (idx !== -1) {
@@ -437,6 +465,42 @@ function onFilterByHash(modelHash: string) {
   searchQuery.value = criteriaToQuery(activeCriteria.value);
   void loadFiles();
 }
+async function onDropMoveFiles(payload: { filePaths: string[]; folderId: number }) {
+  try {
+    await invoke("move_files", {
+      filePaths: payload.filePaths,
+      targetFolderId: payload.folderId,
+    });
+    await onFileOpCompleted();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDropAddFilesToAlbum(payload: { fileIds: number[]; albumId: number }) {
+  try {
+    await invoke("add_files_to_album", {
+      albumId: payload.albumId,
+      fileIds: payload.fileIds,
+    });
+    await loadAlbumsAndTags();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
+  try {
+    await invoke("tag_files", {
+      tagId: payload.tagId,
+      fileIds: payload.fileIds,
+    });
+    await loadAlbumsAndTags();
+    await loadFiles();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
 </script>
 
 <template>
@@ -467,6 +531,9 @@ function onFilterByHash(modelHash: string) {
       @open-album-modal="() => onOpenAlbumModal()"
       @open-tag-modal="() => onOpenTagModal()"
       @open-prompt-stats="promptStatsModalOpen = true"
+      @move-files-to-folder="onDropMoveFiles"
+      @add-files-to-album="onDropAddFilesToAlbum"
+      @tag-files="onDropTagFiles"
     />
 
     <section class="files-view-section">
@@ -642,6 +709,9 @@ function onFilterByHash(modelHash: string) {
       @tag-selected="onBatchTag"
       @toggle-favorite="onBatchToggleFavorite"
       @toggle-nsfw="onBatchToggleNsfw"
+      @move-selected="onBatchMove"
+      @copy-selected="onBatchCopy"
+      @trash-selected="onBatchTrash"
     />
 
     <!-- Album Management & Assignment Modal -->
@@ -671,6 +741,16 @@ function onFilterByHash(modelHash: string) {
       @close="modelManagerModalOpen = false"
       @filter-model="onFilterByModel"
       @filter-hash="onFilterByHash"
+    />
+
+    <!-- File Operations Modal (Move / Copy / Trash) -->
+    <FileOperationModal
+      :open="fileOpModalOpen"
+      :mode="fileOpMode"
+      :files="fileOpTargetFiles"
+      :folders="folders"
+      @close="fileOpModalOpen = false"
+      @completed="onFileOpCompleted"
     />
   </main>
 </template>

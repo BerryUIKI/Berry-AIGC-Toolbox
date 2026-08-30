@@ -349,6 +349,43 @@ impl Database {
         self.search_files(&criteria)
     }
 
+    /// Retrieve a file by its file path.
+    pub fn get_file_by_path(&self, path: &str) -> Result<Option<ImageFile>, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw
+             FROM files WHERE path = ?1 LIMIT 1",
+        )?;
+        let mut rows = stmt.query_and_then([path], Self::map_row)?;
+        match rows.next() {
+            Some(r) => Ok(Some(r?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Update file path and folder_id when a file is moved.
+    pub fn move_file_record(
+        &self,
+        old_path: &str,
+        new_path: &str,
+        new_folder_id: i64,
+    ) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE files SET path = ?1, folder_id = ?2 WHERE path = ?3",
+            params![new_path, new_folder_id, old_path],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(0));
+        }
+        Ok(())
+    }
+
+    /// Delete a file record by path (e.g. after trashing).
+    pub fn delete_file_by_path(&self, path: &str) -> Result<(), DatabaseError> {
+        self.conn
+            .execute("DELETE FROM files WHERE path = ?1", [path])?;
+        Ok(())
+    }
+
     /// Search files matching various criteria (text, parameters, ratings, folders, sorting, pagination).
     pub fn search_files(&self, criteria: &SearchCriteria) -> Result<Vec<ImageFile>, DatabaseError> {
         let mut conditions = Vec::new();
@@ -1922,5 +1959,37 @@ mod tests {
         // 4. List cache
         let list = db.list_model_cache().unwrap();
         assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn file_move_and_delete_operations() {
+        let db = Database::connect_in_memory().unwrap();
+        let f1 = db.add_folder("/folder1").unwrap();
+        let f2 = db.add_folder("/folder2").unwrap();
+
+        let id = db.upsert_file(&image(f1.id, "/folder1/cat.png")).unwrap();
+
+        let retrieved = db
+            .get_file_by_path("/folder1/cat.png")
+            .unwrap()
+            .expect("exists");
+        assert_eq!(retrieved.id, Some(id));
+        assert_eq!(retrieved.folder_id, f1.id);
+
+        // Move to folder2
+        db.move_file_record("/folder1/cat.png", "/folder2/cat.png", f2.id)
+            .unwrap();
+
+        assert_eq!(db.get_file_by_path("/folder1/cat.png").unwrap(), None);
+        let moved = db
+            .get_file_by_path("/folder2/cat.png")
+            .unwrap()
+            .expect("moved exists");
+        assert_eq!(moved.id, Some(id));
+        assert_eq!(moved.folder_id, f2.id);
+
+        // Delete file
+        db.delete_file_by_path("/folder2/cat.png").unwrap();
+        assert_eq!(db.get_file_by_path("/folder2/cat.png").unwrap(), None);
     }
 }

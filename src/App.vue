@@ -9,9 +9,11 @@ import type {
   Folder,
   ImageFile,
   LibraryCounts,
+  NavTarget,
   ScanProgress,
   SearchCriteria,
   SortDirection,
+  Tag,
 } from "./types";
 import FolderPicker from "./components/FolderPicker.vue";
 import FolderList from "./components/FolderList.vue";
@@ -29,6 +31,10 @@ import { countActiveFilters, criteriaToQuery } from "./utils/search";
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
 const libraryCounts = ref<LibraryCounts | null>(null);
+const albums = ref<Album[]>([]);
+const albumCounts = ref<Record<number, number>>({});
+const tags = ref<Tag[]>([]);
+const activeTarget = ref<NavTarget>({ type: "all" });
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
@@ -41,7 +47,6 @@ const distinctModels = ref<string[]>([]);
 const distinctSamplers = ref<string[]>([]);
 const activeCriteria = ref<SearchCriteria>({});
 const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
-const selectedFolder = ref<Folder | null>(null);
 const selectedFile = ref<ImageFile | null>(null);
 const selectedFilePaths = ref<Set<string>>(new Set());
 const selectedFilesList = computed(() =>
@@ -80,6 +85,7 @@ onMounted(async () => {
     await reloadFolders();
     await refreshCounts();
     await reloadFiltersMeta();
+    await loadAlbumsAndTags();
     await loadFiles();
   } catch (e) {
     error.value = String(e);
@@ -116,11 +122,27 @@ async function reloadFiltersMeta() {
   }
 }
 
+async function loadAlbumsAndTags() {
+  try {
+    albums.value = await invoke<Album[]>("list_albums");
+    const counts: Record<number, number> = {};
+    for (const album of albums.value) {
+      counts[album.id] = await invoke<number>("count_album_files", {
+        albumId: album.id,
+      });
+    }
+    albumCounts.value = counts;
+    tags.value = await invoke<Tag[]>("list_tags");
+  } catch (e) {
+    console.error("Failed to load albums/tags:", e);
+  }
+}
+
 function onFolderAdded(folder: Folder) {
   void reloadFolders();
   void refreshCounts();
   void reloadFiltersMeta();
-  selectedFolder.value = folder;
+  activeTarget.value = { type: "folder", folder };
   selectedFile.value = null;
   previewingFile.value = null;
   void loadFiles();
@@ -130,24 +152,42 @@ function onFolderRemoved(folderId: number) {
   folders.value = folders.value.filter((f) => f.id !== folderId);
   void refreshCounts();
   void reloadFiltersMeta();
-  if (selectedFolder.value?.id === folderId) {
-    selectedFolder.value = null;
+  if (activeTarget.value.type === "folder" && activeTarget.value.folder.id === folderId) {
+    activeTarget.value = { type: "all" };
     selectedFile.value = null;
     previewingFile.value = null;
   }
   void loadFiles();
 }
 
-async function onFolderSelected(folder: Folder | null) {
-  selectedFolder.value = folder;
+function onSelectNav(target: NavTarget) {
+  activeTarget.value = target;
   selectedFile.value = null;
   previewingFile.value = null;
-  await loadFiles();
+  void loadFiles();
 }
+
+const targetTitle = computed(() => {
+  switch (activeTarget.value.type) {
+    case "all":
+      return "All Images";
+    case "favorites":
+      return "★ Favorites";
+    case "nsfw":
+      return "🔞 Sensitive (18+)";
+    case "folder":
+      return activeTarget.value.folder.path.split(/[\\/]/).pop() || activeTarget.value.folder.path;
+    case "album":
+      return `🗂️ ${activeTarget.value.album.name}`;
+    case "tag":
+      return `🏷 #${activeTarget.value.tag.name}`;
+  }
+});
 
 async function onFolderScanned(_folderId: number) {
   await refreshCounts();
   await reloadFiltersMeta();
+  await loadAlbumsAndTags();
   await loadFiles();
 }
 
@@ -319,18 +359,30 @@ async function loadFiles() {
   try {
     const q = searchQuery.value.trim();
     if (q) {
+      const folderId = activeTarget.value.type === "folder" ? activeTarget.value.folder.id : null;
       files.value = await invoke<ImageFile[]>("search_files_by_query", {
         query: q,
-        folderId: selectedFolder.value?.id ?? null,
+        folderId,
         sort: sortField.value,
         direction: sortDirection.value,
       });
     } else {
-      files.value = await invoke<ImageFile[]>("query_files", {
-        folderId: selectedFolder.value?.id ?? null,
+      const criteria: SearchCriteria = {
         sort: sortField.value,
         direction: sortDirection.value,
-      });
+      };
+      if (activeTarget.value.type === "folder") {
+        criteria.folder_id = activeTarget.value.folder.id;
+      } else if (activeTarget.value.type === "favorites") {
+        criteria.is_favorite = true;
+      } else if (activeTarget.value.type === "nsfw") {
+        criteria.is_nsfw = true;
+      } else if (activeTarget.value.type === "album") {
+        criteria.album_id = activeTarget.value.album.id;
+      } else if (activeTarget.value.type === "tag") {
+        criteria.tag_id = activeTarget.value.tag.id;
+      }
+      files.value = await invoke<ImageFile[]>("search_files", { criteria });
     }
   } catch (e) {
     error.value = String(e);
@@ -381,11 +433,16 @@ function onResetFilters() {
     <FolderList
       :folders="folders"
       :counts="libraryCounts"
-      :selected-id="selectedFolder?.id ?? null"
+      :albums="albums"
+      :album-counts="albumCounts"
+      :tags="tags"
+      :active-target="activeTarget"
       :progress="progress"
       @removed="onFolderRemoved"
-      @selected="onFolderSelected"
       @scanned="onFolderScanned"
+      @select-nav="onSelectNav"
+      @open-album-modal="() => onOpenAlbumModal()"
+      @open-tag-modal="() => onOpenTagModal()"
     />
 
     <section class="files-view-section">
@@ -395,10 +452,9 @@ function onResetFilters() {
             Files
             <span v-if="files.length" class="count-badge">({{ files.length }})</span>
           </h2>
-          <span v-if="selectedFolder" class="folder-badge" :title="selectedFolder.path">
-            {{ selectedFolder.path.split(/[\\/]/).pop() || selectedFolder.path }}
+          <span class="folder-badge" :class="{ 'all-badge': activeTarget.type === 'all' }">
+            {{ targetTitle }}
           </span>
-          <span v-else class="folder-badge all-badge">All Images</span>
           <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
             Selected: {{ selectedFile.path.split(/[\\/]/).pop() }}
             <button
@@ -553,12 +609,14 @@ function onResetFilters() {
       v-model:open="albumModalOpen"
       :file-ids="albumTargetFileIds"
       @added-to-album="onAddedToAlbum"
+      @albums-changed="loadAlbumsAndTags"
     />
 
     <!-- Tag Management & Assignment Modal -->
     <TagModal
       v-model:open="tagModalOpen"
       :file-ids="tagTargetFileIds"
+      @tags-changed="loadAlbumsAndTags"
     />
   </main>
 </template>

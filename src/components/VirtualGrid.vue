@@ -1,0 +1,468 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import type { ImageFile } from "../types";
+import {
+  assetUrl,
+  formatBytes,
+  getFileName,
+  normalizePath,
+} from "../utils/image";
+
+const props = withDefaults(
+  defineProps<{
+    files: ImageFile[];
+    selectedFile?: ImageFile | null;
+    loading?: boolean;
+    itemMinWidth?: number;
+    gap?: number;
+    overscan?: number;
+  }>(),
+  {
+    selectedFile: null,
+    loading: false,
+    itemMinWidth: 180,
+    gap: 16,
+    overscan: 2,
+  },
+);
+
+const emit = defineEmits<{
+  (e: "select", file: ImageFile): void;
+  (e: "activate", file: ImageFile): void;
+}>();
+
+const containerRef = ref<HTMLElement | null>(null);
+const scrollTop = ref(0);
+const containerWidth = ref(800);
+const containerHeight = ref(600);
+
+// Image loading error tracker
+const failedImages = ref<Set<string>>(new Set());
+
+function onImageError(path: string) {
+  failedImages.value.add(path);
+}
+
+// Update container dimensions
+function updateDimensions() {
+  if (!containerRef.value) return;
+  containerWidth.value = containerRef.value.clientWidth;
+  containerHeight.value = containerRef.value.clientHeight;
+}
+
+let resizeObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  if (containerRef.value) {
+    updateDimensions();
+    resizeObserver = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    resizeObserver.observe(containerRef.value);
+  }
+  window.addEventListener("keydown", handleKeyDown);
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+  window.removeEventListener("keydown", handleKeyDown);
+});
+
+function onScroll(e: Event) {
+  const target = e.target as HTMLElement;
+  scrollTop.value = target.scrollTop;
+}
+
+// Columns count based on container width
+const cols = computed(() => {
+  const available = containerWidth.value - 2; // small padding offset
+  const minWidth = props.itemMinWidth;
+  const count = Math.floor((available + props.gap) / (minWidth + props.gap));
+  return Math.max(1, count);
+});
+
+// Single item dimensions
+const itemWidth = computed(() => {
+  const totalGaps = (cols.value - 1) * props.gap;
+  return Math.floor((containerWidth.value - totalGaps) / cols.value);
+});
+
+// Card height = 1:1 square image + 56px info footer
+const CARD_INFO_HEIGHT = 56;
+const cardHeight = computed(() => itemWidth.value + CARD_INFO_HEIGHT);
+const rowHeight = computed(() => cardHeight.value + props.gap);
+
+// Total grid rows and phantom scroll height
+const totalRows = computed(() => Math.ceil(props.files.length / cols.value));
+const totalHeight = computed(() => {
+  if (totalRows.value === 0) return 0;
+  return totalRows.value * rowHeight.value - props.gap;
+});
+
+// Visible row range
+const startRow = computed(() => {
+  const raw = Math.floor(scrollTop.value / rowHeight.value);
+  return Math.max(0, raw - props.overscan);
+});
+
+const endRow = computed(() => {
+  const visibleCount = Math.ceil(containerHeight.value / rowHeight.value);
+  const raw = startRow.value + visibleCount + props.overscan * 2;
+  return Math.min(totalRows.value - 1, raw);
+});
+
+// Sliced visible items with their absolute row offset
+const startIndex = computed(() => startRow.value * cols.value);
+const endIndex = computed(() =>
+  Math.min(props.files.length - 1, (endRow.value + 1) * cols.value - 1),
+);
+
+const visibleFiles = computed(() => {
+  if (props.files.length === 0) return [];
+  return props.files.slice(startIndex.value, endIndex.value + 1);
+});
+
+const translateY = computed(() => startRow.value * rowHeight.value);
+
+function selectFile(file: ImageFile) {
+  emit("select", file);
+}
+
+function activateFile(file: ImageFile) {
+  emit("activate", file);
+}
+
+// Format dimensions helper
+function formatDimensions(file: ImageFile): string {
+  if (file.metadata?.width && file.metadata?.height) {
+    return `${file.metadata.width} × ${file.metadata.height}`;
+  }
+  return formatBytes(file.size_bytes);
+}
+
+// Keyboard navigation
+function handleKeyDown(e: KeyboardEvent) {
+  // Only handle navigation if active element is not an input or textarea
+  const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+  if (tag === "input" || tag === "textarea") return;
+
+  if (!props.files.length) return;
+
+  const currentIndex = props.selectedFile
+    ? props.files.findIndex((f) => f.path === props.selectedFile?.path)
+    : -1;
+
+  let nextIndex = currentIndex;
+
+  switch (e.key) {
+    case "ArrowRight":
+      nextIndex = currentIndex < props.files.length - 1 ? currentIndex + 1 : 0;
+      break;
+    case "ArrowLeft":
+      nextIndex = currentIndex > 0 ? currentIndex - 1 : props.files.length - 1;
+      break;
+    case "ArrowDown":
+      if (currentIndex + cols.value < props.files.length) {
+        nextIndex = currentIndex + cols.value;
+      }
+      break;
+    case "ArrowUp":
+      if (currentIndex - cols.value >= 0) {
+        nextIndex = currentIndex - cols.value;
+      }
+      break;
+    case "Enter":
+    case " ":
+      if (props.selectedFile) {
+        e.preventDefault();
+        activateFile(props.selectedFile);
+      }
+      return;
+    default:
+      return;
+  }
+
+  if (nextIndex !== currentIndex && nextIndex >= 0 && nextIndex < props.files.length) {
+    e.preventDefault();
+    const nextFile = props.files[nextIndex];
+    selectFile(nextFile);
+    scrollToIndex(nextIndex);
+  }
+}
+
+// Ensure the selected item is scrolled into visible viewport
+function scrollToIndex(index: number) {
+  if (!containerRef.value) return;
+  const targetRow = Math.floor(index / cols.value);
+  const targetTop = targetRow * rowHeight.value;
+  const targetBottom = targetTop + cardHeight.value;
+
+  const currentScrollTop = containerRef.value.scrollTop;
+  const viewportHeight = containerRef.value.clientHeight;
+
+  if (targetTop < currentScrollTop) {
+    containerRef.value.scrollTop = targetTop;
+  } else if (targetBottom > currentScrollTop + viewportHeight) {
+    containerRef.value.scrollTop = targetBottom - viewportHeight;
+  }
+}
+
+// When files change or reset, scroll to top if needed
+watch(
+  () => props.files,
+  () => {
+    failedImages.value.clear();
+  },
+);
+</script>
+
+<template>
+  <div class="virtual-grid-wrapper">
+    <div v-if="loading" class="grid-placeholder">Loading…</div>
+    <div v-else-if="!files.length" class="grid-placeholder">
+      Select a folder to see its indexed files.
+    </div>
+
+    <div
+      v-else
+      ref="containerRef"
+      class="virtual-grid-container"
+      tabindex="0"
+      @scroll.passive="onScroll"
+    >
+      <div class="virtual-phantom" :style="{ height: `${totalHeight}px` }">
+        <div
+          class="virtual-content"
+          :style="{
+            transform: `translateY(${translateY}px)`,
+            gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+            gap: `${gap}px`,
+          }"
+        >
+          <div
+            v-for="file in visibleFiles"
+            :key="file.id ?? file.path"
+            class="grid-card"
+            :class="{ active: selectedFile?.path === file.path }"
+            @click="selectFile(file)"
+            @dblclick="activateFile(file)"
+          >
+            <div class="thumbnail-wrapper">
+              <img
+                v-if="
+                  file.container !== 'mp4' &&
+                  file.container !== 'txt' &&
+                  !failedImages.has(file.path)
+                "
+                :src="assetUrl(file.path)"
+                :alt="getFileName(file.path)"
+                class="thumbnail-img"
+                loading="lazy"
+                @error="onImageError(file.path)"
+              />
+              <div v-else class="thumbnail-fallback">
+                <span class="fallback-text">{{ file.container.toUpperCase() }}</span>
+              </div>
+
+              <!-- Format badge -->
+              <span
+                v-if="file.metadata?.format"
+                class="card-badge badge-format"
+                :title="`Format: ${file.metadata.format}`"
+              >
+                {{ file.metadata.format }}
+              </span>
+
+              <!-- Rating badge -->
+              <span
+                v-if="file.rating"
+                class="card-badge badge-rating"
+                :title="`Rating: ${file.rating}/10`"
+              >
+                ★ {{ file.rating }}
+              </span>
+            </div>
+
+            <div class="card-info">
+              <div class="card-title" :title="normalizePath(file.path)">
+                {{ getFileName(file.path) }}
+              </div>
+              <div class="card-meta">
+                <span>{{ formatDimensions(file) }}</span>
+                <span class="card-container">{{ file.container.toUpperCase() }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.virtual-grid-wrapper {
+  position: relative;
+  width: 100%;
+  height: 580px;
+  display: flex;
+  flex-direction: column;
+}
+
+.virtual-grid-container {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  outline: none;
+  border-radius: 8px;
+}
+
+.virtual-grid-container:focus-visible {
+  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.4);
+}
+
+.grid-placeholder {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 0.9em;
+}
+
+.virtual-phantom {
+  width: 100%;
+  position: relative;
+}
+
+.virtual-content {
+  display: grid;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.grid-card {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .grid-card {
+    background: #252525;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+}
+
+.grid-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: rgba(47, 111, 237, 0.4);
+}
+
+.grid-card.active {
+  border-color: #2f6fed;
+  box-shadow: 0 0 0 2px #2f6fed, 0 4px 14px rgba(47, 111, 237, 0.25);
+}
+
+.thumbnail-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+}
+
+@media (prefers-color-scheme: dark) {
+  .thumbnail-wrapper {
+    background: rgba(0, 0, 0, 0.25);
+  }
+}
+
+.thumbnail-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumbnail-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+}
+
+.fallback-text {
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.card-badge {
+  position: absolute;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: 600;
+  line-height: 1.2;
+  backdrop-filter: blur(4px);
+}
+
+.badge-format {
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+}
+
+.badge-rating {
+  top: 6px;
+  right: 6px;
+  background: rgba(234, 179, 8, 0.9);
+  color: #000;
+}
+
+.card-info {
+  padding: 0.5rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+
+.card-title {
+  font-size: 0.8em;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72em;
+  color: #888;
+}
+
+.card-container {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.9em;
+}
+</style>

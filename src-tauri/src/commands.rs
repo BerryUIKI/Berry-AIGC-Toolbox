@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
 use berry_domain::{
-    Album, CheckpointModelStat, FileSortField, Folder, ImageFile, ModelCacheEntry, PromptStat,
-    SearchCriteria, SortDirection, Tag,
+    Album, CheckpointModelStat, DatabaseStats, FileSortField, Folder, ImageFile, ModelCacheEntry,
+    PromptStat, SearchCriteria, SortDirection, Tag,
 };
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
@@ -833,6 +833,67 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| format!("Failed to open file manager: {e}"))?;
     }
+
+    Ok(())
+}
+
+// --- Database Maintenance ---
+
+/// Run SQLite VACUUM and optimize to compact database and reclaim unused disk pages.
+#[tauri::command]
+pub fn vacuum_database(state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?.vacuum_database().map_err(|e| e.to_string())
+}
+
+/// Backup the current database to a designated file destination via VACUUM INTO.
+#[tauri::command]
+pub fn backup_database(destination_path: String, state: State<'_, AppState>) -> Result<(), String> {
+    db(&state)?
+        .backup_database(&destination_path)
+        .map_err(|e| e.to_string())
+}
+
+/// Get database size and record counts.
+#[tauri::command]
+pub fn get_database_stats(state: State<'_, AppState>) -> Result<DatabaseStats, String> {
+    db(&state)?.get_database_stats().map_err(|e| e.to_string())
+}
+
+/// Restore database from a backup file, verifying integrity and reloading connection.
+#[tauri::command]
+pub fn restore_database(
+    source_path: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let src = Path::new(&source_path);
+    if !src.exists() {
+        return Err(format!("Backup source file does not exist: {source_path}"));
+    }
+
+    // Verify backup database is valid and readable
+    let _test_db =
+        Database::connect(src).map_err(|e| format!("Invalid backup SQLite file: {e}"))?;
+
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let active_db_path = data_dir.join("berry.db");
+
+    // Copy backup to active database location
+    std::fs::copy(src, &active_db_path)
+        .map_err(|e| format!("Failed to copy backup database to active location: {e}"))?;
+
+    // Reopen database connection in AppState
+    let new_db = Database::connect(&active_db_path)
+        .map_err(|e| format!("Failed to reconnect restored database: {e}"))?;
+    let mut guard = state
+        .db
+        .lock()
+        .map_err(|_| "Database lock poisoned".to_string())?;
+    *guard = new_db;
 
     Ok(())
 }

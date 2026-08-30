@@ -29,6 +29,7 @@ import TagModal from "./components/TagModal.vue";
 import PromptStatsModal from "./components/PromptStatsModal.vue";
 import ModelManagerModal from "./components/ModelManagerModal.vue";
 import FileOperationModal from "./components/FileOperationModal.vue";
+import DatabaseManagerModal from "./components/DatabaseManagerModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -44,6 +45,7 @@ const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
 const promptStatsModalOpen = ref(false);
 const modelManagerModalOpen = ref(false);
+const dbManagerModalOpen = ref(false);
 const fileOpModalOpen = ref(false);
 const fileOpMode = ref<"move" | "copy" | "trash">("move");
 const fileOpTargetFiles = ref<ImageFile[]>([]);
@@ -501,6 +503,14 @@ async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
     error.value = String(err);
   }
 }
+
+async function onDatabaseChanged() {
+  await reloadFolders();
+  await refreshCounts();
+  await reloadFiltersMeta();
+  await loadAlbumsAndTags();
+  await loadFiles();
+}
 </script>
 
 <template>
@@ -624,6 +634,14 @@ async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
           @click="modelManagerModalOpen = true"
         >
           <span>🧠 Models</span>
+        </button>
+        <button
+          type="button"
+          class="models-toggle-btn"
+          title="Open Database & Storage Maintenance"
+          @click="dbManagerModalOpen = true"
+        >
+          <span>🗄️ Database</span>
         </button>
       </div>
 
@@ -751,6 +769,13 @@ async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
       :folders="folders"
       @close="fileOpModalOpen = false"
       @completed="onFileOpCompleted"
+    />
+
+    <!-- Database & Storage Maintenance Modal -->
+    <DatabaseManagerModal
+      :show="dbManagerModalOpen"
+      @close="dbManagerModalOpen = false"
+      @database-changed="onDatabaseChanged"
     />
   </main>
 </template>

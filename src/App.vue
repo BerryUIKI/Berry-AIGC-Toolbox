@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  Album,
   AppInfo,
   FileSortField,
   Folder,
@@ -21,6 +22,7 @@ import PreviewPane from "./components/PreviewPane.vue";
 import SearchBar from "./components/SearchBar.vue";
 import FilterDrawer from "./components/FilterDrawer.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
+import AlbumModal from "./components/AlbumModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -30,6 +32,8 @@ const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
+const albumModalOpen = ref(false);
+const albumTargetFileIds = ref<number[]>([]);
 const distinctModels = ref<string[]>([]);
 const distinctSamplers = ref<string[]>([]);
 const activeCriteria = ref<SearchCriteria>({});
@@ -229,6 +233,24 @@ function onFileRated(fileId: number, rating: number | null) {
   if (previewingFile.value?.id === fileId) {
     previewingFile.value.rating = rating ?? undefined;
   }
+}
+
+function onOpenAlbumModal(fileIds?: number[]) {
+  albumTargetFileIds.value = fileIds ?? [];
+  albumModalOpen.value = true;
+}
+
+function onBatchAddToAlbum() {
+  const ids = selectedFilesList.value
+    .map((f) => f.id)
+    .filter((id): id is number => id != null);
+  if (ids.length > 0) {
+    onOpenAlbumModal(ids);
+  }
+}
+
+function onAddedToAlbum(_album: Album) {
+  selectedFilePaths.value.clear();
 }
 
 async function loadFiles() {
@@ -457,6 +479,14 @@ function onResetFilters() {
       @select-all="onSelectAll"
       @clear-selection="onClearSelection"
       @rate-selected="onBatchRate"
+      @add-to-album="onBatchAddToAlbum"
+    />
+
+    <!-- Album Management & Assignment Modal -->
+    <AlbumModal
+      v-model:open="albumModalOpen"
+      :file-ids="albumTargetFileIds"
+      @added-to-album="onAddedToAlbum"
     />
   </main>
 </template>

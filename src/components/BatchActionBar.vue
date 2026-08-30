@@ -11,6 +11,7 @@ const emit = defineEmits<{
   (e: "selectAll"): void;
   (e: "clearSelection"): void;
   (e: "rateSelected", rating: number | null): void;
+  (e: "addToAlbum"): void;
 }>();
 
 const ratingMenuOpen = ref(false);
@@ -99,6 +100,16 @@ function onSetRating(rating: number | null) {
             </button>
           </div>
         </div>
+
+        <!-- Add to Album -->
+        <button
+          type="button"
+          class="action-btn"
+          title="Add selected images to album"
+          @click="emit('addToAlbum')"
+        >
+          📁 Add to Album
+        </button>
 
         <!-- Copy Paths -->
         <button

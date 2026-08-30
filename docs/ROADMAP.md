@@ -127,7 +127,7 @@ milestone; see the legend below.
 
 ## Release Notes
 
-- **v3.0.0**: Complete clean-slate rewrite release with full feature parity, modern UI, multi-format metadata support, 7 languages, and cross-platform desktop installers.
+- **v0.1.0**: Complete clean-slate rewrite release with full feature parity, modern UI, multi-format metadata support, 7 languages, and cross-platform desktop installers.
 
 ---
 

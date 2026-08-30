@@ -149,7 +149,7 @@ flow, and schema-versioning rules.
 1. Create a feature branch from `dev` (`feature/your-feature`)
 2. Implement with tests
 3. Open a Pull Request targeting `dev`
-4. After merge to `dev`, a release PR merges `dev` into `rewrite`
+4. After merge to `dev`, a release PR merges `dev` into `main`
 
 ## License
 
@@ -158,6 +158,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: ✅ Production Ready (v3.0.0 — All 7 Milestones Completed)
+**Project Status**: ✅ Production Ready (v0.1.0 — All 7 Milestones Completed)
 **Current Branch**: `dev`
 **Last Updated**: 2026-08-31

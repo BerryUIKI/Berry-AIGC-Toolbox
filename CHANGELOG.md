@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [3.0.0] - 2026-08-31
+## [0.1.0] - 2026-08-31
 
 ### Complete Clean-Slate Rewrite (Tauri 2 + Rust + Vue 3)
 
-Version 3.0.0 marks the complete clean-slate rewrite of Berry-AIGC-Toolbox from the legacy C#/.NET architecture to a modern, high-performance, cross-platform stack powered by Tauri 2, Rust core crates, and Vue 3 + TypeScript.
+Version 0.1.0 marks the initial release of the complete clean-slate rewrite of Berry-AIGC-Toolbox from the legacy C#/.NET architecture to a modern, high-performance, cross-platform stack powered by Tauri 2, Rust core crates, and Vue 3 + TypeScript.
 
 ---
 

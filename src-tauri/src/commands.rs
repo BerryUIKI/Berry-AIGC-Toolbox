@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::sync::MutexGuard;
 
 use berry_domain::{
-    Album, FileSortField, Folder, ImageFile, PromptStat, SearchCriteria, SortDirection, Tag,
+    Album, CheckpointModelStat, FileSortField, Folder, ImageFile, ModelCacheEntry, PromptStat,
+    SearchCriteria, SortDirection, Tag,
 };
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
@@ -533,4 +534,114 @@ async fn run_scan(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// --- Checkpoints and Model Cache ---
+
+/// Get list of indexed checkpoint models and their occurrence counts.
+#[tauri::command]
+pub fn get_checkpoint_models(
+    state: State<'_, AppState>,
+) -> Result<Vec<CheckpointModelStat>, String> {
+    db(&state)?
+        .get_checkpoint_models()
+        .map_err(|e| e.to_string())
+}
+
+/// Import A1111 cache.json or custom model hash mapping JSON file.
+#[tauri::command]
+pub fn import_model_cache_file(path: String, state: State<'_, AppState>) -> Result<usize, String> {
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("failed to read cache file at {path}: {e}"))?;
+
+    let root: serde_json::Value = serde_json::from_str(&content)
+        .map_err(|e| format!("failed to parse JSON in cache file: {e}"))?;
+
+    let mut entries = Vec::new();
+
+    if let Some(obj) = root.as_object() {
+        for (key, val) in obj {
+            if let Some(item_obj) = val.as_object() {
+                // A1111 format: key = "checkpoint/name [hash]", val = { "model_name": ..., "hash": ..., "sha256": ... }
+                let hash = item_obj
+                    .get("hash")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        item_obj
+                            .get("hashes")
+                            .and_then(|h| h.get("SHA256"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .unwrap_or(key.as_str());
+
+                let name = item_obj
+                    .get("model_name")
+                    .or_else(|| item_obj.get("filename"))
+                    .or_else(|| item_obj.get("title"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(key.as_str());
+
+                let title = item_obj
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                let sha256 = item_obj
+                    .get("sha256")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        item_obj
+                            .get("hashes")
+                            .and_then(|h| h.get("SHA256"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .map(|s| s.to_string());
+
+                entries.push(ModelCacheEntry {
+                    hash: hash.to_string(),
+                    name: name.to_string(),
+                    title,
+                    sha256,
+                });
+            } else if let Some(str_val) = val.as_str() {
+                // Simple { "hash": "model_name" } map
+                entries.push(ModelCacheEntry {
+                    hash: key.clone(),
+                    name: str_val.to_string(),
+                    title: None,
+                    sha256: if key.len() == 64 {
+                        Some(key.clone())
+                    } else {
+                        None
+                    },
+                });
+            }
+        }
+    } else if let Some(arr) = root.as_array() {
+        for item in arr {
+            if let Ok(entry) = serde_json::from_value::<ModelCacheEntry>(item.clone()) {
+                entries.push(entry);
+            }
+        }
+    }
+
+    db(&state)?
+        .import_model_cache(&entries)
+        .map_err(|e| e.to_string())
+}
+
+/// Resolve a model name from its short hash or SHA256.
+#[tauri::command]
+pub fn resolve_model_hash(
+    hash: String,
+    state: State<'_, AppState>,
+) -> Result<Option<ModelCacheEntry>, String> {
+    db(&state)?
+        .resolve_model_hash(&hash)
+        .map_err(|e| e.to_string())
+}
+
+/// List all entries in model cache.
+#[tauri::command]
+pub fn list_model_cache(state: State<'_, AppState>) -> Result<Vec<ModelCacheEntry>, String> {
+    db(&state)?.list_model_cache().map_err(|e| e.to_string())
 }

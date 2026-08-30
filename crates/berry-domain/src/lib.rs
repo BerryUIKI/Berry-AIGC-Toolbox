@@ -5,6 +5,7 @@
 //! Crates may depend on `berry-domain`, but it depends on nothing else.
 
 mod album;
+mod checkpoint;
 mod extracted_metadata;
 mod folder;
 mod image_file;
@@ -15,6 +16,7 @@ mod search_parser;
 mod tag;
 
 pub use album::Album;
+pub use checkpoint::{CheckpointModelStat, ModelCacheEntry};
 pub use extracted_metadata::ExtractedMetadata;
 pub use folder::Folder;
 pub use image_file::{Container, FileSortField, ImageFile, SortDirection};

@@ -27,6 +27,7 @@ import BatchActionBar from "./components/BatchActionBar.vue";
 import AlbumModal from "./components/AlbumModal.vue";
 import TagModal from "./components/TagModal.vue";
 import PromptStatsModal from "./components/PromptStatsModal.vue";
+import ModelManagerModal from "./components/ModelManagerModal.vue";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
 const info = ref<AppInfo | null>(null);
@@ -41,6 +42,7 @@ const filesLoading = ref(false);
 const searchQuery = ref("");
 const filterDrawerOpen = ref(false);
 const promptStatsModalOpen = ref(false);
+const modelManagerModalOpen = ref(false);
 const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
 const tagModalOpen = ref(false);
@@ -423,6 +425,18 @@ function onApplyStatsSearch(query: string) {
   activeCriteria.value = {};
   void loadFiles();
 }
+
+function onFilterByModel(modelName: string) {
+  activeCriteria.value = { ...activeCriteria.value, model_name: modelName };
+  searchQuery.value = criteriaToQuery(activeCriteria.value);
+  void loadFiles();
+}
+
+function onFilterByHash(modelHash: string) {
+  activeCriteria.value = { ...activeCriteria.value, model_hash: modelHash };
+  searchQuery.value = criteriaToQuery(activeCriteria.value);
+  void loadFiles();
+}
 </script>
 
 <template>
@@ -536,6 +550,14 @@ function onApplyStatsSearch(query: string) {
         >
           <span>📊 Insights</span>
         </button>
+        <button
+          type="button"
+          class="models-toggle-btn"
+          title="Open Checkpoint Models Catalog & Hash Cache"
+          @click="modelManagerModalOpen = true"
+        >
+          <span>🧠 Models</span>
+        </button>
       </div>
 
       <div v-if="searchQuery.trim()" class="search-status-bar">
@@ -641,6 +663,14 @@ function onApplyStatsSearch(query: string) {
     <PromptStatsModal
       v-model:open="promptStatsModalOpen"
       @apply-search="onApplyStatsSearch"
+    />
+
+    <!-- Checkpoint Models & Hash Cache Modal -->
+    <ModelManagerModal
+      :show="modelManagerModalOpen"
+      @close="modelManagerModalOpen = false"
+      @filter-model="onFilterByModel"
+      @filter-hash="onFilterByHash"
     />
   </main>
 </template>
@@ -887,7 +917,8 @@ h1 {
   line-height: 1.2;
 }
 
-.stats-toggle-btn {
+.stats-toggle-btn,
+.models-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -906,7 +937,8 @@ h1 {
   box-sizing: border-box;
 }
 
-.stats-toggle-btn:hover {
+.stats-toggle-btn:hover,
+.models-toggle-btn:hover {
   background: rgba(128, 128, 128, 0.15);
   border-color: rgba(128, 128, 128, 0.4);
 }

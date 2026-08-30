@@ -83,6 +83,18 @@ pub const MIGRATIONS: &[&str] = &[
     CREATE INDEX idx_files_favorite ON files(is_favorite);
     CREATE INDEX idx_files_nsfw ON files(is_nsfw);
     "#,
+    // v5: checkpoint model cache table.
+    r#"
+    CREATE TABLE model_cache (
+        hash        TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        title       TEXT,
+        sha256      TEXT,
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+    ) STRICT;
+
+    CREATE INDEX idx_model_cache_name ON model_cache(name);
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

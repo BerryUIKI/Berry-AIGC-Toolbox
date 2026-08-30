@@ -39,32 +39,43 @@ multiple AI platforms and file formats.
 - .TXT sidecar metadata files
 
 ### Organization
-- Albums (including drag-and-drop to add images)
-- Custom tags
-- Favorites
-- Ratings (1–10)
-- NSFW tagging: manual, keyword-based auto-tagging, and blur
+- Albums (custom collections, batch assignment, sidebar navigation)
+- Custom tags (color-coded chips, batch tagging, search filtering)
+- Favorites and ratings (1–10 stars)
+- NSFW tagging: manual, blur overlay with click-to-reveal
 
 ### Search & Prompts
 - Advanced metadata search (model file name/hash, prompts, parameters, and more)
 - Visual search builder for fine-grained queries
-- Prompt and negative-prompt lists with usage statistics
+- Prompt and negative-prompt insights modal (`PromptStatsModal.vue`) with keyword frequencies and average ratings
 - Reverse hash search against a known model list (partial name matching supported)
 
-### Sorting
-- By creation date
-- By aesthetics score
-- By rating
+### Sorting & Navigation
+- By creation / modification date, file name, file size
+- By rating (with unrated files positioned last)
+- By aesthetics score (with unrated files positioned last)
+- Grid view (`VirtualGrid.vue` with dynamic responsiveness and infinite scrolling) and Table view (`FileList.vue`)
+- Global keyboard navigation (`Space`/`Enter` preview, `Esc` deselect, Arrow key navigation, `Cmd+A` select all, `1-5` rating, `F` favorite, `Delete` trash, `?` shortcuts guide)
 
 ### Model Management
+- Checkpoint models catalog and image counts browser (`ModelManagerModal.vue`)
 - Filter checkpoints by name and hash
-- AUTOMATIC1111 cache.json integration (SHA256 hash lookup)
+- AUTOMATIC1111 `cache.json` and custom dictionary integration (SHA256 and short hash lookup)
+
+### File Operations
+- Move and copy files (and associated `.txt`/`.json` sidecars) between indexed folders
+- Drag-and-drop from grid view directly onto sidebar Folders, Albums, and Tags
+- Safe deletion to system Trash / Recycle Bin via native OS integration
+- Instant file reveal in system file manager (Finder / Explorer / Files)
 
 ### Localization
 - English, French, Spanish, German, Japanese, Simplified Chinese, Traditional Chinese
 
-### Database
-- Backup and restore of the metadata database
+### Database & Maintenance
+- Real-time database metrics dashboard (file size, SQLite page allocations, record counts)
+- Point-in-time database backup snapshot export via SQLite `VACUUM INTO`
+- Database restore with SQLite integrity validation
+- One-click `VACUUM` compaction and query optimization
 
 ## Tech Stack
 
@@ -87,8 +98,8 @@ a runnable slice of the application.
 | M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage | ✅ |
 | M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting | ✅ |
 | M4 | Search                       | Metadata search engine, query parser, visual filters, batch actions | ✅ |
-| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ⬜ |
-| M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore | ⬜ |
+| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ✅ |
+| M6 | Performance, Cache & Polish  | Checkpoints, file ops, drag-and-drop, DB backup/restore, shortcuts | ✅ |
 | M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers | ⬜ |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed milestone breakdown,
@@ -122,7 +133,7 @@ pnpm build            # type-check (vue-tsc) and build the frontend to dist/
 pnpm tauri build      # build a release bundle (installer)
 
 cargo test --workspace    # run all Rust tests
-cargo clippy --workspace -- -D warnings   # lint (must be clean)
+cargo clippy --workspace --all-targets -- -D warnings   # lint (must be clean)
 cargo fmt --all -- --check                # check formatting
 ```
 
@@ -147,6 +158,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: 🟡 Active development (M5: Organization)
+**Project Status**: 🟡 Active development (M6 completed, preparing M7 Localization & Release)
 **Current Branch**: `dev`
 **Last Updated**: 2026-08-31

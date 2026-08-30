@@ -84,44 +84,77 @@ incremental cache is bypassed, so every file is re-read and re-extracted even
 when its `(size, mtime)` is unchanged. Use it after a metadata-parser update so
 files indexed under an older extractor pick up the new fields.
 
-## Schema versioning
+## Schema Versioning & Migrations
 
 `berry-storage` tracks schema versions with SQLite's `PRAGMA user_version`.
 `crates/berry-storage/src/migrations.rs` holds an ordered `MIGRATIONS: &[&str]`;
 `Database::migrate()` applies each pending migration inside a transaction and
 bumps `user_version` by one.
 
-**Rules:**
+**Migration History:**
+- **v1**: Initial tables (`folders`, `files`, `meta`).
+- **v2**: Albums and relationships (`albums`, `album_files`).
+- **v3**: Tagging system (`tags`, `file_tags`).
+- **v4**: Favorites and NSFW classification flags (`is_favorite`, `is_nsfw` indexed columns in `files`).
+- **v5**: Model cache & hash lookup table (`model_cache` with unique indexes on `hash` and `sha256`).
 
+**Rules:**
 - Never edit, reorder, or delete an applied migration — deployed databases
   depend on the sequence. Add a new entry to the end of `MIGRATIONS` instead.
 - Every schema change ships with a migration, never ad-hoc `CREATE`/`ALTER`
   statements.
 
-## Browsing, Asset Protocol & Virtualization
- 
-- **Asset Protocol**: Configured via Tauri 2 `app.security.assetProtocol` (`protocol-asset` feature enabled). Local images are streamed into `<img>` tags via `@tauri-apps/api/core` `convertFileSrc`, with Windows verbatim prefixes (`\\?\`) sanitized before resolution.
-- **Virtualized Grid (`VirtualGrid.vue`)**: Custom responsive virtualization engine. `ResizeObserver` dynamically adapts column count to container width (`minWidth: 180px`). Total height is driven by a phantom element; only rows in the visible viewport (plus 2-row overscan buffer) are rendered in the DOM to ensure smooth 60fps scrolling over thousands of items without memory leaks.
-- **Navigation & Sorting**: `query_files` handles optional folder filtering and multi-column sorting (date, path, size, rating with NULLs last, aesthetic score with NULLs last).
-- **Preview & Inspector (`PreviewPane.vue`)**: Modal dialog with full-resolution image viewer, keyboard navigation (`←`/`→`/`Esc`), interactive rating widget (1–10 stars), prompt copy buttons, and collapsible metadata inspector toggled by the `I` shortcut.
+## Multi-Format Metadata Parsers
 
-## Search Engine, Query Syntax & Batch Actions
+Metadata parsing in `berry-metadata` supports diverse generator pipelines through modular parsers:
+- **AUTOMATIC1111 / SDNext (`parameters.rs`, `pnginfo.rs`)**: Standard A1111 parameter block parser extracting positive/negative prompts, samplers, seeds, steps, CFG, and hashes.
+- **ComfyUI (`comfyui.rs`)**: JSON node graph decoder navigating prompt and workflow dictionaries to identify `KSampler`, `CLIPTextEncode`, `CheckpointLoaderSimple`, and `EmptyLatentImage` nodes.
+- **NovelAI (`novelai.rs`)**: Comment JSON metadata extractor reading `prompt`, `uc` (undesired content), `steps`, `scale`, `sampler`, `seed`, and native resolution.
+- **InvokeAI (`invokeai.rs`)**: Decoder for `sd-metadata` and `invokeai_metadata` JSON blocks.
+- **Fooocus (`fooocus.rs`)**: Text parameter parser mapping `Prompt:`, `Negative:`, `Sampler:`, and `Model:` lines.
+- **EasyDiffusion & Stable Swarm (`easydiffusion.rs`)**: Structured JSON parameters and metadata extractor.
 
-- **Search Criteria & Engine**: Defined by `SearchCriteria` in `berry-domain` and executed by `search_files` in `berry-storage`. Utilizes parameterized SQL with SQLite `json_extract()` for indexing parameters embedded in JSON text (`prompt`, `negative_prompt`, `model_name`, `model_hash`, `sampler`, `steps`, `cfg_scale`), alongside table columns (`rating`, `aesthetic_score`, `folder_id`).
-- **Query Parser**: `parse_query` in `berry-domain::search_parser` parses free-form strings into structured criteria:
-  - Key-value tokens: `prompt:...`, `neg:...`, `model:...`, `hash:...`, `sampler:...`
-  - Quoted string support: `model:"dreamshaper xl"`, `prompt:"neon cat"`
-  - Numeric ranges: `steps:20..40`, `cfg:5.0..8.5`
-  - Comparison operators: `steps:>=25`, `rating:>=8`, `cfg:<10`
-  - Bare words are automatically aggregated into broad `text` substring matching across prompt, negative prompt, model name, and path.
-- **Visual Filters (`FilterDrawer.vue`)**: Slide-out drawer with dynamic checkpoint and sampler dropdowns queried from `list_distinct_models` and `list_distinct_samplers`, bidirectional synchronization with the search input via `criteriaToQuery`, and active filter count badges.
-- **Batch Selection & Toolbar (`BatchActionBar.vue`)**: Multi-selection via checkboxes, `Cmd+Click`, `Shift+Click` range selection, and `Cmd+A` keyboard shortcut. Provides high-performance batch operations: single-transaction multi-file rating updates (`set_files_rating`), newline-separated path copying, and prompt extraction.
+## Organization & Curation
+
+- **Albums (`AlbumModal.vue`)**: Custom collections with drag-and-drop support, sidebar counts, and multi-file assignment.
+- **Tags (`TagModal.vue`)**: Color-coded taxonomy chips allowing categorization, filter queries (`tag:anime`), and batch tagging.
+- **Favorites & NSFW**: Flagged in SQLite (`files.is_favorite`, `files.is_nsfw`) with quick-toggle hotkeys and privacy blur overlays.
+- **Prompt Insights (`PromptStatsModal.vue`)**: Aggregates positive/negative keyword frequencies, average star ratings, top checkpoint models, and top samplers.
+
+## Checkpoint Models & Hash Cache
+
+- **Catalog & Resolver (`ModelManagerModal.vue`)**: Aggregates distinct models referenced across indexed metadata alongside image counts.
+- **Hash Cache Integration**: Imports AUTOMATIC1111 `cache.json` dictionaries to resolve short model hashes (e.g. `e4a30e46`) and full SHA256 hashes back to human-readable checkpoint filenames and titles.
+
+## File Operations & Drag-and-Drop
+
+- **Cross-Platform File Management**: Native file moving (`move_files`), copying (`copy_files`), safe system trash deletion (`trash_files` via `trash` crate), and system file manager reveal (`reveal_in_file_manager`). Automatically manages associated sibling sidecars (`.txt`, `.json`).
+- **Interactive Drag-and-Drop**: Native HTML5 Drag and Drop from `VirtualGrid.vue` onto sidebar `FolderList.vue` rows to move files or assign albums/tags.
+- **Batch Action Toolbar (`BatchActionBar.vue`)**: Floating batch bar supporting star rating, album addition, tagging, favoriting, NSFW toggling, clipboard copying, and batch file moves/copies/deletion.
+
+## Database & Storage Maintenance
+
+- **Real-Time Storage Metrics (`DatabaseManagerModal.vue`)**: Inspects file size, total indexed images, folders, albums, tags, cached hashes, SQLite page count, and free pages.
+- **Optimization & Compaction**: Executes `VACUUM` and `PRAGMA optimize` to defragment B-trees and reclaim freelist pages.
+- **Point-in-Time Backup & Restore**: Exports snapshots using SQLite `VACUUM INTO` and supports full database restoration with schema and integrity verification.
+
+## Global Keyboard Shortcuts
+
+- `Space` / `Enter`: Open preview / full metadata inspector for selected image.
+- `Esc`: Close open modal / preview, or clear active selection.
+- `←` / `→` / `↑` / `↓`: Seamlessly navigate images in the virtual grid.
+- `Cmd+A` / `Ctrl+A`: Select all images in current view.
+- `/` or `Cmd+F` / `Ctrl+F`: Focus search input.
+- `1` – `5`: Quick star rating (and `0` to clear).
+- `F`: Toggle favorite status.
+- `Delete` / `Backspace`: Move selected file(s) to system Trash.
+- `?`: Toggle Keyboard Shortcuts Guide modal (`ShortcutsHelpModal.vue`).
 
 ## Frontend
 
 - Vue 3 `<script setup lang="ts">` single-file components, built with Vite.
-- All Rust interaction goes through `@tauri-apps/api` `invoke()`; there is no
-  `tauri-plugin-sql` — storage is owned by `berry-storage`.
+- All Rust interaction goes through `@tauri-apps/api/core` `invoke()`; there is no
+  `tauri-plugin-sql` — storage is strictly owned by `berry-storage`.
 - `vue-tsc --noEmit` runs type-checking as part of `pnpm build`.
 
 ## Conventions

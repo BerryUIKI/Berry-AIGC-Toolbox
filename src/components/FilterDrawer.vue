@@ -27,6 +27,8 @@ const maxCfg = ref<number | "">("");
 const minRating = ref<number | "">("");
 const maxRating = ref<number | "">("");
 const minAesthetic = ref<number | "">("");
+const isFavorite = ref<boolean | null>(null);
+const isNsfw = ref<boolean | null>(null);
 
 // Sync form state when drawer opens or initialCriteria changes
 watch(
@@ -45,6 +47,8 @@ watch(
       minRating.value = c.min_rating ?? "";
       maxRating.value = c.max_rating ?? "";
       minAesthetic.value = c.min_aesthetic ?? "";
+      isFavorite.value = c.is_favorite ?? null;
+      isNsfw.value = c.is_nsfw ?? null;
     }
   },
   { immediate: true },
@@ -73,6 +77,8 @@ function apply() {
     min_rating: minRating.value !== "" ? Number(minRating.value) : null,
     max_rating: maxRating.value !== "" ? Number(maxRating.value) : null,
     min_aesthetic: minAesthetic.value !== "" ? Number(minAesthetic.value) : null,
+    is_favorite: isFavorite.value,
+    is_nsfw: isNsfw.value,
   };
   emit("apply", criteria);
   close();
@@ -90,6 +96,8 @@ function reset() {
   minRating.value = "";
   maxRating.value = "";
   minAesthetic.value = "";
+  isFavorite.value = null;
+  isNsfw.value = null;
   emit("reset");
   close();
 }
@@ -220,6 +228,60 @@ function reset() {
             placeholder="e.g. 7.0"
             class="form-input"
           />
+        </div>
+
+        <!-- Favorites Filter -->
+        <div class="filter-group">
+          <label class="group-label">Favorites</label>
+          <div class="segmented-control">
+            <button
+              type="button"
+              class="seg-btn"
+              :class="{ active: isFavorite === null }"
+              @click="isFavorite = null"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="seg-btn"
+              :class="{ active: isFavorite === true }"
+              @click="isFavorite = true"
+            >
+              ★ Favorites
+            </button>
+          </div>
+        </div>
+
+        <!-- Content Sensitivity / NSFW Filter -->
+        <div class="filter-group">
+          <label class="group-label">Content Sensitivity</label>
+          <div class="segmented-control">
+            <button
+              type="button"
+              class="seg-btn"
+              :class="{ active: isNsfw === null }"
+              @click="isNsfw = null"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="seg-btn"
+              :class="{ active: isNsfw === false }"
+              @click="isNsfw = false"
+            >
+              🛡 SFW
+            </button>
+            <button
+              type="button"
+              class="seg-btn"
+              :class="{ active: isNsfw === true }"
+              @click="isNsfw = true"
+            >
+              🔞 NSFW
+            </button>
+          </div>
         </div>
 
         <!-- Prompt Substring -->
@@ -478,5 +540,40 @@ function reset() {
 
 .btn-apply:hover {
   opacity: 0.9;
+}
+
+.segmented-control {
+  display: flex;
+  background: rgba(128, 128, 128, 0.12);
+  border-radius: 6px;
+  padding: 0.2rem;
+  gap: 0.2rem;
+}
+
+.seg-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #888;
+  font: inherit;
+  font-size: 0.8em;
+  font-weight: 500;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.seg-btn:hover {
+  color: inherit;
+}
+
+.seg-btn.active {
+  background: #2f6fed;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 </style>

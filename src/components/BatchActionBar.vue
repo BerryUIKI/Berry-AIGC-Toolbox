@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import type { ImageFile } from "../types";
 
 const props = defineProps<{
@@ -12,7 +12,17 @@ const emit = defineEmits<{
   (e: "clearSelection"): void;
   (e: "rateSelected", rating: number | null): void;
   (e: "addToAlbum"): void;
+  (e: "tagSelected"): void;
+  (e: "toggleFavorite", isFavorite: boolean): void;
+  (e: "toggleNsfw", isNsfw: boolean): void;
 }>();
+
+const allFavorites = computed(
+  () => props.selectedFiles.length > 0 && props.selectedFiles.every((f) => f.is_favorite),
+);
+const allNsfw = computed(
+  () => props.selectedFiles.length > 0 && props.selectedFiles.every((f) => f.is_nsfw),
+);
 
 const ratingMenuOpen = ref(false);
 const copiedPaths = ref(false);
@@ -108,7 +118,39 @@ function onSetRating(rating: number | null) {
           title="Add selected images to album"
           @click="emit('addToAlbum')"
         >
-          📁 Add to Album
+          📁 Album
+        </button>
+
+        <!-- Tag -->
+        <button
+          type="button"
+          class="action-btn"
+          title="Add tags to selected images"
+          @click="emit('tagSelected')"
+        >
+          🏷 Tag
+        </button>
+
+        <!-- Favorite -->
+        <button
+          type="button"
+          class="action-btn"
+          :class="{ active: allFavorites }"
+          :title="allFavorites ? 'Remove favorite from selected' : 'Mark selected as favorite'"
+          @click="emit('toggleFavorite', !allFavorites)"
+        >
+          {{ allFavorites ? "★ Favorited" : "☆ Favorite" }}
+        </button>
+
+        <!-- NSFW -->
+        <button
+          type="button"
+          class="action-btn"
+          :class="{ 'nsfw-active': allNsfw }"
+          :title="allNsfw ? 'Mark selected as SFW' : 'Mark selected as NSFW'"
+          @click="emit('toggleNsfw', !allNsfw)"
+        >
+          {{ allNsfw ? "🔞 NSFW" : "🛡 SFW" }}
         </button>
 
         <!-- Copy Paths -->
@@ -241,6 +283,12 @@ function onSetRating(rating: number | null) {
 .action-btn.active {
   background: #2f6fed;
   border-color: #2f6fed;
+  color: #fff;
+}
+
+.action-btn.nsfw-active {
+  background: #dc2626;
+  border-color: #dc2626;
   color: #fff;
 }
 

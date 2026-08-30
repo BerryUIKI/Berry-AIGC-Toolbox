@@ -130,3 +130,17 @@ export type NavTarget =
   | { type: "album"; album: Album }
   | { type: "tag"; tag: Tag };
 
+export interface PromptKeywordStat {
+  keyword: string;
+  count: number;
+  avg_rating?: number | null;
+}
+
+export interface PromptStats {
+  total_analyzed: number;
+  top_positive_words: PromptKeywordStat[];
+  top_negative_words: PromptKeywordStat[];
+  top_models: PromptKeywordStat[];
+  top_samplers: PromptKeywordStat[];
+}
+

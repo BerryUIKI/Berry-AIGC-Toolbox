@@ -122,6 +122,7 @@ version = "0.1.0"
 dependencies = [
  "berry-domain",
  "kamadak-exif",
+ "serde_json",
 ]
 
 [[package]]

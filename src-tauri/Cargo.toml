@@ -1,0 +1,30 @@
+[package]
+name = "berry-aigc-toolbox"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Metadata indexer and viewer for AI-generated images"
+authors = ["Berry Wahlberg"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "berry_aigc_toolbox_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+berry-domain = { path = "../crates/berry-domain" }
+berry-scan = { path = "../crates/berry-scan" }
+berry-storage = { path = "../crates/berry-storage" }
+tauri = { version = "2", features = ["protocol-asset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri-plugin-dialog = "2"
+trash = "5"
+

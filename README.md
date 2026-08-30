@@ -17,7 +17,7 @@ multiple AI platforms and file formats.
 ## Features
 
 ### Scanning & Indexing
-- Scan folders for images and videos, store and index prompts and other metadata (PNGInfo)
+- Scan folders for images and videos, store and index prompts and other metadata (PNGInfo, EXIF, .TXT sidecars)
 - Rebuild metadata on demand (re-scan and re-extract from existing files)
 - Folder-based organization with drag-and-drop file management
 
@@ -39,32 +39,43 @@ multiple AI platforms and file formats.
 - .TXT sidecar metadata files
 
 ### Organization
-- Albums (including drag-and-drop to add images)
-- Custom tags
-- Favorites
-- Ratings (1–10)
-- NSFW tagging: manual, keyword-based auto-tagging, and blur
+- Albums (custom collections, batch assignment, sidebar navigation)
+- Custom tags (color-coded chips, batch tagging, search filtering)
+- Favorites and ratings (1–10 stars)
+- NSFW tagging: manual, blur overlay with click-to-reveal
 
 ### Search & Prompts
 - Advanced metadata search (model file name/hash, prompts, parameters, and more)
 - Visual search builder for fine-grained queries
-- Prompt and negative-prompt lists with usage statistics
+- Prompt and negative-prompt insights modal (`PromptStatsModal.vue`) with keyword frequencies and average ratings
 - Reverse hash search against a known model list (partial name matching supported)
 
-### Sorting
-- By creation date
-- By aesthetics score
-- By rating
+### Sorting & Navigation
+- By creation / modification date, file name, file size
+- By rating (with unrated files positioned last)
+- By aesthetics score (with unrated files positioned last)
+- Grid view (`VirtualGrid.vue` with dynamic responsiveness and infinite scrolling) and Table view (`FileList.vue`)
+- Global keyboard navigation (`Space`/`Enter` preview, `Esc` deselect, Arrow key navigation, `Cmd+A` select all, `1-5` rating, `F` favorite, `Delete` trash, `?` shortcuts guide)
 
 ### Model Management
+- Checkpoint models catalog and image counts browser (`ModelManagerModal.vue`)
 - Filter checkpoints by name and hash
-- AUTOMATIC1111 cache.json integration (SHA256 hash lookup)
+- AUTOMATIC1111 `cache.json` and custom dictionary integration (SHA256 and short hash lookup)
+
+### File Operations
+- Move and copy files (and associated `.txt`/`.json` sidecars) between indexed folders
+- Drag-and-drop from grid view directly onto sidebar Folders, Albums, and Tags
+- Safe deletion to system Trash / Recycle Bin via native OS integration
+- Instant file reveal in system file manager (Finder / Explorer / Files)
 
 ### Localization
 - English, French, Spanish, German, Japanese, Simplified Chinese, Traditional Chinese
 
-### Database
-- Backup and restore of the metadata database
+### Database & Maintenance
+- Real-time database metrics dashboard (file size, SQLite page allocations, record counts)
+- Point-in-time database backup snapshot export via SQLite `VACUUM INTO`
+- Database restore with SQLite integrity validation
+- One-click `VACUUM` compaction and query optimization
 
 ## Tech Stack
 
@@ -81,15 +92,15 @@ multiple AI platforms and file formats.
 The rewrite is delivered in feature-first milestones — each milestone produces
 a runnable slice of the application.
 
-| # | Milestone                    | Outcome                                   |
-|---|------------------------------|-------------------------------------------|
-| M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite |
-| M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage |
-| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting |
-| M4 | Search                       | Metadata search engine + visual search GUI |
-| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats |
-| M6 | Models & File Operations     | Checkpoint filtering, drag-and-drop, DB backup/restore |
-| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers |
+| # | Milestone                    | Outcome                                   | Status  |
+|---|------------------------------|-------------------------------------------|---------|
+| M1 | Scaffolding & Foundation     | Runnable shell app, core crate, CI, SQLite | ✅ |
+| M2 | Scanning & Indexing          | Folder scan, PNGInfo/EXIF/TXT extraction, storage | ✅ |
+| M3 | Browsing & Metadata View     | Thumbnail grid, preview pane, metadata panel, sorting | ✅ |
+| M4 | Search                       | Metadata search engine, query parser, visual filters, batch actions | ✅ |
+| M5 | Organization                 | Albums, tags, favorites, ratings, NSFW, prompt stats | ✅ |
+| M6 | Performance, Cache & Polish  | Checkpoints, file ops, drag-and-drop, DB backup/restore, shortcuts | ✅ |
+| M7 | Localization & Release       | 7 languages, Windows/macOS/Linux installers | ✅ |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the detailed milestone breakdown,
 deliverables, and status tracking.
@@ -98,7 +109,7 @@ deliverables, and status tracking.
 
 | Branch      | Purpose                                                             |
 |-------------|---------------------------------------------------------------------|
-| `rewrite`   | Protected default branch — production-ready code (PR-only)          |
+| `main`      | Protected default branch — production-ready code (PR-only)          |
 | `dev`       | Development integration branch — feature work lands here first      |
 | `old/main`  | Read-only archive of the legacy C#/.NET codebase                    |
 
@@ -107,18 +118,38 @@ All changes flow through Pull Requests. See
 
 ## Development
 
-> Build and run instructions will be added here once the M1 scaffold is in place.
-
-### Prerequisites (planned)
-- [Rust toolchain](https://www.rust-lang.org/tools/install)
+### Prerequisites
+- [Rust toolchain](https://www.rust-lang.org/tools/install) (stable)
 - [Node.js](https://nodejs.org) LTS
+- [pnpm](https://pnpm.io)
 - Tauri 2 prerequisites for your platform (see [Tauri docs](https://tauri.app))
+
+### Commands
+
+```bash
+pnpm install          # install frontend dependencies
+pnpm tauri dev        # run the desktop app in development (hot reload)
+pnpm build            # type-check (vue-tsc) and build the frontend to dist/
+pnpm tauri build      # build a release bundle (installer)
+
+cargo test --workspace    # run all Rust tests
+cargo clippy --workspace --all-targets -- -D warnings   # lint (must be clean)
+cargo fmt --all -- --check                # check formatting
+```
+
+Run cargo commands from the repository root — a single workspace covers the
+`src-tauri` app crate and the `crates/*` core crates.
+
+### Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout, data
+flow, and schema-versioning rules.
 
 ### Contribution Workflow
 1. Create a feature branch from `dev` (`feature/your-feature`)
 2. Implement with tests
 3. Open a Pull Request targeting `dev`
-4. After merge to `dev`, a release PR merges `dev` into `rewrite`
+4. After merge to `dev`, a release PR merges `dev` into `main`
 
 ## License
 
@@ -127,6 +158,6 @@ This project is licensed under the **GNU Affero General Public License v3.0**
 
 ---
 
-**Project Status**: 🟡 Active development (M1: Scaffolding & Foundation)
+**Project Status**: ✅ Production Ready (v0.1.0 — All 7 Milestones Completed)
 **Current Branch**: `dev`
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-31

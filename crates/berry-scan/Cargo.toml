@@ -1,0 +1,14 @@
+[package]
+name = "berry-scan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Folder scanning and indexing orchestration for Berry-AIGC-Toolbox"
+
+[dependencies]
+berry-domain = { path = "../berry-domain" }
+berry-metadata = { path = "../berry-metadata" }
+berry-storage = { path = "../berry-storage" }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+walkdir = "2"

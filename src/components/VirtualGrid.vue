@@ -193,7 +193,7 @@ watch(
       }
     }, 40);
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 );
 
 function selectFile(file: ImageFile, event?: MouseEvent) {
@@ -216,6 +216,25 @@ function formatDimensions(file: ImageFile): string {
   return formatBytes(file.size_bytes);
 }
 
+// Selected index tracking for O(1) keyboard navigation
+const selectedIndex = ref(-1);
+watch(
+  () => props.selectedFile,
+  (file) => {
+    if (!file) {
+      selectedIndex.value = -1;
+      return;
+    }
+    if (selectedIndex.value >= 0 && selectedIndex.value < props.files.length) {
+      if (props.files[selectedIndex.value]?.path === file.path) {
+        return;
+      }
+    }
+    selectedIndex.value = props.files.findIndex((f) => f.path === file.path);
+  },
+  { immediate: true },
+);
+
 // Keyboard navigation
 function handleKeyDown(e: KeyboardEvent) {
   // Only handle navigation if active element is not an input or textarea
@@ -224,9 +243,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
   if (!props.files.length) return;
 
-  const currentIndex = props.selectedFile
-    ? props.files.findIndex((f) => f.path === props.selectedFile?.path)
-    : -1;
+  const currentIndex = selectedIndex.value;
 
   let nextIndex = currentIndex;
 
@@ -249,19 +266,19 @@ function handleKeyDown(e: KeyboardEvent) {
       break;
     case "Enter":
     case " ":
-      if (props.selectedFile) {
+      if (currentIndex >= 0 && props.files[currentIndex]) {
         e.preventDefault();
-        activateFile(props.selectedFile);
+        activateFile(props.files[currentIndex]);
       }
       return;
     default:
       return;
   }
 
-  if (nextIndex !== currentIndex && nextIndex >= 0 && nextIndex < props.files.length) {
+  if (nextIndex >= 0 && nextIndex < props.files.length && nextIndex !== currentIndex) {
     e.preventDefault();
-    const nextFile = props.files[nextIndex];
-    selectFile(nextFile);
+    selectedIndex.value = nextIndex;
+    selectFile(props.files[nextIndex]);
     scrollToIndex(nextIndex);
   }
 }

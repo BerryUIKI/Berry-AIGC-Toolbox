@@ -102,13 +102,13 @@ pub fn remove_folder(folder_id: i64, state: State<'_, AppState>) -> Result<(), S
 
 /// Files of a folder, ordered by path.
 #[tauri::command]
-pub fn list_files(folder_id: i64, state: State<'_, AppState>) -> Result<Vec<ImageFile>, String> {
+pub async fn list_files(folder_id: i64, state: State<'_, AppState>) -> Result<Vec<ImageFile>, String> {
     db(&state)?.list_files(folder_id).map_err(|e| e.to_string())
 }
 
 /// Query indexed files with optional folder filtering and multi-criteria sorting.
 #[tauri::command]
-pub fn query_files(
+pub async fn query_files(
     folder_id: Option<i64>,
     sort: Option<FileSortField>,
     direction: Option<SortDirection>,
@@ -123,7 +123,7 @@ pub fn query_files(
 
 /// Search indexed files using structured criteria.
 #[tauri::command]
-pub fn search_files(
+pub async fn search_files(
     criteria: SearchCriteria,
     state: State<'_, AppState>,
 ) -> Result<Vec<ImageFile>, String> {
@@ -134,7 +134,7 @@ pub fn search_files(
 
 /// Search indexed files using a parsed query string.
 #[tauri::command]
-pub fn search_files_by_query(
+pub async fn search_files_by_query(
     query: String,
     folder_id: Option<i64>,
     sort: Option<FileSortField>,
@@ -932,7 +932,7 @@ pub fn open_external_url(url: String, app_handle: AppHandle) -> Result<(), Strin
 
 /// Request a single thumbnail (lazy on-demand generation).
 #[tauri::command]
-pub fn get_or_create_thumbnail(
+pub async fn get_or_create_thumbnail(
     app_handle: AppHandle,
     file_id: i64,
     file_path: String,
@@ -944,7 +944,11 @@ pub fn get_or_create_thumbnail(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
     let max_edge = max_edge.unwrap_or(384);
-    berry_scan::ensure_thumbnail(&data_dir, file_id, &file_path, modified_at, max_edge)
+    tauri::async_runtime::spawn_blocking(move || {
+        berry_scan::ensure_thumbnail(&data_dir, file_id, &file_path, modified_at, max_edge)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[derive(Deserialize)]

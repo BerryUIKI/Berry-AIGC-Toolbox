@@ -95,6 +95,11 @@ pub const MIGRATIONS: &[&str] = &[
 
     CREATE INDEX idx_model_cache_name ON model_cache(name);
     "#,
+    // v6: performance indexing for composite and size_bytes sorting.
+    r#"
+    CREATE INDEX IF NOT EXISTS idx_files_folder_modified ON files(folder_id, modified_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_files_size ON files(size_bytes DESC);
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

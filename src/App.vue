@@ -83,9 +83,26 @@ const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value
 // Selection
 const selectedFile = ref<ImageFile | null>(null);
 const selectedFilePaths = ref<Set<string>>(new Set());
-const selectedFilesList = computed(() =>
-  files.value.filter((f) => selectedFilePaths.value.has(f.path)),
-);
+
+// Fast lookup map computed once per files change (O(1) lookups on selection)
+const filePathMap = computed(() => {
+  const map = new Map<string, ImageFile>();
+  for (const f of files.value) {
+    map.set(f.path, f);
+  }
+  return map;
+});
+
+const selectedFilesList = computed(() => {
+  if (selectedFilePaths.value.size === 0) return [];
+  const map = filePathMap.value;
+  const list: ImageFile[] = [];
+  for (const path of selectedFilePaths.value) {
+    const f = map.get(path);
+    if (f) list.push(f);
+  }
+  return list;
+});
 
 const viewMode = ref<"grid" | "table">("grid");
 const sortField = ref<FileSortField>("modified_at");

@@ -10,9 +10,48 @@ export interface ThumbnailCacheStats {
 
 const THUMBNAIL_SETTING_KEY = "berry_thumbnail_max_edge";
 const DEFAULT_MAX_EDGE = 384; // 64 * 6, perfect balanced resolution for 130px~360px grid zoom
+const MAX_MEMORY_CACHE_ENTRIES = 3000;
 
-// In-memory runtime map of file_id -> cached thumbnail asset url
-const memoryCache = new Map<number, string>();
+class LruThumbnailCache {
+  private cache = new Map<number, string>();
+  private maxSize: number;
+
+  constructor(maxSize = MAX_MEMORY_CACHE_ENTRIES) {
+    this.maxSize = maxSize;
+  }
+
+  get(key: number): string | undefined {
+    const val = this.cache.get(key);
+    if (val !== undefined) {
+      this.cache.delete(key);
+      this.cache.set(key, val);
+    }
+    return val;
+  }
+
+  set(key: number, value: string): void {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey !== undefined) {
+        this.cache.delete(oldestKey);
+      }
+    }
+    this.cache.set(key, value);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+}
+
+// In-memory runtime LRU map of file_id -> cached thumbnail asset url
+const memoryCache = new LruThumbnailCache(3000);
 
 // Active in-flight promises to deduplicate concurrent requests for the same file
 const inFlightRequests = new Map<number, Promise<string>>();

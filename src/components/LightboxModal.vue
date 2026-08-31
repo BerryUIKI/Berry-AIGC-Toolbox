@@ -24,19 +24,47 @@ const dragStartY = ref(0);
 const promptCopied = ref(false);
 const revealedNsfw = ref(false);
 
-const currentIndex = computed(() =>
-  props.files.findIndex((f) => f.path === props.file.path),
-);
-
-const hasPrev = computed(() => currentIndex.value > 0);
-const hasNext = computed(() => currentIndex.value < props.files.length - 1);
+const cachedIndex = ref(-1);
 
 watch(
   () => props.file.path,
-  () => {
+  (newPath) => {
     resetTransform();
     revealedNsfw.value = false;
+    if (cachedIndex.value >= 0 && cachedIndex.value < props.files.length) {
+      if (props.files[cachedIndex.value]?.path === newPath) return;
+      if (cachedIndex.value + 1 < props.files.length && props.files[cachedIndex.value + 1]?.path === newPath) {
+        cachedIndex.value++;
+        return;
+      }
+      if (cachedIndex.value > 0 && props.files[cachedIndex.value - 1]?.path === newPath) {
+        cachedIndex.value--;
+        return;
+      }
+    }
+    cachedIndex.value = props.files.findIndex((f) => f.path === newPath);
   },
+  { immediate: true },
+);
+
+const currentIndex = computed(() => cachedIndex.value);
+const hasPrev = computed(() => currentIndex.value > 0);
+const hasNext = computed(() => currentIndex.value >= 0 && currentIndex.value < props.files.length - 1);
+
+// Silent background preload for adjacent images
+watch(
+  currentIndex,
+  (idx) => {
+    if (idx > 0 && props.files[idx - 1]) {
+      const prevImg = new Image();
+      prevImg.src = assetUrl(props.files[idx - 1].path);
+    }
+    if (idx >= 0 && idx < props.files.length - 1 && props.files[idx + 1]) {
+      const nextImg = new Image();
+      nextImg.src = assetUrl(props.files[idx + 1].path);
+    }
+  },
+  { immediate: true },
 );
 
 function resetTransform() {

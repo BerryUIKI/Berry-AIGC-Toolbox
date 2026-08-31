@@ -87,6 +87,11 @@ impl Database {
     fn init(conn: Connection, path: Option<PathBuf>) -> Result<Self, DatabaseError> {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
+        conn.pragma_update(None, "cache_size", -16000)?;
+        conn.pragma_update(None, "temp_store", "MEMORY")?;
+        conn.pragma_update(None, "mmap_size", 268435456i64)?;
+        conn.pragma_update(None, "busy_timeout", 5000)?;
 
         let mut db = Self { conn, path };
         db.migrate()?;

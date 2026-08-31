@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { ImageFile } from "../types";
 import {
   assetUrl,
@@ -8,8 +9,13 @@ import {
   getFileName,
   normalizePath,
 } from "../utils/image";
+import {
+  getThumbnailUrl,
+  getThumbnailUrlSync,
+  requestBatchThumbnails,
+} from "../utils/thumbnail";
 
-defineProps<{
+const props = defineProps<{
   files: ImageFile[];
   loading: boolean;
   selectedFile?: ImageFile | null;
@@ -22,6 +28,101 @@ const emit = defineEmits<{
   (e: "toggleSelect", file: ImageFile): void;
   (e: "toggleAll"): void;
 }>();
+
+const ROW_HEIGHT = 46;
+const OVERSCAN = 6;
+
+const containerRef = ref<HTMLElement | null>(null);
+const scrollTop = ref(0);
+const containerHeight = ref(600);
+
+const startRow = computed(() => {
+  const raw = Math.floor(scrollTop.value / ROW_HEIGHT);
+  return Math.max(0, raw - OVERSCAN);
+});
+
+const endRow = computed(() => {
+  const visibleCount = Math.ceil(containerHeight.value / ROW_HEIGHT);
+  const raw = startRow.value + visibleCount + OVERSCAN * 2;
+  return Math.min(props.files.length - 1, raw);
+});
+
+const visibleFiles = computed(() => {
+  if (props.files.length === 0) return [];
+  return props.files.slice(startRow.value, endRow.value + 1);
+});
+
+const topSpacerHeight = computed(() => startRow.value * ROW_HEIGHT);
+const bottomSpacerHeight = computed(() =>
+  Math.max(0, (props.files.length - (endRow.value + 1)) * ROW_HEIGHT),
+);
+
+function onScroll(e: Event) {
+  const target = e.target as HTMLElement;
+  scrollTop.value = target.scrollTop;
+}
+
+function updateDimensions() {
+  if (containerRef.value) {
+    containerHeight.value = containerRef.value.clientHeight;
+  }
+}
+
+let resizeObserver: ResizeObserver | null = null;
+onMounted(() => {
+  if (containerRef.value) {
+    updateDimensions();
+    resizeObserver = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    resizeObserver.observe(containerRef.value);
+  }
+});
+
+onUnmounted(() => {
+  resizeObserver?.disconnect();
+});
+
+const thumbnailMap = ref<Record<number, string>>({});
+
+function getRowImageSrc(file: ImageFile): string {
+  if (!file.id) return assetUrl(file.path);
+  return thumbnailMap.value[file.id] || getThumbnailUrlSync(file) || assetUrl(file.path);
+}
+
+async function loadThumbnailFor(file: ImageFile) {
+  if (!file.id || thumbnailMap.value[file.id]) return;
+  const url = await getThumbnailUrl(file);
+  if (file.id) {
+    thumbnailMap.value[file.id] = url;
+  }
+}
+
+watch(
+  visibleFiles,
+  (files) => {
+    if (!files || files.length === 0) return;
+    for (const f of files) {
+      if (f.id && !thumbnailMap.value[f.id]) {
+        void loadThumbnailFor(f);
+      }
+    }
+    void requestBatchThumbnails(files);
+  },
+  { immediate: true },
+);
+
+// Reset local thumbnail cache on file list replacement
+watch(
+  () => props.files,
+  () => {
+    thumbnailMap.value = {};
+    if (containerRef.value) {
+      containerRef.value.scrollTop = 0;
+      scrollTop.value = 0;
+    }
+  },
+);
 
 /** First `max` chars, with an ellipsis when truncated. */
 function snippet(text: string | null | undefined, max: number): string {
@@ -41,9 +142,9 @@ function size(meta: ImageFile["metadata"]): string {
     <p v-if="loading" class="empty">Loading…</p>
     <p v-else-if="!files.length" class="empty">Select a folder to see its indexed files.</p>
 
-    <div v-else class="scroll">
+    <div v-else ref="containerRef" class="scroll" @scroll.passive="onScroll">
       <table class="table">
-        <thead>
+        <thead class="sticky-header">
           <tr>
             <th class="th-checkbox">
               <input
@@ -65,9 +166,16 @@ function size(meta: ImageFile["metadata"]): string {
           </tr>
         </thead>
         <tbody>
+          <!-- Top Spacer for Virtualization -->
+          <tr v-if="topSpacerHeight > 0" :style="{ height: `${topSpacerHeight}px` }" class="spacer-row">
+            <td colspan="10" class="spacer-cell"></td>
+          </tr>
+
+          <!-- Visible Rows -->
           <tr
-            v-for="file in files"
+            v-for="file in visibleFiles"
             :key="file.id ?? file.path"
+            class="data-row"
             :class="{
               'row-selected': selectedFile?.path === file.path,
               'row-multi-selected': selectedFilePaths?.has(file.path),
@@ -85,10 +193,11 @@ function size(meta: ImageFile["metadata"]): string {
             <td class="preview-cell">
               <img
                 v-if="file.container !== 'mp4' && file.container !== 'txt'"
-                :src="assetUrl(file.path)"
+                :src="getRowImageSrc(file)"
                 :alt="getFileName(file.path)"
                 class="thumb"
                 loading="lazy"
+                decoding="async"
               />
               <div v-else class="thumb-placeholder">
                 {{ file.container.toUpperCase() }}
@@ -109,6 +218,11 @@ function size(meta: ImageFile["metadata"]): string {
             <td class="model" :title="file.metadata?.model_name ?? ''">
               {{ snippet(file.metadata?.model_name, 32) }}
             </td>
+          </tr>
+
+          <!-- Bottom Spacer for Virtualization -->
+          <tr v-if="bottomSpacerHeight > 0" :style="{ height: `${bottomSpacerHeight}px` }" class="spacer-row">
+            <td colspan="10" class="spacer-cell"></td>
           </tr>
         </tbody>
       </table>
@@ -134,9 +248,11 @@ function size(meta: ImageFile["metadata"]): string {
 
 .scroll {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: auto;
   width: 100%;
   height: 100%;
+  position: relative;
 }
 
 .table {
@@ -145,11 +261,19 @@ function size(meta: ImageFile["metadata"]): string {
   font-size: 0.82em;
 }
 
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #18181c;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .table th,
 .table td {
   text-align: left;
   padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
   white-space: nowrap;
 }
 
@@ -159,6 +283,22 @@ function size(meta: ImageFile["metadata"]): string {
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.spacer-row {
+  border: none !important;
+  background: transparent !important;
+}
+
+.spacer-cell {
+  padding: 0 !important;
+  border: none !important;
+  height: inherit;
+}
+
+.data-row {
+  height: 46px;
+  box-sizing: border-box;
 }
 
 .th-preview {
@@ -171,17 +311,17 @@ function size(meta: ImageFile["metadata"]): string {
 }
 
 .thumb {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   object-fit: cover;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.1);
   display: block;
 }
 
 .thumb-placeholder {
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -232,23 +372,17 @@ function size(meta: ImageFile["metadata"]): string {
   color: #999;
 }
 
-tbody tr {
+tbody tr.data-row {
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 
-tbody tr:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-@media (prefers-color-scheme: dark) {
-  tbody tr:hover {
-    background: rgba(255, 255, 255, 0.04);
-  }
+tbody tr.data-row:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 tbody tr.row-selected {
-  background: rgba(47, 111, 237, 0.15) !important;
+  background: rgba(47, 111, 237, 0.18) !important;
 }
 
 tbody tr.row-multi-selected {

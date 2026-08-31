@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { AppInfo, ScanProgress } from "../types";
+import { t } from "../i18n";
 
 const props = defineProps<{
   totalCount: number;
@@ -30,15 +31,15 @@ const thumbPercent = computed(() => {
       <span class="status-item">
         <span class="dot"></span>
         <span v-if="hasFilter">
-          筛选匹配: <strong>{{ filteredCount }}</strong> / {{ totalCount }} 项
+          {{ t.statusbar.matched }} <strong>{{ filteredCount }}</strong> {{ t.statusbar.of }} {{ totalCount }} {{ t.statusbar.items }}
         </span>
         <span v-else>
-          已索引: <strong>{{ totalCount }}</strong> 项
+          {{ t.statusbar.indexed }} <strong>{{ totalCount }}</strong> {{ t.statusbar.items }}
         </span>
       </span>
 
       <span v-if="selectedCount > 0" class="status-item selection-stat">
-        已选中 <strong>{{ selectedCount }}</strong> 项
+        {{ t.statusbar.selected }} <strong>{{ selectedCount }}</strong> {{ t.statusbar.items }}
       </span>
     </div>
 
@@ -54,7 +55,7 @@ const thumbPercent = computed(() => {
       <!-- Thumbnail generation progress -->
       <div v-if="thumbProgress?.active && thumbProgress.total > 0 && thumbProgress.current < thumbProgress.total" class="scan-status">
         <span class="scan-label" style="color: #67e8f9;">
-          ⚡ 正在生成缩略图: {{ thumbProgress.current }} / {{ thumbProgress.total }} ({{ thumbPercent }}%)
+          {{ t.statusbar.generatingThumb }} {{ thumbProgress.current }} / {{ thumbProgress.total }} ({{ thumbPercent }}%)
         </span>
         <div class="mini-progress-track">
           <div class="mini-progress-fill cyan" :style="{ width: `${thumbPercent}%` }"></div>
@@ -64,13 +65,13 @@ const thumbPercent = computed(() => {
       <!-- Scan Progress -->
       <div v-else-if="progress && progress.found > 0 && progress.scanned < progress.found" class="scan-status">
         <span class="scan-label">
-          正在后台扫描: {{ progress.scanned }} / {{ progress.found }} ({{ progressPercent }}%)
+          {{ t.statusbar.scanning }} {{ progress.scanned }} / {{ progress.found }} ({{ progressPercent }}%)
         </span>
         <div class="mini-progress-track">
           <div class="mini-progress-fill" :style="{ width: `${progressPercent}%` }"></div>
         </div>
       </div>
-      <span v-else class="ready-badge">就绪</span>
+      <span v-else class="ready-badge">{{ t.statusbar.ready }}</span>
     </div>
   </footer>
 </template>

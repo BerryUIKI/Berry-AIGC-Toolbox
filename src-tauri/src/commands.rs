@@ -102,7 +102,10 @@ pub fn remove_folder(folder_id: i64, state: State<'_, AppState>) -> Result<(), S
 
 /// Files of a folder, ordered by path.
 #[tauri::command]
-pub async fn list_files(folder_id: i64, state: State<'_, AppState>) -> Result<Vec<ImageFile>, String> {
+pub async fn list_files(
+    folder_id: i64,
+    state: State<'_, AppState>,
+) -> Result<Vec<ImageFile>, String> {
     db(&state)?.list_files(folder_id).map_err(|e| e.to_string())
 }
 

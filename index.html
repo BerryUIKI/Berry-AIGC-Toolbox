@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Berry AIGC Toolbox — Eagle-Style Local AI Image & Workflow Asset Manager</title>
+  <meta name="description" content="A high-performance, local-first Eagle-style AI image organizer & workflow inspector. Lossless metadata parsing for WebUI, ComfyUI, NovelAI & Fooocus with 64x WebP thumbnail caching." />
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Berry AIGC Toolbox — Eagle-Style Local AI Image & Workflow Asset Manager" />
+  <meta property="og:description" content="A high-performance, local-first Eagle-style AI image organizer & workflow inspector for WebUI, ComfyUI, NovelAI and Fooocus." />
+  <meta property="og:image" content="app-icon.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Berry AIGC Toolbox — Eagle-Style Local AI Image & Workflow Asset Manager" />
+  <meta name="twitter:description" content="Local-first Eagle-style AI image organizer & workflow inspector built on Tauri 2 + Rust + Vue 3." />
+
+  <link rel="icon" type="image/svg+xml" href="app-icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      --color-brand-cyan: #12b5cb;
+      --color-brand-amber: #fab82b;
+      --color-bg-dark: #0f0f13;
+      --color-bg-dark-card: #18181d;
+      --color-bg-dark-subtle: #202026;
+      --color-border-dark: rgba(255, 255, 255, 0.09);
+      --font-display: "Inter Tight", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+    }
+    
+    body {
+      font-family: var(--font-body);
+    }
+    
+    .glow-cyan {
+      box-shadow: 0 0 40px -10px rgba(18, 181, 203, 0.35);
+    }
+    .glow-amber {
+      box-shadow: 0 0 40px -10px rgba(250, 184, 43, 0.25);
+    }
+    .shot-shadow {
+      box-shadow: 0 30px 60px -12px rgba(0,0,0,0.5), 0 10px 24px -6px rgba(0,0,0,0.3);
+    }
+    .dropdown-shadow {
+      box-shadow: 0 16px 36px -6px rgba(0,0,0,0.4), 0 8px 16px -4px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body class="h-full antialiased bg-[#0b0b0e] text-[#f1f5f9] selection:bg-[#12b5cb]/30 selection:text-white pt-[72px]">
+
+  <!-- ═══════════ Sticky Header ═══════════ -->
+  <header class="fixed top-0 inset-x-0 z-50 h-[72px] px-6 lg:px-12 bg-[#0f0f13]/90 backdrop-blur-md flex items-center justify-between border-b border-white/[0.08]">
+    <!-- Brand Logo -->
+    <a href="#" class="flex items-center gap-3 group">
+      <img src="app-icon.svg" alt="Berry Logo" class="w-8 h-8 rounded-lg group-hover:scale-105 transition-transform" />
+      <div class="flex items-center gap-2">
+        <span class="font-display text-[18px] font-bold text-white tracking-tight">Berry AIGC</span>
+        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#12b5cb]/15 text-[#67e8f9] border border-[#12b5cb]/30" id="headerVersionBadge">v0.1.1</span>
+      </div>
+    </a>
+
+    <!-- Nav Links -->
+    <nav class="hidden md:flex items-center gap-7 text-[14px] text-[#94a3b8]">
+      <a href="#features" class="hover:text-[#67e8f9] transition-colors" data-i18n="nav.features">Features</a>
+      <a href="#showcase" class="hover:text-[#67e8f9] transition-colors" data-i18n="nav.showcase">Showcase</a>
+      <a href="#download" class="hover:text-[#67e8f9] transition-colors" data-i18n="nav.download">Download</a>
+      <a href="#architecture" class="hover:text-[#67e8f9] transition-colors" data-i18n="nav.architecture">Architecture</a>
+      <a href="#faq" class="hover:text-[#67e8f9] transition-colors" data-i18n="nav.faq">FAQ</a>
+    </nav>
+
+    <!-- Header Actions -->
+    <div class="flex items-center gap-3">
+      <!-- Language Switcher -->
+      <div class="relative" id="langSwitcher">
+        <button id="langBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[13px] text-[#cbd5e1] hover:text-white hover:border-white/20 transition-all bg-white/[0.03]" aria-label="Select display language">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.4 3.8 5.5 3.8 9S14.5 18.6 12 21c-2.5-2.4-3.8-5.5-3.8-9S9.5 5.4 12 3z"/></svg>
+          <span id="langLabel" class="font-medium">English</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div id="langMenu" class="hidden absolute top-[44px] right-0 w-[220px] rounded-xl bg-[#18181d] border border-white/15 dropdown-shadow p-1.5 flex flex-col gap-0.5 z-50 text-[13px]">
+          <p class="px-2.5 py-1 text-[11px] text-[#64748b] font-medium" data-i18n="lang.title">Select Display Language</p>
+          <button onclick="setLang('en')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#67e8f9] font-medium" data-lang="en">English <span class="text-[11px] text-[#64748b]">en</span></button>
+          <button onclick="setLang('zh-CN')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="zh-CN">简体中文 <span class="text-[11px] text-[#64748b]">zh-CN</span></button>
+          <button onclick="setLang('zh-TW')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="zh-TW">繁體中文 <span class="text-[11px] text-[#64748b]">zh-TW</span></button>
+          <button onclick="setLang('ja')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="ja">日本語 <span class="text-[11px] text-[#64748b]">ja</span></button>
+          <button onclick="setLang('de')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="de">Deutsch <span class="text-[11px] text-[#64748b]">de</span></button>
+          <button onclick="setLang('fr')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="fr">Français <span class="text-[11px] text-[#64748b]">fr</span></button>
+          <button onclick="setLang('es')" class="lang-opt flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-left transition-colors text-[#cbd5e1]" data-lang="es">Español <span class="text-[11px] text-[#64748b]">es</span></button>
+        </div>
+      </div>
+
+      <!-- GitHub Link -->
+      <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox" target="_blank" rel="noopener" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-[13px] text-[#cbd5e1] hover:text-white hover:border-white/20 transition-all bg-white/[0.03]">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+        <span class="font-medium">GitHub</span>
+      </a>
+
+      <!-- Quick Download CTA -->
+      <a href="#download" class="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-gradient-to-r from-[#12b5cb] to-[#0891b2] text-white text-[13px] font-semibold hover:opacity-90 transition-opacity shadow-md shadow-[#12b5cb]/20">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16"/></svg>
+        <span data-i18n="header.downloadBtn">Download</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <!-- ═══════════ Hero Section ═══════════ -->
+    <section class="relative pt-16 pb-20 px-6 max-w-6xl mx-auto flex flex-col items-center text-center">
+      <!-- Background Ambient Glow -->
+      <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-gradient-to-r from-[#12b5cb]/15 to-[#fab82b]/10 blur-[120px] pointer-events-none -z-10 rounded-full"></div>
+
+      <!-- Release Badge -->
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-[13px] text-[#94a3b8] mb-6">
+        <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
+        <span id="heroReleaseTag">v0.1.1 Released · AGPL-3.0 Open Source</span>
+      </div>
+
+      <!-- Title -->
+      <h1 class="font-display text-4xl sm:text-6xl lg:text-7xl font-bold tracking-tight text-white max-w-4xl leading-[1.1] mb-6" data-i18n="hero.title">
+        Eagle-Style Local AI Image & Workflow Asset Manager
+      </h1>
+
+      <!-- Subtitle -->
+      <p class="text-lg sm:text-xl text-[#94a3b8] max-w-2xl leading-relaxed mb-10" data-i18n="hero.subtitle">
+        High-performance, local-first asset manager with lossless metadata parsing for WebUI, ComfyUI, NovelAI & Fooocus. Instant 64x WebP thumbnail caching with zero cloud dependency.
+      </p>
+
+      <!-- Primary Smart Download CTA & Actions -->
+      <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-6">
+        <!-- Smart Detected Download Button -->
+        <a id="smartDownloadBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#12b5cb] via-[#0ea5e9] to-[#fab82b] text-[#0b0b0e] text-[16px] font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#12b5cb]/25 glow-cyan">
+          <span id="smartOsIcon" class="text-xl">🪟</span>
+          <div class="text-left">
+            <div class="text-[15px] font-bold leading-tight" id="smartDownloadTitle">Download for Windows (x64)</div>
+            <div class="text-[11px] opacity-85 font-medium" id="smartDownloadSubtitle">v0.1.1 · Installer (.msi / .exe)</div>
+          </div>
+        </a>
+
+        <!-- Other Platforms Button -->
+        <a href="#download" class="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] border border-white/10 text-white text-[15px] font-semibold transition-all">
+          <span data-i18n="hero.allPlatforms">All Platforms & Formats ↓</span>
+        </a>
+      </div>
+
+      <!-- Quick Platform Chips -->
+      <div class="flex flex-wrap items-center justify-center gap-4 text-[12px] text-[#64748b]">
+        <span class="flex items-center gap-1.5"><span class="text-white/60">🪟</span> Windows 10 / 11 (x64)</span>
+        <span class="text-white/20">·</span>
+        <span class="flex items-center gap-1.5"><span class="text-white/60">🍎</span> macOS (Apple Silicon M-Series / Intel)</span>
+        <span class="text-white/20">·</span>
+        <span class="flex items-center gap-1.5"><span class="text-white/60">🐧</span> Linux (.AppImage / .deb)</span>
+      </div>
+    </section>
+
+    <!-- ═══════════ Showcase Preview (Mac Style) ═══════════ -->
+    <section id="showcase" class="px-6 lg:px-12 max-w-7xl mx-auto mb-28">
+      <div class="rounded-2xl border border-white/15 bg-[#141418] p-3 sm:p-4 shot-shadow">
+        <!-- Interactive Theme Switcher Bar -->
+        <div class="flex items-center justify-between px-2 pb-3 mb-2 border-b border-white/[0.06] text-[13px]">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-[#ff5f56]"></span>
+            <span class="w-3 h-3 rounded-full bg-[#ffbd2e]"></span>
+            <span class="w-3 h-3 rounded-full bg-[#27c93f]"></span>
+            <span class="ml-2 font-mono text-[12px] text-[#64748b]" data-i18n="showcase.interactiveTitle">Berry AIGC Toolbox — Eagle Studio Preview</span>
+          </div>
+          <div class="flex items-center gap-1.5 bg-black/40 p-1 rounded-lg border border-white/10">
+            <button id="themeDarkBtn" onclick="switchPreviewTheme('dark')" class="px-3 py-1 rounded-md text-[12px] font-semibold bg-[#12b5cb] text-black transition-colors">Dark Studio</button>
+            <button id="themeLightBtn" onclick="switchPreviewTheme('light')" class="px-3 py-1 rounded-md text-[12px] font-medium text-[#94a3b8] hover:text-white transition-colors">Light Studio</button>
+          </div>
+        </div>
+
+        <!-- Preview Image Container -->
+        <div class="relative overflow-hidden rounded-xl bg-black/60">
+          <img id="previewImg" src="gui_preview_dark.svg" alt="Berry AIGC Toolbox GUI Screenshot" class="w-full h-auto object-contain transition-all duration-300" />
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Core Features Grid ═══════════ -->
+    <section id="features" class="px-6 lg:px-12 max-w-7xl mx-auto mb-28">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-4" data-i18n="features.heading">
+          Engineered for High-Frequency AI Creators
+        </h2>
+        <p class="text-lg text-[#94a3b8]" data-i18n="features.subheading">
+          Every component is optimized for speed, precision, and privacy — from instantaneous virtual scrolling to deep ComfyUI node graph parsing.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Feature 1: Eagle Layout -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#12b5cb]/15 border border-[#12b5cb]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            🦅
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f1.title">Eagle-Style 3-Pane Studio</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f1.desc">
+            Collapsible left navigation tree, ultra-smooth virtual grid gallery with live zoom slider (130px~360px), and a dedicated inspector pane.
+          </p>
+        </div>
+
+        <!-- Feature 2: Lossless Metadata -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#fab82b]/15 border border-[#fab82b]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            🔍
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f2.title">Lossless AIGC Metadata Parser</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f2.desc">
+            Extracts prompt, negative prompt, checkpoint model hash, sampler, CFG scale, steps, and full ComfyUI JSON workflow trees without data loss.
+          </p>
+        </div>
+
+        <!-- Feature 3: WebP 64x Thumbnails -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#10b981]/15 border border-[#10b981]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            ⚡
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f3.title">64x-Optimized WebP Cache</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f3.desc">
+            Lanczos3 downsampling tailored for AIGC aspect ratios (1024/1536/2048) with 2-thread background throttling and lazy on-demand decoding.
+          </p>
+        </div>
+
+        <!-- Feature 4: Smart Tags & Albums -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#8b5cf6]/15 border border-[#8b5cf6]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            🏷️
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f4.title">Smart Tags & Color Albums</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f4.desc">
+            Organize huge libraries with color-coded multi-tags, custom smart albums, 1~5 star ratings, and 1-click batch classification.
+          </p>
+        </div>
+
+        <!-- Feature 5: Prompt & Seed Explorer -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#ec4899]/15 border border-[#ec4899]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            📋
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f5.title">Prompt & Seed Reproduction</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f5.desc">
+            1-click token copy, prompt phrase breakdown, seed extraction, model hash resolution, and prompt statistical frequency analysis.
+          </p>
+        </div>
+
+        <!-- Feature 6: Local-First Privacy -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/[0.08] hover:border-[#12b5cb]/40 transition-all group">
+          <div class="w-12 h-12 rounded-xl bg-[#3b82f6]/15 border border-[#3b82f6]/30 flex items-center justify-center text-2xl mb-5 group-hover:scale-110 transition-transform">
+            🔒
+          </div>
+          <h3 class="font-display text-lg font-bold text-white mb-2" data-i18n="features.f6.title">100% Local-First & Private</h3>
+          <p class="text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="features.f6.desc">
+            Embedded SQLite database, zero tracking, zero cloud dependencies. Works completely offline with automated backup and vacuum utilities.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Supported Ecosystem ═══════════ -->
+    <section class="px-6 lg:px-12 max-w-7xl mx-auto mb-28">
+      <div class="rounded-2xl bg-gradient-to-b from-[#18181d] to-[#121216] border border-white/10 p-8 sm:p-12">
+        <h3 class="font-display text-2xl font-bold text-white text-center mb-8" data-i18n="ecosystem.title">
+          Universal Support for Leading AIGC Ecosystems
+        </h3>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
+          <div class="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center">
+            <span class="text-2xl mb-2">🎨</span>
+            <span class="font-semibold text-[14px] text-white">WebUI</span>
+            <span class="text-[11px] text-[#64748b]">A1111 / SD.Next</span>
+          </div>
+          <div class="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center">
+            <span class="text-2xl mb-2">⚡</span>
+            <span class="font-semibold text-[14px] text-white">ComfyUI</span>
+            <span class="text-[11px] text-[#64748b]">Workflow JSON Tree</span>
+          </div>
+          <div class="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center">
+            <span class="text-2xl mb-2">🔮</span>
+            <span class="font-semibold text-[14px] text-white">NovelAI</span>
+            <span class="text-[11px] text-[#64748b]">PNG / WebP Comment</span>
+          </div>
+          <div class="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center">
+            <span class="text-2xl mb-2">🎯</span>
+            <span class="font-semibold text-[14px] text-white">Fooocus</span>
+            <span class="text-[11px] text-[#64748b]">Fooocus-MRE Metadata</span>
+          </div>
+          <div class="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center">
+            <span class="text-2xl mb-2">🖌️</span>
+            <span class="font-semibold text-[14px] text-white">InvokeAI</span>
+            <span class="text-[11px] text-[#64748b]">Sidecar & JSON</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Download Matrix Section ═══════════ -->
+    <section id="download" class="px-6 lg:px-12 max-w-7xl mx-auto mb-28">
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <h2 class="font-display text-3xl sm:text-4xl font-bold text-white mb-4" data-i18n="download.heading">
+          Download Berry AIGC Toolbox
+        </h2>
+        <p class="text-lg text-[#94a3b8]" data-i18n="download.subheading">
+          Select your platform below. All releases are digitally packaged and open-source on GitHub Releases.
+        </p>
+      </div>
+
+      <!-- Platform Download Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <!-- Windows Card -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/10 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🪟</span>
+                <h3 class="font-display text-xl font-bold text-white">Windows</h3>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#12b5cb]/15 text-[#67e8f9]">x64 / ARM64</span>
+            </div>
+            <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.winDesc">Compatible with Windows 10 / 11 (64-bit).</p>
+            
+            <div class="flex flex-col gap-2.5 mb-6">
+              <a id="winMsiBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+                <span class="flex items-center gap-2"><span>📦</span> Windows Installer (.msi)</span>
+                <span class="text-[11px] text-[#67e8f9] font-semibold" data-i18n="download.recommended">Recommended</span>
+              </a>
+              <a id="winExeBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>⚙️</span> Setup Executable (.exe)</span>
+                <span class="text-[11px] text-[#64748b]">x64</span>
+              </a>
+              <a id="winZipBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>🗜️</span> Portable Archive (.zip)</span>
+                <span class="text-[11px] text-[#64748b]">No-Install</span>
+              </a>
+            </div>
+          </div>
+          <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="text-center text-[12px] text-[#12b5cb] hover:underline" data-i18n="download.allWinReleases">View all Windows assets on GitHub →</a>
+        </div>
+
+        <!-- macOS Card -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/10 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🍎</span>
+                <h3 class="font-display text-xl font-bold text-white">macOS</h3>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#12b5cb]/15 text-[#67e8f9]">Apple Silicon / Intel</span>
+            </div>
+            <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.macDesc">Compatible with macOS 11.0 Big Sur or later.</p>
+            
+            <div class="flex flex-col gap-2.5 mb-6">
+              <a id="macArmBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+                <span class="flex items-center gap-2"><span>🍏</span> Apple Silicon (.dmg)</span>
+                <span class="text-[11px] text-[#67e8f9] font-semibold">M1 / M2 / M3 / M4</span>
+              </a>
+              <a id="macIntelBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>🖥️</span> Intel x64 (.dmg)</span>
+                <span class="text-[11px] text-[#64748b]">x86_64</span>
+              </a>
+              <a id="macTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>📦</span> App Bundle (.tar.gz)</span>
+                <span class="text-[11px] text-[#64748b]">Universal</span>
+              </a>
+            </div>
+          </div>
+          <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="text-center text-[12px] text-[#12b5cb] hover:underline" data-i18n="download.allMacReleases">View all macOS assets on GitHub →</a>
+        </div>
+
+        <!-- Linux Card -->
+        <div class="p-6 rounded-2xl bg-[#141418] border border-white/10 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="text-2xl">🐧</span>
+                <h3 class="font-display text-xl font-bold text-white">Linux</h3>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#12b5cb]/15 text-[#67e8f9]">x64 / ARM64</span>
+            </div>
+            <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.linuxDesc">Supports Ubuntu, Debian, Arch, Fedora and others.</p>
+            
+            <div class="flex flex-col gap-2.5 mb-6">
+              <a id="linuxAppImageBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+                <span class="flex items-center gap-2"><span>🚀</span> Universal AppImage</span>
+                <span class="text-[11px] text-[#67e8f9] font-semibold" data-i18n="download.recommended">Recommended</span>
+              </a>
+              <a id="linuxDebBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>📦</span> Debian / Ubuntu (.deb)</span>
+                <span class="text-[11px] text-[#64748b]">apt</span>
+              </a>
+              <a id="linuxTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>🗜️</span> Generic Tarball (.tar.gz)</span>
+                <span class="text-[11px] text-[#64748b]">Binary</span>
+              </a>
+            </div>
+          </div>
+          <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="text-center text-[12px] text-[#12b5cb] hover:underline" data-i18n="download.allLinuxReleases">View all Linux assets on GitHub →</a>
+        </div>
+      </div>
+
+      <!-- Release Information Card -->
+      <div class="p-6 rounded-2xl bg-[#18181d] border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-[#12b5cb]/20 text-[#67e8f9] flex items-center justify-center font-bold">
+            ✓
+          </div>
+          <div>
+            <div class="text-[14px] font-bold text-white" id="releaseInfoTitle">Latest Release: v0.1.1</div>
+            <div class="text-[12px] text-[#94a3b8]" id="releaseInfoDate">Built on Tauri 2.11 + Rust 1.85 + Vue 3.5</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-[13px] font-semibold transition-colors" data-i18n="download.viewChangelog">
+            Full Release Notes ↗
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ Architecture & Keyboard Shortcuts ═══════════ -->
+    <section id="architecture" class="px-6 lg:px-12 max-w-7xl mx-auto mb-28">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Architecture -->
+        <div class="p-8 rounded-2xl bg-[#141418] border border-white/10">
+          <h3 class="font-display text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span>🏗️</span> <span data-i18n="arch.title">Clean-Slate Architecture</span>
+          </h3>
+          <p class="text-[#94a3b8] text-[14px] mb-6 leading-relaxed" data-i18n="arch.desc">
+            Modular multi-crate Rust architecture designed for zero memory leaks, sub-second SQLite queries, and crash-resilient metadata extraction.
+          </p>
+          <div class="space-y-3 font-mono text-[12px]">
+            <div class="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between">
+              <span class="text-[#67e8f9]">crates/berry-metadata</span>
+              <span class="text-[#64748b]">PNG / WebP / ComfyUI Parser</span>
+            </div>
+            <div class="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between">
+              <span class="text-[#fab82b]">crates/berry-scan</span>
+              <span class="text-[#64748b]">Rayon Parallel & 64x WebP Engine</span>
+            </div>
+            <div class="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between">
+              <span class="text-[#4ade80]">crates/berry-storage</span>
+              <span class="text-[#64748b]">SQLite Schema & Full-Text Search</span>
+            </div>
+            <div class="p-3 rounded-lg bg-black/40 border border-white/5 flex items-center justify-between">
+              <span class="text-[#a78bfa]">src/ (Frontend)</span>
+              <span class="text-[#64748b]">Vue 3 + TypeScript Virtual Grid</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shortcuts -->
+        <div class="p-8 rounded-2xl bg-[#141418] border border-white/10">
+          <h3 class="font-display text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <span>⌨️</span> <span data-i18n="shortcuts.title">Efficiency Keyboard Shortcuts</span>
+          </h3>
+          <p class="text-[#94a3b8] text-[14px] mb-6 leading-relaxed" data-i18n="shortcuts.desc">
+            Master your AIGC workflow with rapid single-key shortcuts without lifting your hands from the keyboard.
+          </p>
+          <div class="grid grid-cols-2 gap-3 text-[13px]">
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.quickLook">Quick Look / Lightbox</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">Space / ↵</kbd>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.sidebar">Toggle Sidebar</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">B</kbd>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.inspector">Toggle Inspector</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">I</kbd>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.filter">Filter Drawer</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">F</kbd>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.rating">Rate 1~5 Stars</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">1 ~ 5</kbd>
+            </div>
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-black/40 border border-white/5">
+              <span class="text-[#cbd5e1]" data-i18n="shortcuts.search">Focus Search Bar</span>
+              <kbd class="px-2 py-0.5 rounded bg-white/10 font-mono text-[11px] text-white">/</kbd>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════ FAQ Section ═══════════ -->
+    <section id="faq" class="px-6 lg:px-12 max-w-4xl mx-auto mb-28">
+      <div class="text-center mb-12">
+        <h2 class="font-display text-3xl font-bold text-white mb-3" data-i18n="faq.heading">Frequently Asked Questions</h2>
+        <p class="text-[#94a3b8]" data-i18n="faq.subheading">Everything you need to know about Berry AIGC Toolbox.</p>
+      </div>
+
+      <div class="space-y-4">
+        <details class="group p-6 rounded-2xl bg-[#141418] border border-white/10 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-semibold text-white">
+            <span data-i18n="faq.q1">Does Berry AIGC Toolbox upload any of my images or prompts to the cloud?</span>
+            <span class="transition group-open:rotate-180 text-[#67e8f9]">▼</span>
+          </summary>
+          <p class="mt-4 text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="faq.a1">
+            No, absolutely not. Berry AIGC Toolbox is 100% local-first and offline. All metadata parsing, thumbnail generation, and database indexing are performed entirely on your local machine using SQLite.
+          </p>
+        </details>
+
+        <details class="group p-6 rounded-2xl bg-[#141418] border border-white/10 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-semibold text-white">
+            <span data-i18n="faq.q2">Can I drag images directly from Berry into ComfyUI or WebUI?</span>
+            <span class="transition group-open:rotate-180 text-[#67e8f9]">▼</span>
+          </summary>
+          <p class="mt-4 text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="faq.a2">
+            Yes! Native OS drag-and-drop is fully supported. You can drag any card directly from Berry into ComfyUI to load its entire workflow node graph, or into WebUI PNG Info to reconstruct generation parameters.
+          </p>
+        </details>
+
+        <details class="group p-6 rounded-2xl bg-[#141418] border border-white/10 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-semibold text-white">
+            <span data-i18n="faq.q3">How does Berry handle huge folders with over 50,000+ AI images?</span>
+            <span class="transition group-open:rotate-180 text-[#67e8f9]">▼</span>
+          </summary>
+          <p class="mt-4 text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="faq.a3">
+            Berry uses virtual row scrolling (only rendering cards currently visible on screen) and a throttled 2-thread Rayon background worker for WebP thumbnails. This ensures minimal RAM usage and zero interface stutter even with 100,000+ images.
+          </p>
+        </details>
+
+        <details class="group p-6 rounded-2xl bg-[#141418] border border-white/10 [&_summary::-webkit-details-marker]:hidden">
+          <summary class="flex items-center justify-between cursor-pointer font-semibold text-white">
+            <span data-i18n="faq.q4">Is Berry AIGC Toolbox free and open source?</span>
+            <span class="transition group-open:rotate-180 text-[#67e8f9]">▼</span>
+          </summary>
+          <p class="mt-4 text-[#94a3b8] text-[14px] leading-relaxed" data-i18n="faq.a4">
+            Yes! Berry AIGC Toolbox is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). It is free to use, modify, and contribute to.
+          </p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════ Footer ═══════════ -->
+  <footer class="border-t border-white/10 bg-[#0c0c0f] py-12 px-6 lg:px-12 text-[13px] text-[#64748b]">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="flex items-center gap-3">
+        <img src="app-icon.svg" alt="Berry Logo" class="w-6 h-6 rounded-md" />
+        <span class="font-bold text-white">Berry AIGC Toolbox</span>
+        <span>·</span>
+        <span>AGPL-3.0 Open Source</span>
+      </div>
+
+      <div class="flex items-center gap-6 text-[#94a3b8]">
+        <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox" target="_blank" rel="noopener" class="hover:text-white transition-colors">GitHub</a>
+        <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="hover:text-white transition-colors">Releases</a>
+        <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/issues" target="_blank" rel="noopener" class="hover:text-white transition-colors">Issues</a>
+        <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/blob/main/LICENSE" target="_blank" rel="noopener" class="hover:text-white transition-colors">License</a>
+      </div>
+
+      <div>
+        Created with ❤️ by <a href="https://github.com/BerryUIKI" target="_blank" rel="noopener" class="text-[#67e8f9] hover:underline font-semibold">BerryUIKI</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ═══════════ i18n & Smart OS Detection Script ═══════════ -->
+  <script>
+    // Translations Dictionary for 7 Languages
+    const i18n = {
+      en: {
+        "nav.features": "Features",
+        "nav.showcase": "Showcase",
+        "nav.download": "Download",
+        "nav.architecture": "Architecture",
+        "nav.faq": "FAQ",
+        "header.downloadBtn": "Download",
+        "lang.title": "Select Display Language",
+        "hero.title": "Eagle-Style Local AI Image & Workflow Asset Manager",
+        "hero.subtitle": "High-performance, local-first asset manager with lossless metadata parsing for WebUI, ComfyUI, NovelAI & Fooocus. Instant 64x WebP thumbnail caching with zero cloud dependency.",
+        "hero.allPlatforms": "All Platforms & Formats ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Eagle Studio Preview",
+        "features.heading": "Engineered for High-Frequency AI Creators",
+        "features.subheading": "Every component is optimized for speed, precision, and privacy — from instantaneous virtual scrolling to deep ComfyUI node graph parsing.",
+        "features.f1.title": "Eagle-Style 3-Pane Studio",
+        "features.f1.desc": "Collapsible left navigation tree, ultra-smooth virtual grid gallery with live zoom slider (130px~360px), and a dedicated inspector pane.",
+        "features.f2.title": "Lossless AIGC Metadata Parser",
+        "features.f2.desc": "Extracts prompt, negative prompt, checkpoint model hash, sampler, CFG scale, steps, and full ComfyUI JSON workflow trees without data loss.",
+        "features.f3.title": "64x-Optimized WebP Cache",
+        "features.f3.desc": "Lanczos3 downsampling tailored for AIGC aspect ratios (1024/1536/2048) with 2-thread background throttling and lazy on-demand decoding.",
+        "features.f4.title": "Smart Tags & Color Albums",
+        "features.f4.desc": "Organize huge libraries with color-coded multi-tags, custom smart albums, 1~5 star ratings, and 1-click batch classification.",
+        "features.f5.title": "Prompt & Seed Reproduction",
+        "features.f5.desc": "1-click token copy, prompt phrase breakdown, seed extraction, model hash resolution, and prompt statistical frequency analysis.",
+        "features.f6.title": "100% Local-First & Private",
+        "features.f6.desc": "Embedded SQLite database, zero tracking, zero cloud dependencies. Works completely offline with automated backup and vacuum utilities.",
+        "ecosystem.title": "Universal Support for Leading AIGC Ecosystems",
+        "download.heading": "Download Berry AIGC Toolbox",
+        "download.subheading": "Select your platform below. All releases are digitally packaged and open-source on GitHub Releases.",
+        "download.winDesc": "Compatible with Windows 10 / 11 (64-bit).",
+        "download.macDesc": "Compatible with macOS 11.0 Big Sur or later.",
+        "download.linuxDesc": "Supports Ubuntu, Debian, Arch, Fedora and others.",
+        "download.recommended": "Recommended",
+        "download.allWinReleases": "View all Windows assets on GitHub →",
+        "download.allMacReleases": "View all macOS assets on GitHub →",
+        "download.allLinuxReleases": "View all Linux assets on GitHub →",
+        "download.viewChangelog": "Full Release Notes ↗",
+        "arch.title": "Clean-Slate Architecture",
+        "arch.desc": "Modular multi-crate Rust architecture designed for zero memory leaks, sub-second SQLite queries, and crash-resilient metadata extraction.",
+        "shortcuts.title": "Efficiency Keyboard Shortcuts",
+        "shortcuts.desc": "Master your AIGC workflow with rapid single-key shortcuts without lifting your hands from the keyboard.",
+        "shortcuts.quickLook": "Quick Look / Lightbox",
+        "shortcuts.sidebar": "Toggle Sidebar",
+        "shortcuts.inspector": "Toggle Inspector",
+        "shortcuts.filter": "Filter Drawer",
+        "shortcuts.rating": "Rate 1~5 Stars",
+        "shortcuts.search": "Focus Search Bar",
+        "faq.heading": "Frequently Asked Questions",
+        "faq.subheading": "Everything you need to know about Berry AIGC Toolbox.",
+        "faq.q1": "Does Berry AIGC Toolbox upload any of my images or prompts to the cloud?",
+        "faq.a1": "No, absolutely not. Berry AIGC Toolbox is 100% local-first and offline. All metadata parsing, thumbnail generation, and database indexing are performed entirely on your local machine using SQLite.",
+        "faq.q2": "Can I drag images directly from Berry into ComfyUI or WebUI?",
+        "faq.a2": "Yes! Native OS drag-and-drop is fully supported. You can drag any card directly from Berry into ComfyUI to load its entire workflow node graph, or into WebUI PNG Info to reconstruct generation parameters.",
+        "faq.q3": "How does Berry handle huge folders with over 50,000+ AI images?",
+        "faq.a3": "Berry uses virtual row scrolling (only rendering cards currently visible on screen) and a throttled 2-thread Rayon background worker for WebP thumbnails. This ensures minimal RAM usage and zero interface stutter even with 100,000+ images.",
+        "faq.q4": "Is Berry AIGC Toolbox free and open source?",
+        "faq.a4": "Yes! Berry AIGC Toolbox is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). It is free to use, modify, and contribute to."
+      },
+      "zh-CN": {
+        "nav.features": "核心特性",
+        "nav.showcase": "界面预览",
+        "nav.download": "下载安装",
+        "nav.architecture": "技术架构",
+        "nav.faq": "常见问题",
+        "header.downloadBtn": "立即下载",
+        "lang.title": "选择显示语言",
+        "hero.title": "专为 AIGC 打造的 Eagle 风格本地图像与工作流管理利器",
+        "hero.subtitle": "高性能、纯本地、无损解析 WebUI、ComfyUI、NovelAI 与 Fooocus 元数据。64倍数优化 WebP 缩略图缓存，100% 离线隐私安全。",
+        "hero.allPlatforms": "查看全部平台与格式 ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Eagle 风格工作室预览",
+        "features.heading": "为高频 AI 创作者量身定制",
+        "features.subheading": "从极速虚拟瀑布流网格到 ComfyUI 工作流 JSON 节点树无损提取，每个模块均针对速度与隐私深度优化。",
+        "features.f1.title": "Eagle 风格三栏工作室",
+        "features.f1.desc": "可折叠左侧导航目录树、自适应平滑虚拟瀑布流网格（支持 130px~360px 缩放）以及右侧专业级属性检查面板。",
+        "features.f2.title": "无损 AIGC 元数据解析引擎",
+        "features.f2.desc": "深度解析正向提示词、负向提示词、模型哈希、采样器、CFG、步数以及完整的 ComfyUI Workflow JSON 节点树。",
+        "features.f3.title": "64倍数优化 WebP 缩略图",
+        "features.f3.desc": "针对 AIGC 图像长边特性（1024/1536/2048 等）采用 Lanczos3 高质量下采样，2 线程后台平滑生成，内存与 I/O 降低 98%+。",
+        "features.f4.title": "智能标签与多色画册",
+        "features.f4.desc": "支持多颜色自定义标签、自定义画册分类、1~5 星级评分以及一键批量移动、归档与标记。",
+        "features.f5.title": "提示词与种子复现工作台",
+        "features.f5.desc": "单项 Token 词条点击即复制、提示词词频统计、Seed 种子一键提取与模型哈希快速反查映射。",
+        "features.f6.title": "100% 离线本地安全",
+        "features.f6.desc": "内置轻量高效 SQLite 数据库，零云端上传、零遥测收集。完全离线可用，自带数据库备份与压缩整理。",
+        "ecosystem.title": "全方位支持主流 AIGC 生态",
+        "download.heading": "下载 Berry AIGC Toolbox",
+        "download.subheading": "请选择您的操作系统。所有安装包均通过 GitHub Releases 自动化构建并开源发布。",
+        "download.winDesc": "兼容 Windows 10 / 11 (64 位)。",
+        "download.macDesc": "兼容 macOS 11.0 Big Sur 或更高版本。",
+        "download.linuxDesc": "支持 Ubuntu、Debian、Arch、Fedora 等主流发行版。",
+        "download.recommended": "官方推荐",
+        "download.allWinReleases": "前往 GitHub 查看全部 Windows 构件 →",
+        "download.allMacReleases": "前往 GitHub 查看全部 macOS 构件 →",
+        "download.allLinuxReleases": "前往 GitHub 查看全部 Linux 构件 →",
+        "download.viewChangelog": "查看完整更新日志 ↗",
+        "arch.title": "原生高性能架构",
+        "arch.desc": "模块化 Rust 多 Crate 架构，针对零内存泄漏、毫秒级 SQLite 索引以及防崩溃元数据提取深度设计。",
+        "shortcuts.title": "高效键盘快捷键",
+        "shortcuts.desc": "全键盘高效操作，无需鼠标反复寻觅，轻松驾驭上万张图片资产流转。",
+        "shortcuts.quickLook": "全屏预览 / 灯箱",
+        "shortcuts.sidebar": "隐藏/展开侧边栏",
+        "shortcuts.inspector": "隐藏/展开检查器",
+        "shortcuts.filter": "多维高级筛选抽屉",
+        "shortcuts.rating": "快速评分 1~5 星",
+        "shortcuts.search": "聚焦搜索输入框",
+        "faq.heading": "常见问题解答",
+        "faq.subheading": "关于 Berry AIGC Toolbox 的常见疑问与设计说明。",
+        "faq.q1": "Berry AIGC Toolbox 会将我的图片或提示词上传到云端吗？",
+        "faq.a1": "绝对不会。Berry AIGC Toolbox 是 100% 纯本地离线软件。所有元数据解析、缩略图生成与数据库索引均在您的本地电脑上运行，无任何网络依赖与数据上传。",
+        "faq.q2": "我可以将图片从软件直接拖拽到 ComfyUI 或 WebUI 吗？",
+        "faq.a2": "完全可以！支持原生操作系统文件拖放。直接将画廊卡片拖入 ComfyUI 即可瞬间载入工作流节点，拖入 WebUI PNG Info 即可一键恢复所有生成参数。",
+        "faq.q3": "对于拥有 5 万张以上图片的庞大文件夹，软件性能如何？",
+        "faq.a3": "Berry 采用虚拟行列滚动渲染（仅渲染屏幕可视区域），配合限制为 2 线程的后台静默 WebP 缩略图缓存池，即使面对 10 万张图片也能保持毫秒级流畅与极低内存占用。",
+        "faq.q4": "这款软件是否完全免费且开源？",
+        "faq.a4": "是的！Berry AIGC Toolbox 基于 GNU Affero GPL v3.0 (AGPL-3.0) 协议开源，完全免费，代码透明，欢迎任何形式的贡献与建议。"
+      },
+      "zh-TW": {
+        "nav.features": "核心特性",
+        "nav.showcase": "介面預覽",
+        "nav.download": "下載安裝",
+        "nav.architecture": "技術架構",
+        "nav.faq": "常見問題",
+        "header.downloadBtn": "立即下載",
+        "lang.title": "選擇顯示語言",
+        "hero.title": "專為 AIGC 打造的 Eagle 風格本地圖像與工作流管理利器",
+        "hero.subtitle": "高性能、純本地、無損解析 WebUI、ComfyUI、NovelAI 與 Fooocus 元數據。64倍數優化 WebP 縮略圖快取，100% 離線隱私安全。",
+        "hero.allPlatforms": "查看全部平台與格式 ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Eagle 風格工作室預覽",
+        "features.heading": "為高頻 AI 創作者量身定制",
+        "features.subheading": "從極速虛擬瀑布流網格到 ComfyUI 工作流 JSON 節點樹無損提取，每個模組均針對速度與隱私深度優化。",
+        "features.f1.title": "Eagle 風格三欄工作室",
+        "features.f1.desc": "可摺疊左側導覽目錄樹、自適應平滑虛擬瀑布流網格（支援 130px~360px 縮放）以及右側專業級屬性檢查面板。",
+        "features.f2.title": "無損 AIGC 元數據解析引擎",
+        "features.f2.desc": "深度解析正向提示詞、負向提示詞、模型雜湊、採樣器、CFG、步數以及完整的 ComfyUI Workflow JSON 節點樹。",
+        "features.f3.title": "64倍數優化 WebP 縮略圖",
+        "features.f3.desc": "針對 AIGC 圖像長邊特性（1024/1536/2048 等）採用 Lanczos3 高品質下採樣，2 執行緒背景平滑生成，記憶體與 I/O 降低 98%+。",
+        "features.f4.title": "智慧標籤與多色畫冊",
+        "features.f4.desc": "支援多顏色自訂標籤、自訂畫冊分類、1~5 星級評分以及一鍵批次移動、歸檔與標記。",
+        "features.f5.title": "提示詞與種子復現工作台",
+        "features.f5.desc": "單項 Token 詞條點擊即複製、提示詞詞頻統計、Seed 種子一鍵提取與模型雜湊快速反查對應。",
+        "features.f6.title": "100% 離線本地安全",
+        "features.f6.desc": "內建輕量高效 SQLite 資料庫，零雲端上傳、零遙測收集。完全離線可用，自帶資料庫備份與壓縮整理。",
+        "ecosystem.title": "全方位支援主流 AIGC 生態",
+        "download.heading": "下載 Berry AIGC Toolbox",
+        "download.subheading": "請選擇您的作業系統。所有安裝包均透過 GitHub Releases 自動化建置並開源發布。",
+        "download.winDesc": "相容 Windows 10 / 11 (64 位元)。",
+        "download.macDesc": "相容 macOS 11.0 Big Sur 或更高版本。",
+        "download.linuxDesc": "支援 Ubuntu、Debian、Arch、Fedora 等主流發行版。",
+        "download.recommended": "官方推薦",
+        "download.allWinReleases": "前往 GitHub 查看全部 Windows 構件 →",
+        "download.allMacReleases": "前往 GitHub 查看全部 macOS 構件 →",
+        "download.allLinuxReleases": "前往 GitHub 查看全部 Linux 構件 →",
+        "download.viewChangelog": "查看完整更新日誌 ↗",
+        "arch.title": "原生高性能架構",
+        "arch.desc": "模組化 Rust 多 Crate 架構，針對零記憶體流失、毫秒級 SQLite 索引以及防崩潰元數據提取深度設計。",
+        "shortcuts.title": "高效鍵盤快速鍵",
+        "shortcuts.desc": "全鍵盤高效操作，無需滑鼠反覆尋覓，輕鬆駕馭上萬張圖片資產流轉。",
+        "shortcuts.quickLook": "全螢幕預覽 / 燈箱",
+        "shortcuts.sidebar": "隱藏/展開側邊欄",
+        "shortcuts.inspector": "隱藏/展開檢查器",
+        "shortcuts.filter": "多維進階篩選抽屜",
+        "shortcuts.rating": "快速評分 1~5 星",
+        "shortcuts.search": "聚焦搜尋輸入框",
+        "faq.heading": "常見問題解答",
+        "faq.subheading": "關於 Berry AIGC Toolbox 的常見疑問與設計說明。",
+        "faq.q1": "Berry AIGC Toolbox 會將我的圖片或提示詞上傳到雲端嗎？",
+        "faq.a1": "絕對不會。Berry AIGC Toolbox 是 100% 純本地離線軟體。所有元數據解析、縮略圖生成與資料庫索引均在您的本機電腦上運作，無任何網路依賴與資料上傳。",
+        "faq.q2": "我可以將圖片從軟體直接拖曳到 ComfyUI 或 WebUI 嗎？",
+        "faq.a2": "完全可以！支援原生作業系統檔案拖放。直接將畫廊卡片拖入 ComfyUI 即可瞬間載入工作流節點，拖入 WebUI PNG Info 即可一鍵還原所有生成參數。",
+        "faq.q3": "對於擁有 5 萬張以上圖片的龐大資料夾，軟體性能如何？",
+        "faq.a3": "Berry 採用虛擬行列滾動渲染（僅渲染螢幕可視區域），配合限制為 2 執行緒的背景靜默 WebP 縮略圖快取池，即使面對 10 萬張圖片也能保持毫秒級流暢與極低記憶體佔用。",
+        "faq.q4": "這款軟體是否完全免費且開源？",
+        "faq.a4": "是的！Berry AIGC Toolbox 基於 GNU Affero GPL v3.0 (AGPL-3.0) 協議開源，完全免費，程式碼透明，歡迎任何形式的貢獻與建議。"
+      },
+      "ja": {
+        "nav.features": "機能紹介",
+        "nav.showcase": "プレビュー",
+        "nav.download": "ダウンロード",
+        "nav.architecture": "アーキテクチャ",
+        "nav.faq": "よくある質問",
+        "header.downloadBtn": "ダウンロード",
+        "lang.title": "表示言語を選択",
+        "hero.title": "AIGC専用 Eagleスタイルのローカル画像＆ワークフロー管理ツール",
+        "hero.subtitle": "高速・完全ローカル・ロスレスでWebUI、ComfyUI、NovelAI、Fooocusのメタデータを解析。64倍数最適化WebPサムネイル、完全オフラインでプライバシーを守ります。",
+        "hero.allPlatforms": "全プラットフォームと形式を表示 ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Eagleスタイル プレビュー",
+        "features.heading": "AIクリエイターのために設計",
+        "features.subheading": "超高速仮想スクロールからComfyUIワークフローJSONノードツリー解析まで、すべてが速度とプライバシーのために最適化されています。",
+        "features.f1.title": "Eagleスタイル 3ペインスタジオ",
+        "features.f1.desc": "折りたたみ可能な左ナビゲーションツリー、ズーム対応の仮想グリッド、専用インスペクターパネル。",
+        "features.f2.title": "ロスレスAIGCメタデータ解析",
+        "features.f2.desc": "プロンプト、ネガティブプロンプト、モデルハッシュ、サンプラー、CFG、ステップ数、ComfyUI JSONを完全抽出。",
+        "features.f3.title": "64倍数最適化 WebPキャッシュ",
+        "features.f3.desc": "AIGC解像度（1024/1536/2048など）に最適化されたLanczos3高品質縮小。2スレッド背景生成でメモリを98%+削減。",
+        "features.f4.title": "スマートタグ＆カラーアルバム",
+        "features.f4.desc": "カラータグ、カスタムアルバム、1〜5段階評価、一括管理で膨大な画像を直感的に整理。",
+        "features.f5.title": "プロンプト＆シード再現",
+        "features.f5.desc": "ワンクリック単語コピー、プロンプト単語頻度解析、シード抽出、モデルハッシュ逆引き。",
+        "features.f6.title": "100% 完全ローカル＆安全",
+        "features.f6.desc": "組み込みSQLite、クラウド依存なし、トラッキングなし。完全オフラインで動作しバックアップ機能も搭載。",
+        "ecosystem.title": "主要AIGCエコシステムを包括サポート",
+        "download.heading": "Berry AIGC Toolbox をダウンロード",
+        "download.subheading": "お使いのOSを選択してください。GitHub Releasesから直接ダウンロード可能です。",
+        "download.winDesc": "Windows 10 / 11 (64-bit) に対応。",
+        "download.macDesc": "macOS 11.0 Big Sur 以降に対応。",
+        "download.linuxDesc": "Ubuntu、Debian、Arch、Fedora 等に対応。",
+        "download.recommended": "おすすめ",
+        "download.allWinReleases": "GitHubでWindowsアセットをすべて表示 →",
+        "download.allMacReleases": "GitHubでmacOSアセットをすべて表示 →",
+        "download.allLinuxReleases": "GitHubでLinuxアセットをすべて表示 →",
+        "download.viewChangelog": "リリースノートを表示 ↗",
+        "arch.title": "高速・堅牢なアーキテクチャ",
+        "arch.desc": "Tauri 2 + Rust + Vue 3によるマルチCrate構成。メモリリークゼロとミリ秒単位のクエリを実現。",
+        "shortcuts.title": "効率的なキーボードショートカット",
+        "shortcuts.desc": "キーボードから手を離さずに数万枚のAI画像を軽快に操作できます。",
+        "shortcuts.quickLook": "クイックルック / 拡大表示",
+        "shortcuts.sidebar": "サイドバー表示/非表示",
+        "shortcuts.inspector": "インスペクター表示/非表示",
+        "shortcuts.filter": "多機能フィルタードロワー",
+        "shortcuts.rating": "1〜5星評価",
+        "shortcuts.search": "検索バーにフォーカス",
+        "faq.heading": "よくある質問",
+        "faq.subheading": "Berry AIGC Toolbox に関する疑問にお答えします。",
+        "faq.q1": "画像やプロンプトがクラウドに送信されることはありますか？",
+        "faq.a1": "いいえ、一切ありません。Berry AIGC Toolboxは100%ローカルファーストです。すべての解析やインデックスはローカルPC内のSQLiteで行われます。",
+        "faq.q2": "画像をComfyUIやWebUIに直接ドラッグ＆ドロップできますか？",
+        "faq.a2": "はい！ネイティブOSのドラッグ＆ドロップに対応しており、ComfyUIへドラッグしてワークフロー全体を読み込ませることができます。",
+        "faq.q3": "5万枚以上の画像があるフォルダでのパフォーマンスはどうですか？",
+        "faq.a3": "画面内のカードのみを描画する仮想スクロールと、2スレッド制限のバックグラウンドWebPサムネイル生成により、10万枚でも軽快に動作します。",
+        "faq.q4": "完全無料でオープンソースですか？",
+        "faq.a4": "はい！AGPL-3.0ライセンスに基づき、完全無料でソースコードもGitHubで公開されています。"
+      },
+      "de": {
+        "nav.features": "Funktionen",
+        "nav.showcase": "Vorschau",
+        "nav.download": "Download",
+        "nav.architecture": "Architektur",
+        "nav.faq": "FAQ",
+        "header.downloadBtn": "Download",
+        "lang.title": "Sprache wählen",
+        "hero.title": "Lokaler AIGC Bild- & Workflow-Manager im Eagle-Stil",
+        "hero.subtitle": "Verlustfreie Metadatenanalyse für WebUI, ComfyUI, NovelAI & Fooocus. 64x WebP-Thumbnails, 100% offline & datenschutzfreundlich.",
+        "hero.allPlatforms": "Alle Plattformen & Formate ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Eagle Studio Vorschau",
+        "features.heading": "Entwickelt für High-Frequency AI Creators",
+        "features.subheading": "Optimiert für maximale Geschwindigkeit, Präzision und Privatsphäre.",
+        "features.f1.title": "3-Spalten-Studio im Eagle-Stil",
+        "features.f1.desc": "Einklappbare Navigationsleiste, reaktionsschnelles virtuelles Raster mit stufenlosem Zoom (130px~360px) und Inspektor-Panel.",
+        "features.f2.title": "Verlustfreier Metadaten-Parser",
+        "features.f2.desc": "Liest Prompts, Negative Prompts, Modell-Hashes, Sampler, CFG, Schritte und ComfyUI Workflow JSON-Bäume aus.",
+        "features.f3.title": "64x WebP Thumbnail Cache",
+        "features.f3.desc": "Lanczos3-Skalierung für AIGC-Formate mit 2-Thread-Hintergrundverarbeitung. 98%+ RAM- und Speicherersparnis.",
+        "features.f4.title": "Smarte Tags & Farb-Alben",
+        "features.f4.desc": "Farbcodierte Multi-Tags, Alben, 1~5 Sterne-Bewertungen und intuitive Stapelverarbeitung.",
+        "features.f5.title": "Prompt- & Seed-Explorer",
+        "features.f5.desc": "1-Klick Token-Kopie, Seed-Wiederherstellung, Modell-Hash-Auflösung und Prompt-Häufigkeitsstatistiken.",
+        "features.f6.title": "100% Lokal & Privat",
+        "features.f6.desc": "Eingebettete SQLite-Datenbank, kein Tracking, keine Cloud-Abhängigkeit. Funktioniert vollständig offline.",
+        "ecosystem.title": "Umfassende Unterstützung für moderne AIGC-Tools",
+        "download.heading": "Berry AIGC Toolbox herunterladen",
+        "download.subheading": "Wählen Sie Ihr Betriebssystem. Alle Builds sind als Open-Source auf GitHub verfügbar.",
+        "download.winDesc": "Kompatibel mit Windows 10 / 11 (64-Bit).",
+        "download.macDesc": "Kompatibel mit macOS 11.0 Big Sur oder neuer.",
+        "download.linuxDesc": "Unterstützt Ubuntu, Debian, Arch, Fedora und mehr.",
+        "download.recommended": "Empfohlen",
+        "download.allWinReleases": "Alle Windows-Builds auf GitHub →",
+        "download.allMacReleases": "Alle macOS-Builds auf GitHub →",
+        "download.allLinuxReleases": "Alle Linux-Builds auf GitHub →",
+        "download.viewChangelog": "Vollständige Release Notes ↗",
+        "arch.title": "Moderne Rust & Tauri 2 Architektur",
+        "arch.desc": "Entwickelt für minimale Latenzen, Null Speicherlecks und absturzsichere Bildverarbeitung.",
+        "shortcuts.title": "Effiziente Tastenkombinationen",
+        "shortcuts.desc": "Navigieren und bewerten Sie zehntausende Bilder blitzschnell per Tastatur.",
+        "shortcuts.quickLook": "Quick Look / Vollbild",
+        "shortcuts.sidebar": "Seitenleiste ein-/ausblenden",
+        "shortcuts.inspector": "Inspektor ein-/ausblenden",
+        "shortcuts.filter": "Filter-Schublade öffnen",
+        "shortcuts.rating": "1~5 Sterne bewerten",
+        "shortcuts.search": "Suchleiste fokussieren",
+        "faq.heading": "Häufig gestellte Fragen (FAQ)",
+        "faq.subheading": "Antworten auf die wichtigsten Fragen zu Berry AIGC Toolbox.",
+        "faq.q1": "Werden Bilder oder Prompts in die Cloud geladen?",
+        "faq.a1": "Nein, absolut nicht. Berry AIGC Toolbox ist 100% lokal und offline. Alle Berechnungen finden direkt auf Ihrem PC statt.",
+        "faq.q2": "Kann ich Bilder direkt in ComfyUI oder WebUI ziehen?",
+        "faq.a2": "Ja! Natives Drag-and-Drop wird vollständig unterstützt, um Workflows oder Parameter sofort wiederherzustellen.",
+        "faq.q3": "Wie ist die Performance bei über 50.000 Bildern?",
+        "faq.a3": "Dank virtuellem Rendering und 2-Thread WebP-Hintergrund-Caching bleibt die App auch bei 100.000 Bildern butterweich.",
+        "faq.q4": "Ist die Software kostenlos und Open Source?",
+        "faq.a4": "Ja! Berry AIGC Toolbox ist unter der AGPL-3.0 Lizenz vollständig kostenlos und quelloffen."
+      },
+      "fr": {
+        "nav.features": "Fonctionnalités",
+        "nav.showcase": "Aperçu",
+        "nav.download": "Télécharger",
+        "nav.architecture": "Architecture",
+        "nav.faq": "FAQ",
+        "header.downloadBtn": "Télécharger",
+        "lang.title": "Choisir la langue",
+        "hero.title": "Gestionnaire d'images et de workflows IA style Eagle",
+        "hero.subtitle": "Analyse sans perte des métadonnées WebUI, ComfyUI, NovelAI et Fooocus. Cache de vignettes WebP 64x, 100% local et privé.",
+        "hero.allPlatforms": "Toutes les plateformes et formats ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Aperçu Eagle Studio",
+        "features.heading": "Conçu pour les créateurs IA à haute fréquence",
+        "features.subheading": "Chaque module est optimisé pour une réactivité instantanée et une confidentialité totale.",
+        "features.f1.title": "Studio à 3 volets style Eagle",
+        "features.f1.desc": "Arborescence pliable, grille virtuelle fluide avec curseur de zoom (130px~360px) et panneau inspecteur dédié.",
+        "features.f2.title": "Analyseur de métadonnées IA sans perte",
+        "features.f2.desc": "Extraction des prompts, negative prompts, hash du modèle, sampler, CFG, étapes et arbres JSON ComfyUI.",
+        "features.f3.title": "Cache WebP optimisé 64x",
+        "features.f3.desc": "Sous-échantillonnage Lanczos3 adapté aux ratios AIGC avec limitation à 2 threads pour économiser 98%+ de mémoire.",
+        "features.f4.title": "Tags intelligents et albums colorés",
+        "features.f4.desc": "Organisez vos galeries avec des tags couleur, des albums sur mesure et des notes de 1 à 5 étoiles.",
+        "features.f5.title": "Explorateur de prompts et de seeds",
+        "features.f5.desc": "Copie de tokens en 1 clic, extraction de seed, résolution de hash et analyse statistique des prompts.",
+        "features.f6.title": "100% Local et privé",
+        "features.f6.desc": "Base de données SQLite intégrée, zéro télémétrie, zéro cloud. Fonctionne entièrement hors ligne.",
+        "ecosystem.title": "Prise en charge universelle des moteurs AIGC",
+        "download.heading": "Télécharger Berry AIGC Toolbox",
+        "download.subheading": "Sélectionnez votre système d'exploitation. Tous les builds sont open source sur GitHub Releases.",
+        "download.winDesc": "Compatible avec Windows 10 / 11 (64 bits).",
+        "download.macDesc": "Compatible avec macOS 11.0 Big Sur ou supérieur.",
+        "download.linuxDesc": "Prend en charge Ubuntu, Debian, Arch, Fedora et plus.",
+        "download.recommended": "Recommandé",
+        "download.allWinReleases": "Voir tous les builds Windows sur GitHub →",
+        "download.allMacReleases": "Voir tous les builds macOS sur GitHub →",
+        "download.allLinuxReleases": "Voir tous les builds Linux sur GitHub →",
+        "download.viewChangelog": "Notes de version complètes ↗",
+        "arch.title": "Architecture moderne et légère",
+        "arch.desc": "Architecture Rust modulaire conçue pour zéro fuite de mémoire et des requêtes ultra-rapides.",
+        "shortcuts.title": "Raccourcis clavier efficaces",
+        "shortcuts.desc": "Gérez des milliers d'images à toute vitesse sans quitter votre clavier.",
+        "shortcuts.quickLook": "Coup d'œil / Plein écran",
+        "shortcuts.sidebar": "Afficher/Masquer la barre latérale",
+        "shortcuts.inspector": "Afficher/Masquer l'inspecteur",
+        "shortcuts.filter": "Ouvrir les filtres avancés",
+        "shortcuts.rating": "Noter de 1 à 5 étoiles",
+        "shortcuts.search": "Activer la barre de recherche",
+        "faq.heading": "Foire Aux Questions (FAQ)",
+        "faq.subheading": "Tout ce que vous devez savoir sur Berry AIGC Toolbox.",
+        "faq.q1": "Mes images ou mes prompts sont-ils envoyés sur le cloud ?",
+        "faq.a1": "Non, absolument jamais. Berry AIGC Toolbox fonctionne 100% en local et hors ligne.",
+        "faq.q2": "Puis-je glisser des images directement dans ComfyUI ou WebUI ?",
+        "faq.a2": "Oui ! Le glisser-déposer natif permet de restaurer instantanément vos nœuds et paramètres de génération.",
+        "faq.q3": "Quelle est la performance avec plus de 50 000 images ?",
+        "faq.a3": "Grâce au rendu virtuel et au cache WebP en arrière-plan (2 threads), la fluidité reste parfaite même avec 100 000 images.",
+        "faq.q4": "L'application est-elle gratuite et open source ?",
+        "faq.a4": "Oui ! Berry AIGC Toolbox est sous licence libre AGPL-3.0 et 100% gratuite."
+      },
+      "es": {
+        "nav.features": "Características",
+        "nav.showcase": "Vista previa",
+        "nav.download": "Descargar",
+        "nav.architecture": "Arquitectura",
+        "nav.faq": "Preguntas frecuentes",
+        "header.downloadBtn": "Descargar",
+        "lang.title": "Seleccionar idioma",
+        "hero.title": "Organizador local de imágenes y flujos de trabajo de IA estilo Eagle",
+        "hero.subtitle": "Análisis sin pérdida de metadatos para WebUI, ComfyUI, NovelAI y Fooocus. Miniaturas WebP optimizadas a 64x, 100% local y privado.",
+        "hero.allPlatforms": "Todas las plataformas y formatos ↓",
+        "showcase.interactiveTitle": "Berry AIGC Toolbox — Vista previa Eagle Studio",
+        "features.heading": "Diseñado para creadores de IA de alta frecuencia",
+        "features.subheading": "Cada componente está optimizado para una respuesta instantánea y máxima privacidad.",
+        "features.f1.title": "Estudio de 3 paneles estilo Eagle",
+        "features.f1.desc": "Árbol de navegación plegable, cuadrícula virtual fluida con control de zoom (130px~360px) y panel inspector.",
+        "features.f2.title": "Analizador de metadatos IA sin pérdidas",
+        "features.f2.desc": "Extrae prompts, negative prompts, hash de modelo, sampler, CFG, pasos y árboles JSON de ComfyUI.",
+        "features.f3.title": "Caché WebP optimizado a 64x",
+        "features.f3.desc": "Reducción Lanczos3 adaptada a resoluciones de IA con límite de 2 hilos para ahorrar más del 98% de memoria.",
+        "features.f4.title": "Etiquetas inteligentes y álbumes",
+        "features.f4.desc": "Organiza con etiquetas de colores, álbumes personalizados, calificaciones de 1 a 5 estrellas y gestión masiva.",
+        "features.f5.title": "Explorador de prompts y semillas",
+        "features.f5.desc": "Copia de tokens en un clic, desglose de términos, extracción de seeds y estadísticas de frecuencia.",
+        "features.f6.title": "100% Local y seguro",
+        "features.f6.desc": "Base de datos SQLite integrada, sin rastreo ni dependencia en la nube. Funciona totalmente sin conexión.",
+        "ecosystem.title": "Soporte universal para los principales ecosistemas de IA",
+        "download.heading": "Descargar Berry AIGC Toolbox",
+        "download.subheading": "Seleccione su plataforma. Todos los paquetes están disponibles en GitHub Releases.",
+        "download.winDesc": "Compatible con Windows 10 / 11 (64 bits).",
+        "download.macDesc": "Compatible con macOS 11.0 Big Sur o superior.",
+        "download.linuxDesc": "Compatible con Ubuntu, Debian, Arch, Fedora y otros.",
+        "download.recommended": "Recomendado",
+        "download.allWinReleases": "Ver todos los archivos de Windows en GitHub →",
+        "download.allMacReleases": "Ver todos los archivos de macOS en GitHub →",
+        "download.allLinuxReleases": "Ver todos los archivos de Linux en GitHub →",
+        "download.viewChangelog": "Notas de la versión ↗",
+        "arch.title": "Arquitectura limpia y de alto rendimiento",
+        "arch.desc": "Estructura modular en Rust para cero fugas de memoria y consultas SQLite en milisegundos.",
+        "shortcuts.title": "Atajos de teclado eficientes",
+        "shortcuts.desc": "Domine su flujo de trabajo de IA a máxima velocidad sin tocar el ratón.",
+        "shortcuts.quickLook": "Vista rápida / Pantalla completa",
+        "shortcuts.sidebar": "Alternar barra lateral",
+        "shortcuts.inspector": "Alternar panel inspector",
+        "shortcuts.filter": "Abrir panel de filtros",
+        "shortcuts.rating": "Calificar 1~5 estrellas",
+        "shortcuts.search": "Enfocar barra de búsqueda",
+        "faq.heading": "Preguntas frecuentes (FAQ)",
+        "faq.subheading": "Todo lo que necesita saber sobre Berry AIGC Toolbox.",
+        "faq.q1": "¿Se sube alguna imagen o prompt a la nube?",
+        "faq.a1": "No, absolutamente no. Berry AIGC Toolbox es 100% local y funciona totalmente sin conexión.",
+        "faq.q2": "¿Puedo arrastrar imágenes directamente a ComfyUI o WebUI?",
+        "faq.a2": "¡Sí! Soporta arrastrar y soltar nativo del sistema para restaurar flujos de trabajo y parámetros de inmediato.",
+        "faq.q3": "¿Cómo es el rendimiento con más de 50.000 imágenes?",
+        "faq.a3": "Con el renderizado virtual y el procesamiento en segundo plano con 2 hilos, funciona fluido incluso con 100.000 imágenes.",
+        "faq.q4": "¿Es gratis y de código abierto?",
+        "faq.a4": "¡Sí! Berry AIGC Toolbox tiene licencia AGPL-3.0 y es totalmente libre y gratuito."
+      }
+    };
+
+    // Current Language & State
+    let currentLang = localStorage.getItem("berry_site_lang") || "en";
+    let latestVersion = "v0.1.1";
+    let releaseAssets = [];
+
+    // Language Switcher Toggle
+    const langBtn = document.getElementById("langBtn");
+    const langMenu = document.getElementById("langMenu");
+    const langLabel = document.getElementById("langLabel");
+
+    langBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      langMenu.classList.toggle("hidden");
+    });
+
+    document.addEventListener("click", () => {
+      langMenu.classList.add("hidden");
+    });
+
+    function setLang(lang) {
+      if (!i18n[lang]) lang = "en";
+      currentLang = lang;
+      localStorage.setItem("berry_site_lang", lang);
+
+      // Update langLabel text
+      const labels = {
+        en: "English",
+        "zh-CN": "简体中文",
+        "zh-TW": "繁體中文",
+        ja: "日本語",
+        de: "Deutsch",
+        fr: "Français",
+        es: "Español"
+      };
+      langLabel.textContent = labels[lang] || "English";
+
+      // Apply translations to DOM
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (i18n[lang] && i18n[lang][key]) {
+          el.textContent = i18n[lang][key];
+        }
+      });
+
+      // Highlight active in menu
+      document.querySelectorAll(".lang-opt").forEach((btn) => {
+        const optLang = btn.getAttribute("data-lang");
+        if (optLang === lang) {
+          btn.classList.add("text-[#67e8f9]", "font-semibold");
+          btn.classList.remove("text-[#cbd5e1]");
+        } else {
+          btn.classList.remove("text-[#67e8f9]", "font-semibold");
+          btn.classList.add("text-[#cbd5e1]");
+        }
+      });
+
+      // Update dynamic smart download button text
+      updateSmartDownloadCTA();
+    }
+
+    // Interactive Preview Theme Switcher
+    function switchPreviewTheme(theme) {
+      const img = document.getElementById("previewImg");
+      const darkBtn = document.getElementById("themeDarkBtn");
+      const lightBtn = document.getElementById("themeLightBtn");
+
+      if (theme === "light") {
+        img.src = "gui_preview_light.svg";
+        lightBtn.className = "px-3 py-1 rounded-md text-[12px] font-semibold bg-[#12b5cb] text-black transition-colors";
+        darkBtn.className = "px-3 py-1 rounded-md text-[12px] font-medium text-[#94a3b8] hover:text-white transition-colors";
+      } else {
+        img.src = "gui_preview_dark.svg";
+        darkBtn.className = "px-3 py-1 rounded-md text-[12px] font-semibold bg-[#12b5cb] text-black transition-colors";
+        lightBtn.className = "px-3 py-1 rounded-md text-[12px] font-medium text-[#94a3b8] hover:text-white transition-colors";
+      }
+    }
+
+    // Client OS Detection Logic
+    function detectClientOS() {
+      const ua = navigator.userAgent.toLowerCase();
+      const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
+
+      if (platform.includes("win") || ua.includes("windows")) {
+        return { os: "windows", arch: "x64", icon: "🪟", name: "Windows" };
+      }
+      if (platform.includes("mac") || ua.includes("macintosh") || ua.includes("mac os")) {
+        // Distinguish Apple Silicon (aarch64 / arm64) from Intel x64
+        const isArm = ua.includes("arm") || (navigator.userAgentData?.architecture === "arm") || navigator.maxTouchPoints > 0;
+        return {
+          os: "macos",
+          arch: isArm ? "arm64" : "x64",
+          icon: "🍎",
+          name: isArm ? "macOS (Apple Silicon)" : "macOS (Intel)"
+        };
+      }
+      if (platform.includes("linux") || ua.includes("linux")) {
+        return { os: "linux", arch: "x64", icon: "🐧", name: "Linux" };
+      }
+      return { os: "windows", arch: "x64", icon: "🪟", name: "Windows" };
+    }
+
+    function updateSmartDownloadCTA() {
+      const client = detectClientOS();
+      const titleEl = document.getElementById("smartDownloadTitle");
+      const subEl = document.getElementById("smartDownloadSubtitle");
+      const iconEl = document.getElementById("smartOsIcon");
+      const btnEl = document.getElementById("smartDownloadBtn");
+
+      iconEl.textContent = client.icon;
+
+      let fileFormatHint = "Installer (.msi / .exe)";
+      let directUrl = `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest`;
+
+      if (client.os === "windows") {
+        fileFormatHint = `${latestVersion} · Installer (.msi / .exe)`;
+        // Find matching Windows msi or exe in releaseAssets if available
+        const matched = releaseAssets.find(a => a.name.endsWith(".msi") || a.name.endsWith(".exe"));
+        if (matched) directUrl = matched.browser_download_url;
+      } else if (client.os === "macos") {
+        fileFormatHint = client.arch === "arm64" ? `${latestVersion} · Apple Silicon (.dmg)` : `${latestVersion} · Intel x64 (.dmg)`;
+        const matched = releaseAssets.find(a => a.name.endsWith(".dmg") || a.name.endsWith(".tar.gz"));
+        if (matched) directUrl = matched.browser_download_url;
+      } else if (client.os === "linux") {
+        fileFormatHint = `${latestVersion} · Universal AppImage (.AppImage / .deb)`;
+        const matched = releaseAssets.find(a => a.name.endsWith(".AppImage") || a.name.endsWith(".deb"));
+        if (matched) directUrl = matched.browser_download_url;
+      }
+
+      btnEl.href = directUrl;
+
+      const titles = {
+        en: `Download for ${client.name}`,
+        "zh-CN": `下载 ${client.name} 版`,
+        "zh-TW": `下載 ${client.name} 版`,
+        ja: `${client.name} 版をダウンロード`,
+        de: `Download für ${client.name}`,
+        fr: `Télécharger pour ${client.name}`,
+        es: `Descargar para ${client.name}`
+      };
+
+      titleEl.textContent = titles[currentLang] || `Download for ${client.name}`;
+      subEl.textContent = fileFormatHint;
+    }
+
+    // Dynamic GitHub Releases Live Query
+    async function fetchLatestGitHubRelease() {
+      try {
+        const resp = await fetch("https://api.github.com/repos/BerryUIKI/Berry-AIGC-Toolbox/releases/latest");
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.tag_name) {
+            latestVersion = data.tag_name;
+            releaseAssets = data.assets || [];
+
+            // Update version badges across page
+            document.getElementById("headerVersionBadge").textContent = latestVersion;
+            document.getElementById("heroReleaseTag").textContent = `${latestVersion} Released · AGPL-3.0 Open Source`;
+            document.getElementById("releaseInfoTitle").textContent = `Latest Release: ${latestVersion}`;
+            
+            if (data.published_at) {
+              const d = new Date(data.published_at);
+              document.getElementById("releaseInfoDate").textContent = `Published on ${d.toLocaleDateString()} · Tauri 2.11 + Rust 1.85 + Vue 3.5`;
+            }
+
+            // Link specific download buttons if asset matches
+            releaseAssets.forEach((asset) => {
+              const name = asset.name.toLowerCase();
+              if (name.endsWith(".msi")) {
+                const el = document.getElementById("winMsiBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".exe")) {
+                const el = document.getElementById("winExeBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".zip") && name.includes("win")) {
+                const el = document.getElementById("winZipBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".dmg") && (name.includes("aarch64") || name.includes("arm64"))) {
+                const el = document.getElementById("macArmBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".dmg") && (name.includes("x64") || name.includes("x86_64"))) {
+                const el = document.getElementById("macIntelBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".appimage")) {
+                const el = document.getElementById("linuxAppImageBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".deb")) {
+                const el = document.getElementById("linuxDebBtn");
+                if (el) el.href = asset.browser_download_url;
+              }
+            });
+
+            updateSmartDownloadCTA();
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query GitHub Releases API (rate-limited or offline), using fallback v0.1.1 assets:", err);
+      }
+    }
+
+    // Auto Language Initialization
+    function autoInitLanguage() {
+      const saved = localStorage.getItem("berry_site_lang");
+      if (saved && i18n[saved]) {
+        setLang(saved);
+        return;
+      }
+      const navLang = (navigator.language || navigator.userLanguage || "en").toLowerCase();
+      if (navLang.startsWith("zh-tw") || navLang.startsWith("zh-hk") || navLang.startsWith("zh-mo")) {
+        setLang("zh-TW");
+      } else if (navLang.startsWith("zh")) {
+        setLang("zh-CN");
+      } else if (navLang.startsWith("ja")) {
+        setLang("ja");
+      } else if (navLang.startsWith("de")) {
+        setLang("de");
+      } else if (navLang.startsWith("fr")) {
+        setLang("fr");
+      } else if (navLang.startsWith("es")) {
+        setLang("es");
+      } else {
+        setLang("en");
+      }
+    }
+
+    // Run on startup
+    autoInitLanguage();
+    fetchLatestGitHubRelease();
+  </script>
+</body>
+</html>

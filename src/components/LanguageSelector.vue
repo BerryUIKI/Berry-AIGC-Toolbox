@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { currentLocale, setLocale, SUPPORTED_LOCALES, type LocaleKey } from "../i18n";
+import { currentLocaleSetting, setLocale, SUPPORTED_LOCALES, type LocaleSetting } from "../i18n";
 
 const open = ref(false);
 
-function select(locale: LocaleKey) {
+function select(locale: LocaleSetting) {
   setLocale(locale);
   open.value = false;
 }
@@ -20,7 +20,7 @@ function select(locale: LocaleKey) {
       @click="open = !open"
     >
       <span class="globe-icon">🌐</span>
-      <span class="current-lang-text">{{ SUPPORTED_LOCALES.find(l => l.key === currentLocale)?.label }}</span>
+      <span class="current-lang-text">{{ SUPPORTED_LOCALES.find(l => l.key === currentLocaleSetting)?.label }}</span>
       <span class="arrow-indicator">▾</span>
     </button>
 
@@ -30,11 +30,11 @@ function select(locale: LocaleKey) {
         :key="item.key"
         type="button"
         class="lang-item"
-        :class="{ active: item.key === currentLocale }"
+        :class="{ active: item.key === currentLocaleSetting }"
         @click="select(item.key)"
       >
         <span class="lang-label">{{ item.label }}</span>
-        <span v-if="item.key === currentLocale" class="check">✓</span>
+        <span v-if="item.key === currentLocaleSetting" class="check">✓</span>
       </button>
     </div>
   </div>

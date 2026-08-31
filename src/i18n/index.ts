@@ -8,16 +8,18 @@ import { fr } from "./locales/fr";
 import { es } from "./locales/es";
 
 export type LocaleKey = "en" | "zh-CN" | "zh-TW" | "ja" | "de" | "fr" | "es";
+export type LocaleSetting = "auto" | LocaleKey;
 
 export interface LocaleOption {
-  key: LocaleKey;
+  key: LocaleSetting;
   label: string;
 }
 
 export const SUPPORTED_LOCALES: LocaleOption[] = [
-  { key: "en", label: "English" },
+  { key: "auto", label: "Auto (跟随系统 / System)" },
   { key: "zh-CN", label: "简体中文" },
   { key: "zh-TW", label: "繁體中文" },
+  { key: "en", label: "English" },
   { key: "ja", label: "日本語" },
   { key: "de", label: "Deutsch" },
   { key: "fr", label: "Français" },
@@ -34,13 +36,9 @@ const messages: Record<LocaleKey, typeof en> = {
   es,
 };
 
-function getInitialLocale(): LocaleKey {
+export function getSystemLocale(): LocaleKey {
   try {
-    const saved = localStorage.getItem("berry_locale") as LocaleKey;
-    if (saved && saved in messages) {
-      return saved;
-    }
-    const navLang = navigator.language;
+    const navLang = navigator.language || "";
     if (navLang.startsWith("zh-TW") || navLang.startsWith("zh-HK")) return "zh-TW";
     if (navLang.startsWith("zh")) return "zh-CN";
     if (navLang.startsWith("ja")) return "ja";
@@ -53,12 +51,31 @@ function getInitialLocale(): LocaleKey {
   return "en";
 }
 
-export const currentLocale = ref<LocaleKey>(getInitialLocale());
-
-export function setLocale(locale: LocaleKey) {
-  currentLocale.value = locale;
+function getInitialSetting(): LocaleSetting {
   try {
-    localStorage.setItem("berry_locale", locale);
+    const saved = localStorage.getItem("berry_locale") as LocaleSetting;
+    if (saved && (saved === "auto" || saved in messages)) {
+      return saved;
+    }
+  } catch {
+    // fallback
+  }
+  return "auto";
+}
+
+export const currentLocaleSetting = ref<LocaleSetting>(getInitialSetting());
+
+export const currentLocale = computed<LocaleKey>(() => {
+  if (currentLocaleSetting.value === "auto") {
+    return getSystemLocale();
+  }
+  return currentLocaleSetting.value;
+});
+
+export function setLocale(setting: LocaleSetting) {
+  currentLocaleSetting.value = setting;
+  try {
+    localStorage.setItem("berry_locale", setting);
   } catch {
     // ignore
   }

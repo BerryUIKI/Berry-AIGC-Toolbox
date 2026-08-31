@@ -4,6 +4,7 @@ import {
   assetUrl,
   formatBytes,
   formatDateTime,
+  formatPlatformName,
   getFileName,
   normalizePath,
 } from "../utils/image";
@@ -98,7 +99,7 @@ function size(meta: ImageFile["metadata"]): string {
             <td>{{ formatBytes(file.size_bytes) }}</td>
             <td class="date">{{ formatDateTime(file.modified_at) }}</td>
             <td>
-              <span v-if="file.metadata" class="format">{{ file.metadata.format }}</span>
+              <span v-if="file.metadata" class="format">{{ formatPlatformName(file.metadata.format) }}</span>
               <span v-else class="none">—</span>
             </td>
             <td class="prompt" :title="file.metadata?.prompt ?? ''">
@@ -116,19 +117,32 @@ function size(meta: ImageFile["metadata"]): string {
 </template>
 
 <style scoped>
+.files {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .empty {
-  color: #888;
-  font-size: 0.9em;
+  color: #71717a;
+  font-size: 0.85em;
+  padding: 2rem;
+  text-align: center;
 }
 
 .scroll {
-  overflow-x: auto;
+  flex: 1;
+  overflow: auto;
+  width: 100%;
+  height: 100%;
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.9em;
+  font-size: 0.82em;
 }
 
 .table th,

@@ -41,3 +41,21 @@ export function formatDateTime(unixSeconds: number): string {
   if (!unixSeconds) return "—";
   return new Date(unixSeconds * 1000).toLocaleString();
 }
+
+/**
+ * Friendly platform name mapping for image generators:
+ * maps 'a1111' / 'A1111' -> 'WebUI', 'comfyui' -> 'ComfyUI', etc.
+ */
+export function formatPlatformName(format: string | null | undefined): string {
+  if (!format) return "";
+  const lower = format.toLowerCase();
+  if (lower === "a1111" || lower === "automatic1111") return "WebUI";
+  if (lower === "comfyui") return "ComfyUI";
+  if (lower === "novelai") return "NovelAI";
+  if (lower === "fooocus" || lower === "fooocusmre") return "Fooocus";
+  if (lower === "invokeai") return "InvokeAI";
+  if (lower === "easydiffusion") return "EasyDiffusion";
+  if (lower === "stableswarm") return "StableSwarm";
+  if (lower === "sd" || lower === "stablediffusion") return "SD";
+  return format;
+}

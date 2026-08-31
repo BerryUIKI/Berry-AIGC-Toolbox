@@ -1,0 +1,940 @@
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import type { ImageFile, Tag } from "../types";
+import { assetUrl, formatBytes, formatPlatformName, getFileName, normalizePath } from "../utils/image";
+
+const props = defineProps<{
+  file: ImageFile | null;
+  selectedCount?: number;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  openLightbox: [file: ImageFile];
+  openTagModal: [fileId: number];
+  openAlbumModal: [fileId: number];
+  updateFile: [file: ImageFile];
+  filterByModel: [model: string];
+  filterByHash: [hash: string];
+}>();
+
+const fileTags = ref<Tag[]>([]);
+const promptCopied = ref(false);
+const negativePromptCopied = ref(false);
+const seedCopied = ref(false);
+const rawCopied = ref(false);
+const showRaw = ref(false);
+const revealedNsfw = ref(false);
+
+watch(
+  () => props.file?.id,
+  () => {
+    revealedNsfw.value = false;
+    loadTags();
+  },
+  { immediate: true },
+);
+
+async function loadTags() {
+  if (!props.file?.id) {
+    fileTags.value = [];
+    return;
+  }
+  try {
+    fileTags.value = await invoke<Tag[]>("get_file_tags", { fileId: props.file.id });
+  } catch (err) {
+    console.error("Failed to load tags:", err);
+  }
+}
+
+async function toggleFavorite() {
+  if (!props.file?.id) return;
+  const nextVal = !props.file.is_favorite;
+  try {
+    await invoke("set_file_favorite", { fileId: props.file.id, isFavorite: nextVal });
+    props.file.is_favorite = nextVal;
+    emit("updateFile", props.file);
+  } catch (err) {
+    console.error("Failed to toggle favorite:", err);
+  }
+}
+
+async function toggleNsfw() {
+  if (!props.file?.id) return;
+  const nextVal = !props.file.is_nsfw;
+  try {
+    await invoke("set_file_nsfw", { fileId: props.file.id, isNsfw: nextVal });
+    props.file.is_nsfw = nextVal;
+    emit("updateFile", props.file);
+  } catch (err) {
+    console.error("Failed to toggle nsfw:", err);
+  }
+}
+
+async function setRating(r: number) {
+  if (!props.file?.id) return;
+  const newRating = props.file.rating === r ? null : r;
+  try {
+    await invoke("set_file_rating", { fileId: props.file.id, rating: newRating });
+    props.file.rating = newRating ?? undefined;
+    emit("updateFile", props.file);
+  } catch (err) {
+    console.error("Failed to set rating:", err);
+  }
+}
+
+async function removeTag(tagId: number) {
+  if (!props.file?.id) return;
+  try {
+    await invoke("untag_file", { fileId: props.file.id, tagId });
+    await loadTags();
+  } catch (err) {
+    console.error("Failed to remove tag:", err);
+  }
+}
+
+async function copyText(text: string, type: "prompt" | "negative" | "seed" | "raw") {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    if (type === "prompt") {
+      promptCopied.value = true;
+      setTimeout(() => (promptCopied.value = false), 1500);
+    } else if (type === "negative") {
+      negativePromptCopied.value = true;
+      setTimeout(() => (negativePromptCopied.value = false), 1500);
+    } else if (type === "seed") {
+      seedCopied.value = true;
+      setTimeout(() => (seedCopied.value = false), 1500);
+    } else if (type === "raw") {
+      rawCopied.value = true;
+      setTimeout(() => (rawCopied.value = false), 1500);
+    }
+  } catch (err) {
+    console.error("Failed to copy:", err);
+  }
+}
+
+const promptTokens = computed(() => {
+  const p = props.file?.metadata?.prompt;
+  if (!p) return [];
+  return p
+    .split(",")
+    .map((token: string) => token.trim())
+    .filter(Boolean);
+});
+</script>
+
+<template>
+  <aside class="inspector-eagle">
+    <!-- Header -->
+    <div class="inspector-header">
+      <div class="header-left">
+        <span class="inspector-title">检查器</span>
+        <span v-if="selectedCount && selectedCount > 1" class="multi-badge">
+          已选 {{ selectedCount }} 项
+        </span>
+      </div>
+      <button
+        type="button"
+        class="close-btn"
+        title="关闭检查器 (I)"
+        @click="emit('close')"
+      >
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+          <path d="M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.75.75 0 1 1 1.06 1.06L9.06 8l3.22 3.22a.75.75 0 1 1-1.06 1.06L8 9.06l-3.22 3.22a.75.75 0 0 1-1.06-1.06L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06z"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div v-if="!file" class="empty-inspector">
+      <span class="empty-icon">🖼️</span>
+      <p class="empty-text">未选择图片</p>
+      <span class="empty-sub">点击画廊中的任意图片查看详细 AIGC 元数据与生成参数</span>
+    </div>
+
+    <!-- Content when file selected -->
+    <div v-else class="inspector-scrollable">
+      <!-- Thumbnail & Quick Lightbox Trigger (Eagle Style) -->
+      <div class="preview-card" @click="emit('openLightbox', file)">
+        <div class="img-wrapper">
+          <img
+            :src="assetUrl(file.path)"
+            :alt="getFileName(file.path)"
+            :class="{ blurred: file.is_nsfw && !revealedNsfw }"
+            loading="lazy"
+          />
+          <div
+            v-if="file.is_nsfw && !revealedNsfw"
+            class="nsfw-overlay"
+            @click.stop="revealedNsfw = true"
+          >
+            <span>🔞 点击查看敏感内容</span>
+          </div>
+          <div class="expand-badge" title="全屏预览 (Space / Enter)">
+            🔍 预览
+          </div>
+        </div>
+
+        <div class="file-main-info">
+          <h4 class="file-name" :title="getFileName(file.path)">
+            {{ getFileName(file.path) }}
+          </h4>
+          <div class="file-meta-tags">
+            <span class="meta-tag uppercase">{{ formatPlatformName(file.metadata?.format) || file.container }}</span>
+            <span v-if="file.metadata?.width && file.metadata?.height" class="meta-tag">
+              {{ file.metadata.width }} × {{ file.metadata.height }}
+            </span>
+            <span v-if="file.size_bytes" class="meta-tag">
+              {{ formatBytes(file.size_bytes) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions (Rating, Fav, NSFW, Album, Tag) -->
+      <div class="quick-actions-bar">
+        <!-- Stars -->
+        <div class="rating-stars" title="评分 (快捷键 0-5)">
+          <button
+            v-for="star in 5"
+            :key="star"
+            type="button"
+            class="star-btn"
+            :class="{ active: (file.rating ?? 0) >= star }"
+            @click="setRating(star)"
+          >
+            ★
+          </button>
+        </div>
+
+        <div class="action-btn-group">
+          <!-- Favorite -->
+          <button
+            type="button"
+            class="action-btn"
+            :class="{ active: file.is_favorite }"
+            :title="file.is_favorite ? '取消收藏 (F)' : '加入收藏 (F)'"
+            @click="toggleFavorite"
+          >
+            {{ file.is_favorite ? '❤️' : '🤍' }}
+          </button>
+
+          <!-- NSFW -->
+          <button
+            type="button"
+            class="action-btn"
+            :class="{ active: file.is_nsfw }"
+            :title="file.is_nsfw ? '标记为安全' : '标记为敏感内容'"
+            @click="toggleNsfw"
+          >
+            🔞
+          </button>
+
+          <!-- Album -->
+          <button
+            type="button"
+            class="action-btn"
+            title="添加到相册"
+            @click="file.id && emit('openAlbumModal', file.id)"
+          >
+            🗂️
+          </button>
+
+          <!-- Tag -->
+          <button
+            type="button"
+            class="action-btn"
+            title="添加标签"
+            @click="file.id && emit('openTagModal', file.id)"
+          >
+            🏷️
+          </button>
+        </div>
+      </div>
+
+      <!-- Tags Section -->
+      <div v-if="fileTags.length > 0" class="section tags-section">
+        <div class="section-header">
+          <span class="section-title">标签</span>
+        </div>
+        <div class="tag-chips">
+          <span
+            v-for="tag in fileTags"
+            :key="tag.id"
+            class="tag-pill"
+            :style="{ borderColor: tag.color || '#8b5cf6' }"
+          >
+            <span class="tag-dot" :style="{ backgroundColor: tag.color || '#8b5cf6' }"></span>
+            {{ tag.name }}
+            <button
+              type="button"
+              class="tag-del-btn"
+              title="移除标签"
+              @click="removeTag(tag.id)"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      </div>
+
+      <!-- Prompts Section -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">提示词 (Prompt)</span>
+          <button
+            v-if="file.metadata?.prompt"
+            type="button"
+            class="copy-btn"
+            @click="copyText(file.metadata.prompt, 'prompt')"
+          >
+            {{ promptCopied ? '已复制 ✓' : '复制' }}
+          </button>
+        </div>
+        <div v-if="file.metadata?.prompt" class="prompt-box">
+          <p class="prompt-text">{{ file.metadata.prompt }}</p>
+          <div v-if="promptTokens.length > 0" class="token-chips">
+            <span v-for="(token, i) in promptTokens.slice(0, 16)" :key="i" class="token-chip">
+              {{ token }}
+            </span>
+            <span v-if="promptTokens.length > 16" class="token-more">
+              +{{ promptTokens.length - 16 }} 项
+            </span>
+          </div>
+        </div>
+        <p v-else class="empty-field">无正向提示词元数据</p>
+      </div>
+
+      <!-- Negative Prompt Section -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">负向提示词 (Negative)</span>
+          <button
+            v-if="file.metadata?.negative_prompt"
+            type="button"
+            class="copy-btn"
+            @click="copyText(file.metadata.negative_prompt, 'negative')"
+          >
+            {{ negativePromptCopied ? '已复制 ✓' : '复制' }}
+          </button>
+        </div>
+        <div v-if="file.metadata?.negative_prompt" class="prompt-box negative">
+          <p class="prompt-text">{{ file.metadata.negative_prompt }}</p>
+        </div>
+        <p v-else class="empty-field">无负向提示词</p>
+      </div>
+
+      <!-- Generation Parameters Section -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">生成参数</span>
+        </div>
+
+        <div class="params-grid">
+          <!-- Model -->
+          <div v-if="file.metadata?.model_name" class="param-row full-width">
+            <span class="param-label">模型</span>
+            <div class="param-value-box">
+              <span class="param-val truncate" :title="file.metadata.model_name">
+                {{ file.metadata.model_name }}
+              </span>
+              <button
+                type="button"
+                class="filter-icon-btn"
+                title="以此模型筛选"
+                @click="emit('filterByModel', file.metadata!.model_name!)"
+              >
+                🔍
+              </button>
+            </div>
+          </div>
+
+          <!-- Model Hash -->
+          <div v-if="file.metadata?.model_hash" class="param-row">
+            <span class="param-label">Hash</span>
+            <div class="param-value-box">
+              <span class="param-val">{{ file.metadata.model_hash }}</span>
+              <button
+                type="button"
+                class="filter-icon-btn"
+                title="以此 Hash 筛选"
+                @click="emit('filterByHash', file.metadata!.model_hash!)"
+              >
+                🔍
+              </button>
+            </div>
+          </div>
+
+          <!-- Sampler -->
+          <div v-if="file.metadata?.sampler" class="param-row">
+            <span class="param-label">采样器</span>
+            <span class="param-val">{{ file.metadata.sampler }}</span>
+          </div>
+
+          <!-- Steps -->
+          <div v-if="file.metadata?.steps != null" class="param-row">
+            <span class="param-label">步数</span>
+            <span class="param-val">{{ file.metadata.steps }}</span>
+          </div>
+
+          <!-- CFG Scale -->
+          <div v-if="file.metadata?.cfg_scale != null" class="param-row">
+            <span class="param-label">CFG</span>
+            <span class="param-val">{{ file.metadata.cfg_scale }}</span>
+          </div>
+
+          <!-- Seed -->
+          <div v-if="file.metadata?.seed != null" class="param-row">
+            <span class="param-label">种子 (Seed)</span>
+            <div class="param-value-box">
+              <span class="param-val">{{ file.metadata.seed }}</span>
+              <button
+                type="button"
+                class="filter-icon-btn"
+                title="复制种子"
+                @click="copyText(String(file.metadata!.seed), 'seed')"
+              >
+                {{ seedCopied ? '✓' : '📋' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Path & Location -->
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">文件路径</span>
+        </div>
+        <p class="file-path-text" :title="file.path">{{ normalizePath(file.path) }}</p>
+      </div>
+
+      <!-- Raw Metadata / Workflow JSON -->
+      <div v-if="file.metadata?.raw" class="section">
+        <div class="section-header cursor-pointer" @click="showRaw = !showRaw">
+          <span class="section-title">原始工作流 / 元数据</span>
+          <div class="header-right-actions">
+            <button
+              type="button"
+              class="copy-btn"
+              @click.stop="copyText(file.metadata!.raw!, 'raw')"
+            >
+              {{ rawCopied ? '已复制 ✓' : '复制 Raw' }}
+            </button>
+            <span class="collapse-icon">{{ showRaw ? '▲' : '▼' }}</span>
+          </div>
+        </div>
+        <pre v-if="showRaw" class="raw-box">{{ file.metadata.raw }}</pre>
+      </div>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+.inspector-eagle {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  flex-shrink: 0;
+  height: 100%;
+  background: #17171a;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  overflow: hidden;
+}
+
+.inspector-header {
+  height: 42px;
+  min-height: 42px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.multi-badge {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.empty-inspector {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  text-align: center;
+  gap: 8px;
+}
+
+.empty-icon {
+  font-size: 2.2rem;
+  opacity: 0.3;
+}
+
+.empty-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.empty-sub {
+  font-size: 0.74rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.inspector-scrollable {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inspector-scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+.inspector-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.preview-card {
+  border-radius: 8px;
+  background: #202024;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preview-card:hover {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.img-wrapper {
+  position: relative;
+  width: 100%;
+  height: 170px;
+  background: #0f0f12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.img-wrapper img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+}
+
+.preview-card:hover .img-wrapper img {
+  transform: scale(1.03);
+}
+
+.img-wrapper img.blurred {
+  filter: blur(20px);
+}
+
+.nsfw-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f87171;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.expand-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.preview-card:hover .expand-badge {
+  opacity: 1;
+}
+
+.file-main-info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.meta-tag {
+  font-size: 0.66rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #94a3b8;
+}
+
+.meta-tag.uppercase {
+  text-transform: uppercase;
+}
+
+.quick-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #202024;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.rating-stars {
+  display: flex;
+  gap: 1px;
+}
+
+.star-btn {
+  background: transparent;
+  border: none;
+  color: #475569;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0 1px;
+  transition: all 0.1s;
+}
+
+.star-btn:hover {
+  transform: scale(1.15);
+  color: #fbbf24;
+}
+
+.star-btn.active {
+  color: #f59e0b;
+}
+
+.action-btn-group {
+  display: flex;
+  gap: 3px;
+}
+
+.action-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.action-btn.active {
+  background: rgba(236, 72, 153, 0.2);
+  border-color: rgba(236, 72, 153, 0.4);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-header.cursor-pointer {
+  cursor: pointer;
+}
+
+.section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.copy-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 4px;
+  font-size: 0.66rem;
+  color: #cbd5e1;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.copy-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.prompt-box {
+  background: #202024;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 0.76rem;
+  color: #e2e8f0;
+  line-height: 1.45;
+  user-select: text;
+}
+
+.prompt-box.negative {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.prompt-text {
+  margin: 0;
+  word-break: break-word;
+}
+
+.token-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.token-chip {
+  font-size: 0.66rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #c4b5fd;
+}
+
+.token-more {
+  font-size: 0.66rem;
+  color: #64748b;
+}
+
+.empty-field {
+  font-size: 0.72rem;
+  color: #475569;
+  font-style: italic;
+  margin: 0;
+}
+
+.params-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5px;
+}
+
+.param-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: #202024;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.param-row.full-width {
+  grid-column: span 2;
+}
+
+.param-label {
+  font-size: 0.64rem;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.param-value-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.param-val {
+  font-size: 0.76rem;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.param-val.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-icon-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.6;
+  transition: opacity 0.1s;
+}
+
+.filter-icon-btn:hover {
+  opacity: 1;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid;
+  color: #f1f5f9;
+}
+
+.tag-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.tag-del-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.tag-del-btn:hover {
+  color: #ef4444;
+}
+
+.file-path-text {
+  font-size: 0.7rem;
+  font-family: monospace;
+  color: #64748b;
+  word-break: break-all;
+  margin: 0;
+  background: #202024;
+  padding: 5px 7px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.header-right-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.collapse-icon {
+  font-size: 0.64rem;
+  color: #64748b;
+}
+
+.raw-box {
+  margin: 0;
+  padding: 8px;
+  background: #111114;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #94a3b8;
+  font-family: monospace;
+  font-size: 0.66rem;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: text;
+}
+</style>

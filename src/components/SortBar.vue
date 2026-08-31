@@ -26,83 +26,75 @@ function toggleDirection() {
 </script>
 
 <template>
-  <div class="sort-bar">
-    <label class="sort-label">
-      <span class="label-text">Sort:</span>
-      <select :value="sortField" class="sort-select" @change="onFieldChange">
-        <option value="modified_at">Date</option>
-        <option value="path">Name</option>
-        <option value="size_bytes">Size</option>
-        <option value="rating">Rating</option>
-        <option value="aesthetic_score">Aesthetic</option>
-      </select>
-    </label>
+  <div class="sort-bar-eagle">
+    <select :value="sortField" class="sort-select" title="排序方式" @change="onFieldChange">
+      <option value="modified_at">时间</option>
+      <option value="path">名称</option>
+      <option value="size_bytes">大小</option>
+      <option value="rating">评分</option>
+      <option value="aesthetic_score">美学评分</option>
+    </select>
 
     <button
       type="button"
       class="direction-btn"
-      :title="sortDirection === 'desc' ? 'Descending (High to Low)' : 'Ascending (Low to High)'"
+      :title="sortDirection === 'desc' ? '降序 (高到低)' : '升序 (低到高)'"
       @click="toggleDirection"
     >
-      {{ sortDirection === "desc" ? "↓ Desc" : "↑ Asc" }}
+      {{ sortDirection === "desc" ? "↓" : "↑" }}
     </button>
   </div>
 </template>
 
 <style scoped>
-.sort-bar {
+.sort-bar-eagle {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-}
-
-.sort-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.85em;
-  color: #666;
-}
-
-@media (prefers-color-scheme: dark) {
-  .sort-label {
-    color: #aaa;
-  }
+  gap: 3px;
+  flex-shrink: 0;
 }
 
 .sort-select {
   font: inherit;
-  font-size: 0.85em;
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  background: rgba(128, 128, 128, 0.06);
-  color: inherit;
+  font-size: 0.76rem;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #202024;
+  color: #d4d4d8;
   cursor: pointer;
   outline: none;
+  transition: all 0.12s ease;
+}
+
+.sort-select:hover {
+  background: #27272a;
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .sort-select:focus {
-  border-color: #2f6fed;
+  border-color: rgba(168, 85, 247, 0.5);
 }
 
 .direction-btn {
   font: inherit;
-  font-size: 0.85em;
-  padding: 0.3rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  background: rgba(128, 128, 128, 0.06);
-  color: inherit;
-  cursor: pointer;
+  font-size: 0.8rem;
+  height: 28px;
+  width: 28px;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  transition: all 0.15s ease;
+  justify-content: center;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #202024;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 
 .direction-btn:hover {
-  background: rgba(128, 128, 128, 0.12);
-  border-color: rgba(128, 128, 128, 0.4);
+  background: #27272a;
+  color: #f4f4f5;
 }
 </style>

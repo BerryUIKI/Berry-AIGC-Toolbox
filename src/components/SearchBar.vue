@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -9,7 +9,7 @@ const props = withDefaults(
     resultCount?: number | null;
   }>(),
   {
-    placeholder: "Search prompts, models, steps:>=20, rating:>=8... (Press / to focus)",
+    placeholder: "搜索提示词、模型、参数... (/ 聚焦)",
     loading: false,
     resultCount: null,
   },
@@ -61,7 +61,6 @@ function clear() {
   inputRef.value?.focus();
 }
 
-// Global hotkey: press '/' or 'Cmd+F' / 'Ctrl+F' to focus search input
 function handleGlobalKey(e: KeyboardEvent) {
   const tag = (document.activeElement?.tagName ?? "").toLowerCase();
   if (tag === "input" || tag === "textarea") return;
@@ -83,209 +82,115 @@ onUnmounted(() => {
     clearTimeout(debounceTimer);
   }
 });
-
-// Parse active chips for visual tags
-interface Chip {
-  raw: string;
-  label: string;
-}
-
-const chips = computed<Chip[]>(() => {
-  const q = localQuery.value.trim();
-  if (!q) return [];
-  const parts: Chip[] = [];
-
-  // Match tokens like key:"value" or key:value
-  const regex = /(\b[a-zA-Z_]+:(?:"[^"]*"|[^\s]+))/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(q)) !== null) {
-    const raw = match[1];
-    const colonIdx = raw.indexOf(":");
-    const key = raw.slice(0, colonIdx);
-    let val = raw.slice(colonIdx + 1);
-    if (val.startsWith('"') && val.endsWith('"')) {
-      val = val.slice(1, -1);
-    }
-    parts.push({
-      raw,
-      label: `${key}: ${val}`,
-    });
-  }
-
-  return parts;
-});
-
-function removeChip(chipRaw: string) {
-  let q = localQuery.value;
-  q = q.replace(chipRaw, "").replace(/\s{2,}/g, " ").trim();
-  localQuery.value = q;
-  emit("update:modelValue", q);
-  emit("search", q);
-}
 </script>
 
 <template>
-  <div class="search-bar-wrapper">
+  <div class="search-bar-eagle">
     <div class="search-box">
-      <span class="search-icon">🔍</span>
+      <span class="search-icon">
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor">
+          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+        </svg>
+      </span>
+
       <input
         ref="inputRef"
+        :value="localQuery"
         type="text"
         class="search-input"
-        :value="localQuery"
         :placeholder="placeholder"
         @input="onInput"
         @keydown.enter="onEnter"
-        @keydown.esc="clear"
       />
 
-      <span v-if="loading" class="spinner">⏳</span>
+      <span v-if="loading" class="spinner" title="搜索中...">⏳</span>
 
       <button
         v-if="localQuery"
         type="button"
         class="clear-btn"
-        title="Clear search (Esc)"
+        title="清除"
         @click="clear"
       >
         ✕
       </button>
     </div>
-
-    <!-- Active filter chips -->
-    <div v-if="chips.length > 0" class="chips-container">
-      <span
-        v-for="chip in chips"
-        :key="chip.raw"
-        class="search-chip"
-        :title="`Remove filter ${chip.label}`"
-      >
-        {{ chip.label }}
-        <button
-          type="button"
-          class="chip-remove-btn"
-          @click.stop="removeChip(chip.raw)"
-        >
-          ×
-        </button>
-      </span>
-    </div>
   </div>
 </template>
 
 <style scoped>
-.search-bar-wrapper {
+.search-bar-eagle {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  align-items: center;
   width: 100%;
+  min-width: 120px;
 }
 
 .search-box {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(128, 128, 128, 0.08);
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  border-radius: 8px;
-  padding: 0.4rem 0.75rem;
+  gap: 6px;
+  background: #202024;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 30px;
+  width: 100%;
   transition: all 0.15s ease;
 }
 
 .search-box:focus-within {
-  border-color: #2f6fed;
-  box-shadow: 0 0 0 2px rgba(47, 111, 237, 0.2);
-  background: rgba(128, 128, 128, 0.12);
+  border-color: rgba(168, 85, 247, 0.5);
+  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
+  background: #242428;
 }
 
 .search-icon {
-  font-size: 0.95em;
-  opacity: 0.7;
-  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #71717a;
+  flex-shrink: 0;
 }
 
 .search-input {
   flex: 1;
+  min-width: 0;
   border: none;
   background: transparent;
   outline: none;
   font: inherit;
-  font-size: 0.9em;
-  color: inherit;
+  font-size: 0.78rem;
+  color: #f1f5f9;
 }
 
 .search-input::placeholder {
-  color: #888;
+  color: #52525b;
 }
 
 .spinner {
-  font-size: 0.85em;
-  animation: pulse 1s infinite alternate;
-}
-
-@keyframes pulse {
-  from {
-    opacity: 0.4;
-  }
-  to {
-    opacity: 1;
-  }
+  font-size: 0.75rem;
+  flex-shrink: 0;
 }
 
 .clear-btn {
   background: transparent;
   border: none;
-  color: #888;
-  font-size: 0.9em;
+  color: #71717a;
+  font-size: 0.75rem;
   cursor: pointer;
-  padding: 0 0.2rem;
+  padding: 2px 4px;
   line-height: 1;
-  transition: color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
 }
 
 .clear-btn:hover {
-  color: #d33;
-}
-
-.chips-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.search-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.75em;
-  font-weight: 500;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  background: rgba(47, 111, 237, 0.12);
-  color: #2f6fed;
-  border: 1px solid rgba(47, 111, 237, 0.25);
-}
-
-@media (prefers-color-scheme: dark) {
-  .search-chip {
-    background: rgba(47, 111, 237, 0.2);
-    color: #60a5fa;
-  }
-}
-
-.chip-remove-btn {
-  background: transparent;
-  border: none;
-  font-size: 1em;
-  line-height: 1;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-  opacity: 0.7;
-}
-
-.chip-remove-btn:hover {
-  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f87171;
 }
 </style>

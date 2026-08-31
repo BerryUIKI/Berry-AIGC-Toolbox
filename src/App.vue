@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   Album,
@@ -15,13 +16,16 @@ import type {
   SortDirection,
   Tag,
 } from "./types";
-import FolderPicker from "./components/FolderPicker.vue";
-import FolderList from "./components/FolderList.vue";
+import TitleBar from "./components/TitleBar.vue";
+import MenuBar from "./components/MenuBar.vue";
+import Sidebar from "./components/Sidebar.vue";
 import FileList from "./components/FileList.vue";
 import VirtualGrid from "./components/VirtualGrid.vue";
 import SortBar from "./components/SortBar.vue";
-import PreviewPane from "./components/PreviewPane.vue";
 import SearchBar from "./components/SearchBar.vue";
+import InspectorPane from "./components/InspectorPane.vue";
+import LightboxModal from "./components/LightboxModal.vue";
+import StatusBar from "./components/StatusBar.vue";
 import FilterDrawer from "./components/FilterDrawer.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
 import AlbumModal from "./components/AlbumModal.vue";
@@ -31,7 +35,8 @@ import ModelManagerModal from "./components/ModelManagerModal.vue";
 import FileOperationModal from "./components/FileOperationModal.vue";
 import DatabaseManagerModal from "./components/DatabaseManagerModal.vue";
 import ShortcutsHelpModal from "./components/ShortcutsHelpModal.vue";
-import LanguageSelector from "./components/LanguageSelector.vue";
+import SettingsModal from "./components/SettingsModal.vue";
+import UpdateModal from "./components/UpdateModal.vue";
 import { t } from "./i18n";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 
@@ -45,6 +50,16 @@ const activeTarget = ref<NavTarget>({ type: "all" });
 const files = ref<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
+const gridItemWidth = ref(200);
+
+// UI Pane Toggles (Eagle Studio layout)
+const sidebarOpen = ref(true);
+const inspectorOpen = ref(true);
+const lightboxFile = ref<ImageFile | null>(null);
+
+// Modals
+const updateModalOpen = ref(false);
+const settingsModalOpen = ref(false);
 const filterDrawerOpen = ref(false);
 const promptStatsModalOpen = ref(false);
 const modelManagerModalOpen = ref(false);
@@ -57,16 +72,20 @@ const albumModalOpen = ref(false);
 const albumTargetFileIds = ref<number[]>([]);
 const tagModalOpen = ref(false);
 const tagTargetFileIds = ref<number[]>([]);
+
+// Filter Metadata
 const distinctModels = ref<string[]>([]);
 const distinctSamplers = ref<string[]>([]);
 const activeCriteria = ref<SearchCriteria>({});
 const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value));
+
+// Selection
 const selectedFile = ref<ImageFile | null>(null);
 const selectedFilePaths = ref<Set<string>>(new Set());
 const selectedFilesList = computed(() =>
   files.value.filter((f) => selectedFilePaths.value.has(f.path)),
 );
-const previewingFile = ref<ImageFile | null>(null);
+
 const viewMode = ref<"grid" | "table">("grid");
 const sortField = ref<FileSortField>("modified_at");
 const sortDirection = ref<SortDirection>("desc");
@@ -84,6 +103,13 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     return;
   }
 
+  // Settings Modal: Cmd+, / Ctrl+,
+  if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+    e.preventDefault();
+    settingsModalOpen.value = !settingsModalOpen.value;
+    return;
+  }
+
   // Help Modal: ?
   if (e.key === "?" || (e.shiftKey && e.key === "/")) {
     e.preventDefault();
@@ -94,9 +120,23 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   // Focus Search Bar: / or Cmd+F / Ctrl+F
   if (e.key === "/" || ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F"))) {
     e.preventDefault();
-    const searchInput = document.querySelector<HTMLInputElement>(".search-bar input");
+    const searchInput = document.querySelector<HTMLInputElement>(".search-bar-eagle input");
     searchInput?.focus();
     searchInput?.select();
+    return;
+  }
+
+  // Toggle Inspector: I / i (without ctrl/meta)
+  if ((e.key === "i" || e.key === "I") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    inspectorOpen.value = !inspectorOpen.value;
+    return;
+  }
+
+  // Toggle Sidebar: B / b (without ctrl/meta)
+  if ((e.key === "b" || e.key === "B") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    sidebarOpen.value = !sidebarOpen.value;
     return;
   }
 
@@ -107,8 +147,20 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     return;
   }
 
-  // Escape: Close modals or clear selection
+  // Escape: Close modals, lightbox, or clear selection
   if (e.key === "Escape") {
+    if (lightboxFile.value) {
+      lightboxFile.value = null;
+      return;
+    }
+    if (updateModalOpen.value) {
+      updateModalOpen.value = false;
+      return;
+    }
+    if (settingsModalOpen.value) {
+      settingsModalOpen.value = false;
+      return;
+    }
     if (shortcutsHelpModalOpen.value) {
       shortcutsHelpModalOpen.value = false;
       return;
@@ -147,17 +199,17 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     }
   }
 
-  // Open Preview / Inspector: Space or Enter
+  // Open Lightbox: Space or Enter
   if (e.key === " " || e.key === "Enter") {
-    if (!previewingFile.value && (selectedFile.value || selectedFilesList.value.length > 0)) {
+    if (!lightboxFile.value && (selectedFile.value || selectedFilesList.value.length > 0)) {
       e.preventDefault();
-      previewingFile.value = selectedFile.value || selectedFilesList.value[0];
+      lightboxFile.value = selectedFile.value || selectedFilesList.value[0];
       return;
     }
   }
 
   // Star Ratings: 1 - 5 (or 0 to clear)
-  if (["0", "1", "2", "3", "4", "5"].includes(e.key)) {
+  if (["0", "1", "2", "3", "4", "5"].includes(e.key) && !lightboxFile.value) {
     const targetFile =
       selectedFile.value || (selectedFilesList.value.length > 0 ? selectedFilesList.value[0] : null);
     if (targetFile && targetFile.id != null) {
@@ -174,7 +226,7 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   }
 
   // Favorite toggle: F
-  if (e.key === "f" || e.key === "F") {
+  if ((e.key === "f" || e.key === "F") && !lightboxFile.value) {
     const targetFile =
       selectedFile.value || (selectedFilesList.value.length > 0 ? selectedFilesList.value[0] : null);
     if (targetFile) {
@@ -190,7 +242,7 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   }
 
   // Delete / Trash: Delete or Backspace
-  if (e.key === "Delete" || e.key === "Backspace") {
+  if ((e.key === "Delete" || e.key === "Backspace") && !lightboxFile.value) {
     if (selectedFilesList.value.length > 0 || selectedFile.value) {
       e.preventDefault();
       if (selectedFilesList.value.length === 0 && selectedFile.value) {
@@ -201,8 +253,8 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     }
   }
 
-  // Arrow Keys Navigation when not in preview
-  if (!previewingFile.value && files.value.length > 0) {
+  // Arrow Keys Navigation when not in lightbox
+  if (!lightboxFile.value && files.value.length > 0) {
     const currentIdx = selectedFile.value
       ? files.value.findIndex((f) => f.path === selectedFile.value?.path)
       : -1;
@@ -285,7 +337,7 @@ function onFolderAdded(folder: Folder) {
   void reloadFiltersMeta();
   activeTarget.value = { type: "folder", folder };
   selectedFile.value = null;
-  previewingFile.value = null;
+  lightboxFile.value = null;
   void loadFiles();
 }
 
@@ -296,7 +348,7 @@ function onFolderRemoved(folderId: number) {
   if (activeTarget.value.type === "folder" && activeTarget.value.folder.id === folderId) {
     activeTarget.value = { type: "all" };
     selectedFile.value = null;
-    previewingFile.value = null;
+    lightboxFile.value = null;
   }
   void loadFiles();
 }
@@ -304,24 +356,24 @@ function onFolderRemoved(folderId: number) {
 function onSelectNav(target: NavTarget) {
   activeTarget.value = target;
   selectedFile.value = null;
-  previewingFile.value = null;
+  lightboxFile.value = null;
   void loadFiles();
 }
 
 const targetTitle = computed(() => {
   switch (activeTarget.value.type) {
     case "all":
-      return "All Images";
+      return t.value.nav.allImages;
     case "favorites":
-      return "★ Favorites";
+      return t.value.nav.favorites;
     case "nsfw":
-      return "🔞 Sensitive (18+)";
+      return t.value.nav.sensitive;
     case "folder":
       return activeTarget.value.folder.path.split(/[\\/]/).pop() || activeTarget.value.folder.path;
     case "album":
-      return `🗂️ ${activeTarget.value.album.name}`;
+      return `📚 ${activeTarget.value.album.name}`;
     case "tag":
-      return `🏷 #${activeTarget.value.tag.name}`;
+      return `🏷️ #${activeTarget.value.tag.name}`;
   }
 });
 
@@ -398,12 +450,12 @@ async function onBatchRate(rating: number | null) {
 
 function onActivateFile(file: ImageFile) {
   selectedFile.value = file;
-  previewingFile.value = file;
+  lightboxFile.value = file;
 }
 
-function onPreviewNavigate(file: ImageFile) {
+function onLightboxNavigate(file: ImageFile) {
   selectedFile.value = file;
-  previewingFile.value = file;
+  lightboxFile.value = file;
 }
 
 function onFileRated(fileId: number, rating: number | null) {
@@ -414,8 +466,8 @@ function onFileRated(fileId: number, rating: number | null) {
   if (selectedFile.value?.id === fileId) {
     selectedFile.value.rating = rating ?? undefined;
   }
-  if (previewingFile.value?.id === fileId) {
-    previewingFile.value.rating = rating ?? undefined;
+  if (lightboxFile.value?.id === fileId) {
+    lightboxFile.value.rating = rating ?? undefined;
   }
 }
 
@@ -513,8 +565,8 @@ function onUpdateFile(file: ImageFile) {
   if (selectedFile.value?.id === file.id) {
     selectedFile.value = { ...file };
   }
-  if (previewingFile.value?.id === file.id) {
-    previewingFile.value = { ...file };
+  if (lightboxFile.value?.id === file.id) {
+    lightboxFile.value = { ...file };
   }
 }
 
@@ -597,6 +649,7 @@ function onFilterByHash(modelHash: string) {
   searchQuery.value = criteriaToQuery(activeCriteria.value);
   void loadFiles();
 }
+
 async function onDropMoveFiles(payload: { filePaths: string[]; folderId: number }) {
   try {
     await invoke("move_files", {
@@ -641,261 +694,336 @@ async function onDatabaseChanged() {
   await loadAlbumsAndTags();
   await loadFiles();
 }
+
+async function onAddFolderFromMenu() {
+  try {
+    const selected = await openFolderDialog({ directory: true, multiple: false });
+    if (typeof selected !== "string") return;
+    const folder = await invoke<Folder>("add_folder", { path: selected });
+    onFolderAdded(folder);
+  } catch (e) {
+    error.value = String(e);
+  }
+}
+
+async function onScanActiveFromMenu() {
+  if (activeTarget.value.type === "folder") {
+    try {
+      await invoke("scan_folder", { folderId: activeTarget.value.folder.id });
+      await onFolderScanned(activeTarget.value.folder.id);
+    } catch (e) {
+      error.value = String(e);
+    }
+  } else if (folders.value.length > 0) {
+    try {
+      await invoke("scan_folder", { folderId: folders.value[0].id });
+      await onFolderScanned(folders.value[0].id);
+    } catch (e) {
+      error.value = String(e);
+    }
+  }
+}
+
+async function onRescanAllFromMenu() {
+  for (const folder of folders.value) {
+    try {
+      await invoke("scan_folder", { folderId: folder.id });
+    } catch (e) {
+      console.error(e);
+    }
+  }
+  await refreshCounts();
+  await reloadFiltersMeta();
+  await loadAlbumsAndTags();
+  await loadFiles();
+}
+
+function onZoomIn() {
+  gridItemWidth.value = Math.min(360, gridItemWidth.value + 20);
+}
+
+function onZoomOut() {
+  gridItemWidth.value = Math.max(130, gridItemWidth.value - 20);
+}
+
+function onResetZoom() {
+  gridItemWidth.value = 200;
+}
 </script>
 
 <template>
-  <main class="shell">
-    <header class="header">
-      <div class="header-main-row">
-        <div class="header-titles">
-          <h1>{{ t.app.title }}</h1>
-          <p class="tagline">{{ t.app.tagline }}</p>
-        </div>
-        <LanguageSelector />
-      </div>
-      <p v-if="info" class="meta">
-        {{ t.app.version }}{{ info.app_version }} · {{ t.app.schema }}{{ info.schema_version }}
-        <span class="db-path" :title="info.database_path">{{ info.database_path }}</span>
-      </p>
-      <p v-else-if="error" class="error">{{ error }}</p>
-    </header>
-
-    <FolderPicker @added="onFolderAdded" />
-
-    <FolderList
-      :folders="folders"
-      :counts="libraryCounts"
-      :albums="albums"
-      :album-counts="albumCounts"
-      :tags="tags"
-      :active-target="activeTarget"
-      :progress="progress"
-      @removed="onFolderRemoved"
-      @scanned="onFolderScanned"
-      @select-nav="onSelectNav"
-      @open-album-modal="() => onOpenAlbumModal()"
-      @open-tag-modal="() => onOpenTagModal()"
-      @open-prompt-stats="promptStatsModalOpen = true"
-      @move-files-to-folder="onDropMoveFiles"
-      @add-files-to-album="onDropAddFilesToAlbum"
-      @tag-files="onDropTagFiles"
-    />
-
-    <section class="files-view-section">
-      <div class="files-view-header">
-        <div class="header-left">
-          <h2>
-            {{ t.view.files }}
-            <span v-if="files.length" class="count-badge">({{ files.length }})</span>
-          </h2>
-          <span class="folder-badge" :class="{ 'all-badge': activeTarget.type === 'all' }">
-            {{ targetTitle }}
-          </span>
-          <span v-if="selectedFile" class="selection-pill" :title="selectedFile.path">
-            {{ selectedFile.path.split(/[\\/]/).pop() }}
-            <button
-              type="button"
-              class="preview-trigger-btn"
-              title="Open Preview (Enter / Space)"
-              @click="onActivateFile(selectedFile)"
-            >
-              👁
-            </button>
-          </span>
-        </div>
-
-        <div class="toolbar-actions">
-          <SortBar
-            v-model:sort-field="sortField"
-            v-model:sort-direction="sortDirection"
-            @change="loadFiles"
-          />
-
-          <div class="view-mode-toggle">
-            <button
-              type="button"
-              class="toggle-btn"
-              :class="{ active: viewMode === 'grid' }"
-              @click="viewMode = 'grid'"
-              :title="t.view.grid"
-            >
-              ⊞ {{ t.view.grid }}
-            </button>
-            <button
-              type="button"
-              class="toggle-btn"
-              :class="{ active: viewMode === 'table' }"
-              @click="viewMode = 'table'"
-              :title="t.view.table"
-            >
-              ☰ {{ t.view.table }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="search-toolbar">
-        <SearchBar
-          v-model="searchQuery"
-          :loading="filesLoading"
-          :result-count="searchQuery.trim() ? files.length : null"
-          @search="onSearch"
-          @clear="onClearSearch"
-        />
-        <button
-          type="button"
-          class="filter-toggle-btn"
-          :class="{ active: filterDrawerOpen || activeFilterCount > 0 }"
-          :title="t.search.filters"
-          @click="filterDrawerOpen = true"
-        >
-          <span>⚡ {{ t.search.filters }}</span>
-          <span v-if="activeFilterCount > 0" class="filter-count-badge">
-            {{ activeFilterCount }}
-          </span>
-        </button>
-        <button
-          type="button"
-          class="stats-toggle-btn"
-          :title="t.search.insights"
-          @click="promptStatsModalOpen = true"
-        >
-          <span>📊 {{ t.search.insights }}</span>
-        </button>
-        <button
-          type="button"
-          class="models-toggle-btn"
-          :title="t.search.models"
-          @click="modelManagerModalOpen = true"
-        >
-          <span>🧠 {{ t.search.models }}</span>
-        </button>
-        <button
-          type="button"
-          class="models-toggle-btn"
-          :title="t.search.database"
-          @click="dbManagerModalOpen = true"
-        >
-          <span>🗄️ {{ t.search.database }}</span>
-        </button>
-        <button
-          type="button"
-          class="models-toggle-btn"
-          :title="t.search.shortcuts"
-          @click="shortcutsHelpModalOpen = true"
-        >
-          <span>⌨️ {{ t.search.shortcuts }}</span>
-        </button>
-      </div>
-
-      <div v-if="searchQuery.trim()" class="search-status-bar">
-        <span>
-          {{ t.search.found }} <strong>{{ files.length }}</strong> {{ files.length === 1 ? t.search.image : t.search.images }}
-        </span>
-        <button type="button" class="reset-search-btn" @click="onClearSearch">
-          ✕ {{ t.search.clearSearch }}
-        </button>
-      </div>
-
-      <div
-        v-if="files.length === 0 && searchQuery.trim() && !filesLoading"
-        class="search-empty-state"
-      >
-        <span class="empty-icon">🔍</span>
-        <p class="empty-title">{{ t.search.noMatchTitle }}</p>
-        <p class="empty-hint">
-          {{ t.search.noMatchHint }}
-        </p>
-        <button type="button" class="clear-filters-btn" @click="onClearSearch">
-          {{ t.search.clearSearch }}
-        </button>
-      </div>
-
-      <template v-else>
-        <VirtualGrid
-          v-if="viewMode === 'grid'"
-          :files="files"
-          :selected-file="selectedFile"
-          :selected-file-paths="selectedFilePaths"
-          :loading="filesLoading"
-          @select="onFileSelected"
-          @activate="onActivateFile"
-          @toggle-select="toggleSelectFile"
-        />
-        <FileList
-          v-else
-          :files="files"
-          :selected-file="selectedFile"
-          :selected-file-paths="selectedFilePaths"
-          :loading="filesLoading"
-          @select="onFileSelected"
-          @activate="onActivateFile"
-          @toggle-select="toggleSelectFile"
-          @toggle-all="onToggleAll"
+  <div class="app-window-eagle">
+    <!-- Custom Frameless Titlebar (Eagle Studio Style with Top MenuBar) -->
+    <TitleBar
+      :title="t.app.title"
+      :subtitle="info ? `v${info.app_version}` : undefined"
+    >
+      <template #menu>
+        <MenuBar
+          @add-folder="onAddFolderFromMenu"
+          @scan-active="onScanActiveFromMenu"
+          @rescan-all="onRescanAllFromMenu"
+          @open-db-manager="dbManagerModalOpen = true"
+          @open-settings="settingsModalOpen = true"
+          @select-all="onSelectAll"
+          @clear-selection="onClearSelection"
+          @batch-album="onBatchAddToAlbum"
+          @batch-tag="onBatchTag"
+          @batch-trash="onBatchTrash"
+          @batch-move="onBatchMove"
+          @batch-copy="onBatchCopy"
+          @batch-rate="onBatchRate"
+          @set-view-mode="viewMode = $event"
+          @toggle-sidebar="sidebarOpen = !sidebarOpen"
+          @toggle-inspector="inspectorOpen = !inspectorOpen"
+          @open-lightbox="selectedFile ? onActivateFile(selectedFile) : (files.length > 0 && onActivateFile(files[0]))"
+          @zoom-in="onZoomIn"
+          @zoom-out="onZoomOut"
+          @reset-zoom="onResetZoom"
+          @open-prompt-stats="promptStatsModalOpen = true"
+          @open-model-manager="modelManagerModalOpen = true"
+          @open-shortcuts-help="shortcutsHelpModalOpen = true"
+          @open-updater="updateModalOpen = true"
+          @open-about="settingsModalOpen = true"
         />
       </template>
-    </section>
 
-    <PreviewPane
-      v-if="previewingFile"
-      :file="previewingFile"
-      :files="files"
-      @close="previewingFile = null"
-      @navigate="onPreviewNavigate"
-      @rate="onFileRated"
-      @update-file="onUpdateFile"
-      @open-tag-modal="(id) => onOpenTagModal([id])"
-      @open-album-modal="(id) => onOpenAlbumModal([id])"
+      <template #actions>
+        <!-- Toggle Sidebar Button -->
+        <button
+          type="button"
+          class="titlebar-quick-btn"
+          :class="{ active: sidebarOpen }"
+          :title="sidebarOpen ? '隐藏导航栏 (B)' : '显示导航栏 (B)'"
+          @click="sidebarOpen = !sidebarOpen"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H5V3H2.5zm3.5 10h7.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H6v10z"/>
+          </svg>
+        </button>
+
+        <!-- Toggle Inspector Button -->
+        <button
+          type="button"
+          class="titlebar-quick-btn"
+          :class="{ active: inspectorOpen }"
+          :title="inspectorOpen ? '隐藏检查器 (I)' : '显示检查器 (I)'"
+          @click="inspectorOpen = !inspectorOpen"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H10V3H2.5zm8.5 10h2.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H11v10z"/>
+          </svg>
+        </button>
+      </template>
+    </TitleBar>
+
+    <!-- Main Three-Pane Studio Layout -->
+    <div class="studio-layout">
+      <!-- Left Sidebar (Collapsible) -->
+      <Sidebar
+        v-if="sidebarOpen"
+        :folders="folders"
+        :counts="libraryCounts"
+        :albums="albums"
+        :album-counts="albumCounts"
+        :tags="tags"
+        :active-target="activeTarget"
+        :progress="progress"
+        @folder-added="onFolderAdded"
+        @removed="onFolderRemoved"
+        @scanned="onFolderScanned"
+        @select-nav="onSelectNav"
+        @open-album-modal="() => onOpenAlbumModal()"
+        @open-tag-modal="() => onOpenTagModal()"
+        @open-prompt-stats="promptStatsModalOpen = true"
+        @open-model-manager="modelManagerModalOpen = true"
+        @open-db-manager="dbManagerModalOpen = true"
+        @open-shortcuts-help="shortcutsHelpModalOpen = true"
+        @move-files-to-folder="onDropMoveFiles"
+        @add-files-to-album="onDropAddFilesToAlbum"
+        @tag-files="onDropTagFiles"
+      />
+
+      <!-- Center Gallery Canvas (Eagle Grid/Waterfall) -->
+      <main class="gallery-canvas">
+        <!-- Top Toolbar -->
+        <div class="gallery-topbar">
+          <!-- Breadcrumbs / Title -->
+          <div class="topbar-left">
+            <h2 class="target-title">
+              {{ targetTitle }}
+              <span class="items-count-badge">({{ files.length }})</span>
+            </h2>
+          </div>
+
+          <!-- Search Bar & Filter Chips -->
+          <div class="topbar-center">
+            <SearchBar
+              v-model="searchQuery"
+              :loading="filesLoading"
+              :result-count="searchQuery.trim() ? files.length : null"
+              @search="onSearch"
+              @clear="onClearSearch"
+            />
+            <button
+              type="button"
+              class="filter-btn"
+              :class="{ active: filterDrawerOpen || activeFilterCount > 0 }"
+              :title="t.search.filters"
+              @click="filterDrawerOpen = true"
+            >
+              <span class="filter-icon">🔍</span>
+              <span class="filter-label">{{ t.search.filters }}</span>
+              <span v-if="activeFilterCount > 0" class="filter-count-badge">
+                {{ activeFilterCount }}
+              </span>
+            </button>
+          </div>
+
+          <!-- Sort, Zoom, and View Mode Actions -->
+          <div class="topbar-right">
+            <!-- Sort Bar -->
+            <SortBar
+              v-model:sort-field="sortField"
+              v-model:sort-direction="sortDirection"
+              @change="loadFiles"
+            />
+
+            <!-- Zoom Slider (Eagle style slider for grid thumbnail size) -->
+            <div v-if="viewMode === 'grid'" class="zoom-slider-wrapper" title="缩放网格尺寸">
+              <span class="zoom-icon small">▪</span>
+              <input
+                v-model.number="gridItemWidth"
+                type="range"
+                min="130"
+                max="360"
+                step="10"
+                class="zoom-slider"
+              />
+              <span class="zoom-icon large">◼</span>
+            </div>
+
+            <!-- View Mode Switch -->
+            <div class="view-mode-toggle">
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: viewMode === 'grid' }"
+                :title="t.view.grid"
+                @click="viewMode = 'grid'"
+              >
+                ⊞
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: viewMode === 'table' }"
+                :title="t.view.table"
+                @click="viewMode = 'table'"
+              >
+                ☰
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Main Viewport: Grid or Table -->
+        <div class="gallery-viewport">
+          <VirtualGrid
+            v-if="viewMode === 'grid'"
+            :files="files"
+            :selected-file="selectedFile"
+            :selected-file-paths="selectedFilePaths"
+            :loading="filesLoading"
+            :item-min-width="gridItemWidth"
+            @select="onFileSelected"
+            @activate="onActivateFile"
+            @toggle-select="toggleSelectFile"
+          />
+
+          <FileList
+            v-else
+            :files="files"
+            :selected-file="selectedFile"
+            :selected-file-paths="selectedFilePaths"
+            :loading="filesLoading"
+            @select="onFileSelected"
+            @activate="onActivateFile"
+            @toggle-select="toggleSelectFile"
+            @toggle-all="onToggleAll"
+          />
+
+          <!-- Floating Batch Action Bar -->
+          <BatchActionBar
+            :selected-count="selectedFilesList.length"
+            :total-count="files.length"
+            :selected-files="selectedFilesList"
+            @clear-selection="onClearSelection"
+            @select-all="onSelectAll"
+            @set-rating="onBatchRate"
+            @add-to-album="onBatchAddToAlbum"
+            @add-tag="onBatchTag"
+            @toggle-favorite="onBatchToggleFavorite"
+            @toggle-nsfw="onBatchToggleNsfw"
+            @move="onBatchMove"
+            @copy="onBatchCopy"
+            @trash="onBatchTrash"
+          />
+        </div>
+      </main>
+
+      <!-- Right Inspector Panel (Collapsible) -->
+      <InspectorPane
+        v-if="inspectorOpen"
+        :file="selectedFile"
+        :selected-count="selectedFilesList.length"
+        @close="inspectorOpen = false"
+        @open-lightbox="onActivateFile"
+        @open-tag-modal="onOpenTagModal([$event])"
+        @open-album-modal="onOpenAlbumModal([$event])"
+        @update-file="onUpdateFile"
+        @filter-by-model="onFilterByModel"
+        @filter-by-hash="onFilterByHash"
+      />
+    </div>
+
+    <!-- Bottom Status Bar -->
+    <StatusBar
+      :total-count="libraryCounts?.total ?? files.length"
+      :filtered-count="files.length"
+      :selected-count="selectedFilesList.length"
+      :info="info"
+      :progress="progress"
+      :has-filter="!!searchQuery.trim() || activeFilterCount > 0"
     />
 
-    <!-- Visual Search Builder / Filter Drawer -->
+    <!-- Fullscreen Lightbox Modal (Eagle Quick Look) -->
+    <LightboxModal
+      v-if="lightboxFile"
+      :file="lightboxFile"
+      :files="files"
+      @close="lightboxFile = null"
+      @navigate="onLightboxNavigate"
+      @update-file="onUpdateFile"
+    />
+
+    <!-- Modals & Drawers -->
     <FilterDrawer
-      v-model:open="filterDrawerOpen"
+      :open="filterDrawerOpen"
       :models="distinctModels"
       :samplers="distinctSamplers"
       :initial-criteria="activeCriteria"
+      @close="filterDrawerOpen = false"
       @apply="onApplyFilters"
       @reset="onResetFilters"
     />
 
-    <!-- Floating Batch Action Bar -->
-    <BatchActionBar
-      :selected-files="selectedFilesList"
-      :total-count="files.length"
-      @select-all="onSelectAll"
-      @clear-selection="onClearSelection"
-      @rate-selected="onBatchRate"
-      @add-to-album="onBatchAddToAlbum"
-      @tag-selected="onBatchTag"
-      @toggle-favorite="onBatchToggleFavorite"
-      @toggle-nsfw="onBatchToggleNsfw"
-      @move-selected="onBatchMove"
-      @copy-selected="onBatchCopy"
-      @trash-selected="onBatchTrash"
-    />
-
-    <!-- Album Management & Assignment Modal -->
-    <AlbumModal
-      v-model:open="albumModalOpen"
-      :file-ids="albumTargetFileIds"
-      @added-to-album="onAddedToAlbum"
-      @albums-changed="loadAlbumsAndTags"
-    />
-
-    <!-- Tag Management & Assignment Modal -->
-    <TagModal
-      v-model:open="tagModalOpen"
-      :file-ids="tagTargetFileIds"
-      @tags-changed="loadAlbumsAndTags"
-    />
-
-    <!-- Prompt & Metadata Insights Modal -->
     <PromptStatsModal
-      v-model:open="promptStatsModalOpen"
+      :open="promptStatsModalOpen"
+      @close="promptStatsModalOpen = false"
       @apply-search="onApplyStatsSearch"
     />
 
-    <!-- Checkpoint Models & Hash Cache Modal -->
     <ModelManagerModal
       :show="modelManagerModalOpen"
       @close="modelManagerModalOpen = false"
@@ -903,7 +1031,17 @@ async function onDatabaseChanged() {
       @filter-hash="onFilterByHash"
     />
 
-    <!-- File Operations Modal (Move / Copy / Trash) -->
+    <DatabaseManagerModal
+      :show="dbManagerModalOpen"
+      @close="dbManagerModalOpen = false"
+      @database-changed="onDatabaseChanged"
+    />
+
+    <ShortcutsHelpModal
+      :show="shortcutsHelpModalOpen"
+      @close="shortcutsHelpModalOpen = false"
+    />
+
     <FileOperationModal
       :open="fileOpModalOpen"
       :mode="fileOpMode"
@@ -913,388 +1051,272 @@ async function onDatabaseChanged() {
       @completed="onFileOpCompleted"
     />
 
-    <!-- Database & Storage Maintenance Modal -->
-    <DatabaseManagerModal
-      :show="dbManagerModalOpen"
-      @close="dbManagerModalOpen = false"
-      @database-changed="onDatabaseChanged"
+    <AlbumModal
+      :open="albumModalOpen"
+      :file-ids="albumTargetFileIds"
+      @close="albumModalOpen = false"
+      @created="loadAlbumsAndTags"
+      @updated="loadAlbumsAndTags"
+      @deleted="loadAlbumsAndTags"
+      @added-to-album="onAddedToAlbum"
     />
 
-    <!-- Keyboard Shortcuts Guide Modal -->
-    <ShortcutsHelpModal
-      :show="shortcutsHelpModalOpen"
-      @close="shortcutsHelpModalOpen = false"
+    <TagModal
+      :open="tagModalOpen"
+      :file-ids="tagTargetFileIds"
+      @close="tagModalOpen = false"
+      @created="loadAlbumsAndTags"
+      @updated="loadAlbumsAndTags"
+      @deleted="loadAlbumsAndTags"
+      @tagged="loadAlbumsAndTags"
     />
-  </main>
+
+    <!-- Settings Modal -->
+    <SettingsModal
+      :show="settingsModalOpen"
+      :info="info"
+      @close="settingsModalOpen = false"
+    />
+
+    <!-- Update Modal -->
+    <UpdateModal
+      :show="updateModalOpen"
+      :current-version="info?.app_version || '0.1.1'"
+      @close="updateModalOpen = false"
+    />
+  </div>
 </template>
 
-<style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-  font-synthesis: none;
-  -webkit-font-smoothing: antialiased;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-}
-
-.shell {
-  max-width: 68rem;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-}
-
-.header {
-  margin-bottom: 1.5rem;
-}
-
-.header-main-row {
+<style scoped>
+.app-window-eagle {
+  width: 100vw;
+  height: 100vh;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  background: #18181c;
+  color: #f1f5f9;
+  overflow: hidden;
 }
 
-.header-titles {
+.titlebar-quick-btn {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  width: 32px;
+  height: 28px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.titlebar-quick-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.titlebar-quick-btn.active {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+}
+
+.studio-layout {
   flex: 1;
-}
-
-h1 {
-  margin: 0;
-  font-size: 1.5rem;
-}
-
-.tagline {
-  color: #888;
-  margin: 0.25rem 0 0;
-}
-
-.meta {
-  color: #888;
-  font-size: 0.8em;
-  margin: 0.5rem 0 0;
-}
-
-.db-path {
-  display: block;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  word-break: break-all;
-  margin-top: 0.15rem;
-}
-
-.error {
-  color: #d33;
-  font-size: 0.85em;
-}
-
-.files-view-section {
-  margin-top: 2rem;
-}
-
-.files-view-header {
   display: flex;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.gallery-canvas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #18181c;
+  position: relative;
+}
+
+.gallery-topbar {
+  height: 42px;
+  min-height: 42px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 8px;
+  background: #18181c;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 10;
+  overflow: hidden;
 }
 
-.header-left {
+.topbar-left {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  max-width: 160px;
+  min-width: 0;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
-.header-left h2 {
+.target-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #f8fafc;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-}
-
-.count-badge {
-  font-size: 0.8em;
-  font-weight: 500;
-  color: #888;
-}
-
-.folder-badge {
-  padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8em;
-  font-weight: 500;
-  background: rgba(47, 111, 237, 0.12);
-  color: #2f6fed;
-}
-
-.all-badge {
-  background: rgba(16, 185, 129, 0.12);
-  color: #059669;
-}
-
-@media (prefers-color-scheme: dark) {
-  .all-badge {
-    color: #34d399;
-  }
-}
-
-.selection-pill {
-  padding: 0.15rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.78em;
-  background: rgba(0, 0, 0, 0.05);
-  color: #666;
-  max-width: 20rem;
+  gap: 5px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  .selection-pill {
-    background: rgba(255, 255, 255, 0.08);
-    color: #aaa;
-  }
-}
-
-.preview-trigger-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0 0.15rem;
-  font-size: 1em;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-}
-
-.preview-trigger-btn:hover {
-  opacity: 1;
-  transform: scale(1.15);
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.view-mode-toggle {
-  display: inline-flex;
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgba(128, 128, 128, 0.06);
-}
-
-.toggle-btn {
-  border: none;
-  background: transparent;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.85em;
-  cursor: pointer;
-  color: #666;
-  transition: all 0.15s ease;
-}
-
-@media (prefers-color-scheme: dark) {
-  .toggle-btn {
-    color: #aaa;
-  }
-}
-
-.toggle-btn:hover {
-  color: inherit;
-}
-
-.toggle-btn.active {
-  background: #2f6fed;
-  color: #fff;
-  font-weight: 600;
-}
-
-.search-toolbar {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  margin-bottom: 0.75rem;
-}
-
-.filter-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  border-radius: 8px;
-  background: rgba(128, 128, 128, 0.08);
-  color: inherit;
-  font: inherit;
-  font-size: 0.88em;
+.items-count-badge {
+  font-size: 0.72rem;
   font-weight: 500;
+  color: #71717a;
+  flex-shrink: 0;
+}
+
+.topbar-center {
+  flex: 1;
+  min-width: 100px;
+  max-width: 460px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a1a1aa;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+  display: flex;
+  align-items: center;
+  gap: 5px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
-  height: 38px;
-  box-sizing: border-box;
+  flex-shrink: 0;
+  transition: all 0.12s;
+  height: 30px;
 }
 
-.filter-toggle-btn:hover {
-  background: rgba(128, 128, 128, 0.15);
-  border-color: rgba(128, 128, 128, 0.4);
+.filter-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
 }
 
-.filter-toggle-btn.active {
-  background: rgba(47, 111, 237, 0.12);
-  border-color: #2f6fed;
-  color: #2f6fed;
-}
-
-@media (prefers-color-scheme: dark) {
-  .filter-toggle-btn.active {
-    background: rgba(47, 111, 237, 0.2);
-    color: #60a5fa;
-  }
+.filter-btn.active {
+  background: rgba(168, 85, 247, 0.16);
+  border-color: rgba(168, 85, 247, 0.35);
+  color: #d8b4fe;
 }
 
 .filter-count-badge {
-  background: #2f6fed;
-  color: #fff;
-  font-size: 0.75em;
-  font-weight: 700;
+  font-size: 0.64rem;
+  padding: 1px 5px;
   border-radius: 999px;
-  padding: 0.05rem 0.45rem;
-  line-height: 1.2;
+  background: #a855f7;
+  color: #ffffff;
+  font-weight: 600;
 }
 
-.stats-toggle-btn,
-.models-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.45rem 0.85rem;
-  border: 1px solid rgba(128, 128, 128, 0.25);
-  border-radius: 8px;
-  background: rgba(128, 128, 128, 0.08);
-  color: inherit;
-  font: inherit;
-  font-size: 0.88em;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s ease;
-  height: 38px;
-  box-sizing: border-box;
-}
-
-.stats-toggle-btn:hover,
-.models-toggle-btn:hover {
-  background: rgba(128, 128, 128, 0.15);
-  border-color: rgba(128, 128, 128, 0.4);
-}
-
-.search-status-bar {
+.topbar-right {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.4rem 0.75rem;
-  margin-bottom: 0.75rem;
-  background: rgba(47, 111, 237, 0.08);
-  border-left: 3px solid #2f6fed;
-  border-radius: 4px;
-  font-size: 0.85em;
-  color: #333;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  .search-status-bar {
-    background: rgba(47, 111, 237, 0.15);
-    color: #ddd;
+.zoom-slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.zoom-icon {
+  color: #71717a;
+  font-size: 0.65rem;
+}
+
+.zoom-icon.large {
+  font-size: 0.85rem;
+}
+
+.zoom-slider {
+  width: 55px;
+  height: 3px;
+  accent-color: #a855f7;
+  cursor: pointer;
+}
+
+.view-mode-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 5px;
+  overflow: hidden;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  padding: 0 7px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.toggle-btn.active {
+  background: rgba(168, 85, 247, 0.2);
+  color: #f3e8ff;
+  font-weight: 600;
+}
+
+.gallery-viewport {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Responsive Adaptive Breakpoints */
+@media (max-width: 1100px) {
+  .zoom-slider-wrapper {
+    display: none;
   }
 }
 
-.reset-search-btn {
-  background: transparent;
-  border: none;
-  color: #2f6fed;
-  font-size: 0.9em;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-}
-
-.reset-search-btn:hover {
-  background: rgba(47, 111, 237, 0.15);
-}
-
-.search-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3.5rem 1rem;
-  text-align: center;
-  border: 1px dashed rgba(128, 128, 128, 0.25);
-  border-radius: 10px;
-  background: rgba(128, 128, 128, 0.03);
-}
-
-.empty-icon {
-  font-size: 2.5em;
-  margin-bottom: 0.5rem;
-  opacity: 0.6;
-}
-
-.empty-title {
-  font-size: 1.1em;
-  font-weight: 600;
-  margin: 0 0 0.4rem;
-}
-
-.empty-hint {
-  font-size: 0.85em;
-  color: #888;
-  max-width: 440px;
-  margin: 0 0 1rem;
-  line-height: 1.4;
-}
-
-.empty-hint code {
-  background: rgba(128, 128, 128, 0.12);
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  font-family: monospace;
-}
-
-.clear-filters-btn {
-  background: #2f6fed;
-  color: #fff;
-  border: none;
-  padding: 0.4rem 1rem;
-  border-radius: 6px;
-  font-size: 0.85em;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-
-.clear-filters-btn:hover {
-  opacity: 0.9;
+@media (max-width: 900px) {
+  .filter-label {
+    display: none;
+  }
+  .topbar-left {
+    max-width: 100px;
+  }
 }
 </style>

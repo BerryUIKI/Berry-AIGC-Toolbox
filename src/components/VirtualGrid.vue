@@ -4,6 +4,7 @@ import type { ImageFile } from "../types";
 import {
   assetUrl,
   formatBytes,
+  formatPlatformName,
   getFileName,
   normalizePath,
 } from "../utils/image";
@@ -346,9 +347,9 @@ watch(
               <span
                 v-if="file.metadata?.format"
                 class="card-badge badge-format"
-                :title="`Format: ${file.metadata.format}`"
+                :title="`Format: ${formatPlatformName(file.metadata.format)}`"
               >
-                {{ file.metadata.format }}
+                {{ formatPlatformName(file.metadata.format) }}
               </span>
 
               <!-- Rating badge -->

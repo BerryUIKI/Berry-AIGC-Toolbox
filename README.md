@@ -14,7 +14,11 @@
 
 <br/>
 
-![Berry AIGC Toolbox GUI Studio](docs/screenshots/gui_preview.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gui_preview_dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/gui_preview_light.svg">
+  <img alt="Berry AIGC Toolbox Studio" src="docs/screenshots/gui_preview_dark.svg" width="100%">
+</picture>
 
 </div>
 

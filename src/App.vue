@@ -933,7 +933,7 @@ function onResetZoom() {
             />
 
             <!-- Zoom Slider (Eagle style slider for grid thumbnail size) -->
-            <div v-if="viewMode === 'grid'" class="zoom-slider-wrapper" title="缩放网格尺寸">
+            <div v-if="viewMode === 'grid'" class="zoom-slider-wrapper" :title="t.preview.zoomGrid">
               <span class="zoom-icon small">▪</span>
               <input
                 v-model.number="gridItemWidth"

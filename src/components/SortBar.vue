@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FileSortField, SortDirection } from "../types";
+import { t } from "../i18n";
 
 const props = defineProps<{
   sortField: FileSortField;
@@ -27,18 +28,18 @@ function toggleDirection() {
 
 <template>
   <div class="sort-bar-eagle">
-    <select :value="sortField" class="sort-select" title="排序方式" @change="onFieldChange">
-      <option value="modified_at">时间</option>
-      <option value="path">名称</option>
-      <option value="size_bytes">大小</option>
-      <option value="rating">评分</option>
-      <option value="aesthetic_score">美学评分</option>
+    <select :value="sortField" class="sort-select" :title="t.sort.title" @change="onFieldChange">
+      <option value="modified_at">{{ t.sort.modified }}</option>
+      <option value="path">{{ t.sort.name }}</option>
+      <option value="size_bytes">{{ t.sort.size }}</option>
+      <option value="rating">{{ t.sort.rating }}</option>
+      <option value="aesthetic_score">{{ t.sort.aesthetic }}</option>
     </select>
 
     <button
       type="button"
       class="direction-btn"
-      :title="sortDirection === 'desc' ? '降序 (高到低)' : '升序 (低到高)'"
+      :title="sortDirection === 'desc' ? t.sort.desc : t.sort.asc"
       @click="toggleDirection"
     >
       {{ sortDirection === "desc" ? "↓" : "↑" }}

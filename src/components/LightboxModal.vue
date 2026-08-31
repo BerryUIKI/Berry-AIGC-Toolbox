@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ImageFile } from "../types";
 import { assetUrl, formatBytes, formatPlatformName, getFileName } from "../utils/image";
+import { t } from "../i18n";
 
 const props = defineProps<{
   file: ImageFile;
@@ -214,7 +215,7 @@ onUnmounted(() => {
         <button
           type="button"
           class="hud-btn"
-          title="100% 原始尺寸 / 适应窗口"
+          :title="t.menu.resetZoom"
           @click="resetTransform"
         >
           {{ Math.round(scale * 100) }}%
@@ -222,7 +223,7 @@ onUnmounted(() => {
         <button
           type="button"
           class="hud-btn close-hud"
-          title="关闭 (Esc)"
+          :title="`${t.preview.close} (Esc)`"
           @click="emit('close')"
         >
           ✕
@@ -243,7 +244,7 @@ onUnmounted(() => {
         v-if="hasPrev"
         type="button"
         class="nav-arrow prev"
-        title="上一张 (←)"
+        title="‹ (←)"
         @click.stop="prev"
       >
         ‹
@@ -267,7 +268,7 @@ onUnmounted(() => {
           class="lightbox-nsfw-overlay"
           @click.stop="revealedNsfw = true"
         >
-          <span>🔞 敏感内容已遮罩 · 点击解除</span>
+          <span>{{ t.preview.clickToReveal }}</span>
         </div>
       </div>
 
@@ -276,7 +277,7 @@ onUnmounted(() => {
         v-if="hasNext"
         type="button"
         class="nav-arrow next"
-        title="下一张 (→)"
+        title="› (→)"
         @click.stop="next"
       >
         ›
@@ -307,7 +308,7 @@ onUnmounted(() => {
           type="button"
           class="hud-action-btn"
           :class="{ active: file.is_favorite }"
-          :title="file.is_favorite ? '取消收藏 (F)' : '加入收藏 (F)'"
+          :title="file.is_favorite ? t.preview.removeFavorite : t.preview.addFavorite"
           @click="toggleFavorite"
         >
           {{ file.is_favorite ? '❤️' : '🤍' }}
@@ -321,7 +322,7 @@ onUnmounted(() => {
           :title="file.metadata.prompt"
           @click="copyPrompt"
         >
-          <span>📝 {{ promptCopied ? '提示词已复制 ✓' : '复制 Prompt' }}</span>
+          <span>📝 {{ promptCopied ? t.preview.copied : t.preview.copyPrompt }}</span>
         </button>
       </div>
     </footer>

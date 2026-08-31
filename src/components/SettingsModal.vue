@@ -9,6 +9,13 @@ import {
   type ThumbnailCacheStats,
 } from "../utils/thumbnail";
 import { formatBytes } from "../utils/image";
+import {
+  currentLocaleSetting,
+  setLocale,
+  SUPPORTED_LOCALES,
+  t,
+  type LocaleSetting,
+} from "../i18n";
 
 const props = defineProps<{
   show: boolean;
@@ -22,6 +29,7 @@ const emit = defineEmits<{
 const activeTab = ref<"general" | "display" | "parsers" | "about">("general");
 
 // Settings state (persisted in localStorage)
+const selectedLocale = ref<LocaleSetting>(currentLocaleSetting.value);
 const autoScanOnStartup = ref(localStorage.getItem("berry_autoscan") !== "false");
 const blurNsfwDefault = ref(localStorage.getItem("berry_blur_nsfw") !== "false");
 const showCardBadges = ref(localStorage.getItem("berry_card_badges") !== "false");
@@ -46,10 +54,10 @@ async function handleClearCache() {
   cacheMessage.value = "";
   try {
     const count = await clearThumbnailCache();
-    cacheMessage.value = `已清理 ${count} 个缩略图缓存文件`;
+    cacheMessage.value = `✓ ${count} ${t.value.settings.thumbnailsCount}`;
     await loadCacheStats();
   } catch (e) {
-    cacheMessage.value = `清理失败: ${e}`;
+    cacheMessage.value = `${e}`;
   } finally {
     clearingCache.value = false;
   }
@@ -59,6 +67,7 @@ watch(
   () => props.show,
   (val) => {
     if (val) {
+      selectedLocale.value = currentLocaleSetting.value;
       void loadCacheStats();
     }
   },
@@ -71,6 +80,7 @@ onMounted(() => {
 });
 
 function saveSettings() {
+  setLocale(selectedLocale.value);
   localStorage.setItem("berry_autoscan", String(autoScanOnStartup.value));
   localStorage.setItem("berry_blur_nsfw", String(blurNsfwDefault.value));
   localStorage.setItem("berry_card_badges", String(showCardBadges.value));
@@ -87,7 +97,7 @@ function saveSettings() {
       <div class="dialog-header">
         <div class="header-left">
           <span class="dialog-icon">⚙️</span>
-          <h3 class="dialog-title">首选项与设置</h3>
+          <h3 class="dialog-title">{{ t.settings.title }}</h3>
         </div>
         <button type="button" class="close-btn" @click="emit('close')">✕</button>
       </div>
@@ -101,7 +111,7 @@ function saveSettings() {
             :class="{ active: activeTab === 'general' }"
             @click="activeTab = 'general'"
           >
-            常规 (General)
+            {{ t.settings.tabs.general }}
           </button>
           <button
             type="button"
@@ -109,7 +119,7 @@ function saveSettings() {
             :class="{ active: activeTab === 'display' }"
             @click="activeTab = 'display'"
           >
-            显示与安全 (Display)
+            {{ t.settings.tabs.display }}
           </button>
           <button
             type="button"
@@ -117,7 +127,7 @@ function saveSettings() {
             :class="{ active: activeTab === 'parsers' }"
             @click="activeTab = 'parsers'"
           >
-            解析器支持 (Parsers)
+            {{ t.settings.tabs.parsers }}
           </button>
           <button
             type="button"
@@ -125,30 +135,47 @@ function saveSettings() {
             :class="{ active: activeTab === 'about' }"
             @click="activeTab = 'about'"
           >
-            关于与存储 (About)
+            {{ t.settings.tabs.about }}
           </button>
         </aside>
 
         <section class="settings-content">
           <!-- Tab: General -->
           <div v-if="activeTab === 'general'" class="settings-panel">
-            <h4 class="panel-title">常规偏好</h4>
+            <h4 class="panel-title">{{ t.settings.generalTitle }}</h4>
 
+            <!-- Language Setting -->
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">默认画廊视图</span>
-                <span class="row-desc">选择启动软件时默认使用的图片展示方式</span>
+                <span class="row-label">{{ t.settings.language }}</span>
+                <span class="row-desc">{{ t.settings.languageDesc }}</span>
               </div>
-              <select v-model="defaultView" class="select-input">
-                <option value="grid">网格瀑布流 (Grid)</option>
-                <option value="table">详细列表 (Table)</option>
+              <select v-model="selectedLocale" class="select-input">
+                <option
+                  v-for="loc in SUPPORTED_LOCALES"
+                  :key="loc.key"
+                  :value="loc.key"
+                >
+                  {{ loc.label }}
+                </option>
               </select>
             </div>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">启动时自动扫描</span>
-                <span class="row-desc">启动时自动检查已添加文件夹中的新增/变动图片</span>
+                <span class="row-label">{{ t.settings.defaultView }}</span>
+                <span class="row-desc">{{ t.settings.defaultViewDesc }}</span>
+              </div>
+              <select v-model="defaultView" class="select-input">
+                <option value="grid">{{ t.settings.viewGrid }}</option>
+                <option value="table">{{ t.settings.viewTable }}</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="row-info">
+                <span class="row-label">{{ t.settings.autoScan }}</span>
+                <span class="row-desc">{{ t.settings.autoScanDesc }}</span>
               </div>
               <input v-model="autoScanOnStartup" type="checkbox" class="toggle-checkbox" />
             </div>
@@ -156,44 +183,44 @@ function saveSettings() {
 
           <!-- Tab: Display & Safety -->
           <div v-if="activeTab === 'display'" class="settings-panel">
-            <h4 class="panel-title">显示与安全保护</h4>
+            <h4 class="panel-title">{{ t.settings.displayTitle }}</h4>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">默认遮罩敏感内容 (NSFW)</span>
-                <span class="row-desc">自动模糊标记为敏感/成人内容的图像，点击后方可显示</span>
+                <span class="row-label">{{ t.settings.blurNsfw }}</span>
+                <span class="row-desc">{{ t.settings.blurNsfwDesc }}</span>
               </div>
               <input v-model="blurNsfwDefault" type="checkbox" class="toggle-checkbox" />
             </div>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">显示卡片角标</span>
-                <span class="row-desc">在网格图片卡片上显示格式、尺寸与评分徽章</span>
+                <span class="row-label">{{ t.settings.showBadges }}</span>
+                <span class="row-desc">{{ t.settings.showBadgesDesc }}</span>
               </div>
               <input v-model="showCardBadges" type="checkbox" class="toggle-checkbox" />
             </div>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">缩略图分辨率规格 (64倍数优化)</span>
-                <span class="row-desc">依据 AIGC 图像尺寸特性（1024/1536/2048 等）生成最佳质量/性能比的本地 WebP 缩略图</span>
+                <span class="row-label">{{ t.settings.thumbResolution }}</span>
+                <span class="row-desc">{{ t.settings.thumbResolutionDesc }}</span>
               </div>
               <select v-model.number="thumbnailMaxEdge" class="select-input">
-                <option :value="256">256px (紧凑 / 64×4 - 极省内存)</option>
-                <option :value="384">384px (标准 / 64×6 - 推荐平衡)</option>
-                <option :value="448">448px (高清 / 64×7 - 宽幅清晰)</option>
-                <option :value="512">512px (超清 / 64×8 - 适合大屏)</option>
+                <option :value="256">{{ t.settings.thumbCompact }}</option>
+                <option :value="384">{{ t.settings.thumbStandard }}</option>
+                <option :value="448">{{ t.settings.thumbHd }}</option>
+                <option :value="512">{{ t.settings.thumbUltra }}</option>
               </select>
             </div>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">磁盘缩略图缓存管理</span>
+                <span class="row-label">{{ t.settings.cacheManagement }}</span>
                 <span class="row-desc">
-                  当前占用:
+                  {{ t.settings.currentUsage }}
                   <strong style="color:#12b5cb;">
-                    {{ cacheStats ? `${formatBytes(cacheStats.total_bytes)} (${cacheStats.file_count} 张缩略图)` : '计算中...' }}
+                    {{ cacheStats ? `${formatBytes(cacheStats.total_bytes)} (${cacheStats.file_count} ${t.settings.thumbnailsCount})` : t.settings.calculating }}
                   </strong>
                   <span v-if="cacheMessage" style="margin-left: 8px; color: #4ade80;">{{ cacheMessage }}</span>
                 </span>
@@ -204,48 +231,48 @@ function saveSettings() {
                 :disabled="clearingCache"
                 @click="handleClearCache"
               >
-                {{ clearingCache ? '正在清理...' : '🗑️ 清理缩略图缓存' }}
+                {{ clearingCache ? t.settings.clearing : t.settings.clearCache }}
               </button>
             </div>
           </div>
 
           <!-- Tab: Parsers -->
           <div v-if="activeTab === 'parsers'" class="settings-panel">
-            <h4 class="panel-title">内置元数据解析引擎</h4>
-            <p class="panel-subtitle">Berry AIGC Toolbox 支持以下生成工具的生成参数与工作流无损解析：</p>
+            <h4 class="panel-title">{{ t.settings.parsersTitle }}</h4>
+            <p class="panel-subtitle">{{ t.settings.parsersSubtitle }}</p>
 
             <div class="parser-list">
               <div class="parser-item">
-                <span class="parser-badge active">✓ 已启用</span>
+                <span class="parser-badge active">{{ t.settings.enabled }}</span>
                 <span class="parser-name">WebUI (AUTOMATIC1111 / SD.Next)</span>
                 <span class="parser-desc">PNG tEXt/iTXt (parameters), WebP EXIF</span>
               </div>
               <div class="parser-item">
-                <span class="parser-badge active">✓ 已启用</span>
+                <span class="parser-badge active">{{ t.settings.enabled }}</span>
                 <span class="parser-name">ComfyUI</span>
-                <span class="parser-desc">Prompt & Workflow JSON 树解析</span>
+                <span class="parser-desc">Prompt & Workflow JSON Graph</span>
               </div>
               <div class="parser-item">
-                <span class="parser-badge active">✓ 已启用</span>
+                <span class="parser-badge active">{{ t.settings.enabled }}</span>
                 <span class="parser-name">NovelAI</span>
-                <span class="parser-desc">Comment / Description / Software 签名解析</span>
+                <span class="parser-desc">Comment / Description / Software Signature</span>
               </div>
               <div class="parser-item">
-                <span class="parser-badge active">✓ 已启用</span>
+                <span class="parser-badge active">{{ t.settings.enabled }}</span>
                 <span class="parser-name">Fooocus / Fooocus-MRE</span>
-                <span class="parser-desc">Fooocus 格式参数与模型解析</span>
+                <span class="parser-desc">Fooocus Parameters & Base Model Parser</span>
               </div>
               <div class="parser-item">
-                <span class="parser-badge active">✓ 已启用</span>
+                <span class="parser-badge active">{{ t.settings.enabled }}</span>
                 <span class="parser-name">InvokeAI & EasyDiffusion</span>
-                <span class="parser-desc">Invoke Metadata & JSON Sidecar 支持</span>
+                <span class="parser-desc">Invoke Metadata & JSON Sidecar</span>
               </div>
             </div>
           </div>
 
           <!-- Tab: About -->
           <div v-if="activeTab === 'about'" class="settings-panel">
-            <h4 class="panel-title">关于与存储</h4>
+            <h4 class="panel-title">{{ t.settings.aboutTitle }}</h4>
 
             <div class="about-card">
               <div class="about-logo">
@@ -253,14 +280,14 @@ function saveSettings() {
               </div>
               <div class="about-details">
                 <h5 class="about-name">Berry AIGC Toolbox</h5>
-                <p class="about-ver">版本 v{{ info?.app_version || '0.1.1' }} (Clean-Slate Architecture)</p>
-                <p class="about-desc">基于 Tauri 2 + Rust + Vue 3 的高性能本地 AIGC 图像资产管理工作台。</p>
+                <p class="about-ver">v{{ info?.app_version || '0.1.1' }}</p>
+                <p class="about-desc">{{ t.settings.aboutDesc }}</p>
               </div>
             </div>
 
             <div class="setting-row">
               <div class="row-info">
-                <span class="row-label">本地 SQLite 数据库路径</span>
+                <span class="row-label">{{ t.settings.dbPath }}</span>
                 <span class="row-desc path-code" :title="info?.database_path">{{ info?.database_path || '—' }}</span>
               </div>
             </div>
@@ -270,8 +297,8 @@ function saveSettings() {
 
       <!-- Footer -->
       <div class="dialog-footer">
-        <button type="button" class="btn secondary" @click="emit('close')">取消</button>
-        <button type="button" class="btn primary" @click="saveSettings">保存偏好</button>
+        <button type="button" class="btn secondary" @click="emit('close')">{{ t.settings.cancel }}</button>
+        <button type="button" class="btn primary" @click="saveSettings">{{ t.settings.save }}</button>
       </div>
     </div>
   </div>

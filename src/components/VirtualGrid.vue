@@ -13,6 +13,7 @@ import {
   getThumbnailUrlSync,
   requestBatchThumbnails,
 } from "../utils/thumbnail";
+import { t } from "../i18n";
 
 const props = withDefaults(
   defineProps<{
@@ -329,9 +330,9 @@ watch(
 
 <template>
   <div class="virtual-grid-wrapper">
-    <div v-if="loading" class="grid-placeholder">Loading…</div>
+    <div v-if="loading" class="grid-placeholder">{{ t.view.loading }}</div>
     <div v-else-if="!files.length" class="grid-placeholder">
-      Select a folder to see its indexed files.
+      {{ t.view.selectFolderPrompt }}
     </div>
 
     <div
@@ -372,8 +373,8 @@ watch(
                 type="button"
                 class="card-select-btn"
                 :class="{ checked: selectedFilePaths?.has(file.path) }"
-                :aria-label="selectedFilePaths?.has(file.path) ? 'Deselect image' : 'Select image'"
-                :title="selectedFilePaths?.has(file.path) ? 'Deselect image' : 'Select image'"
+                :aria-label="selectedFilePaths?.has(file.path) ? t.view.deselect : t.view.selectAll"
+                :title="selectedFilePaths?.has(file.path) ? t.view.deselect : t.view.selectAll"
                 @click.stop="toggleSelect(file)"
               >
                 {{ selectedFilePaths?.has(file.path) ? "✓" : "" }}
@@ -400,7 +401,7 @@ watch(
               <div
                 v-if="file.is_nsfw && !revealedNsfw.has(file.path)"
                 class="nsfw-overlay"
-                title="Click to reveal NSFW content"
+                :title="t.preview.clickToReveal"
                 @click.stop="toggleNsfwReveal(file.path)"
               >
                 <div class="nsfw-overlay-content">

@@ -14,6 +14,7 @@ import {
   getThumbnailUrlSync,
   requestBatchThumbnails,
 } from "../utils/thumbnail";
+import { t } from "../i18n";
 
 const props = defineProps<{
   files: ImageFile[];
@@ -62,75 +63,84 @@ function onScroll(e: Event) {
   scrollTop.value = target.scrollTop;
 }
 
-function updateDimensions() {
+function updateHeight() {
   if (containerRef.value) {
-    containerHeight.value = containerRef.value.clientHeight;
+    containerHeight.value = containerRef.value.clientHeight || 600;
   }
 }
 
+// Memory map for row thumbnails
+const thumbnailMap = ref<Record<string, string>>({});
+
+// Fast sync or async lookup for row image
+function getRowImageSrc(file: ImageFile): string {
+  const syncCached = getThumbnailUrlSync(file);
+  if (syncCached) return syncCached;
+  if (thumbnailMap.value[file.path]) {
+    return thumbnailMap.value[file.path];
+  }
+  return assetUrl(file.path);
+}
+
+// Prefetch thumbnails for visible rows
+watch(
+  visibleFiles,
+  async (batch) => {
+    if (!batch || batch.length === 0) return;
+    const filesToGenerate: ImageFile[] = [];
+
+    for (const file of batch) {
+      if (file.container !== "mp4" && file.container !== "txt" && !thumbnailMap.value[file.path]) {
+        const syncUrl = getThumbnailUrlSync(file);
+        if (syncUrl) {
+          thumbnailMap.value[file.path] = syncUrl;
+        } else {
+          filesToGenerate.push(file);
+        }
+      }
+    }
+
+    if (filesToGenerate.length > 0) {
+      void requestBatchThumbnails(filesToGenerate.slice(0, 30));
+    }
+
+    for (const file of batch) {
+      if (file.container !== "mp4" && file.container !== "txt" && !thumbnailMap.value[file.path]) {
+        getThumbnailUrl(file).then((url) => {
+          if (url) {
+            thumbnailMap.value[file.path] = url;
+          }
+        });
+      }
+    }
+  },
+  { immediate: true },
+);
+
 let resizeObserver: ResizeObserver | null = null;
+
 onMounted(() => {
-  if (containerRef.value) {
-    updateDimensions();
+  updateHeight();
+  if (containerRef.value && typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => {
-      updateDimensions();
+      updateHeight();
     });
     resizeObserver.observe(containerRef.value);
   }
 });
 
 onUnmounted(() => {
-  resizeObserver?.disconnect();
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
 });
 
-const thumbnailMap = ref<Record<number, string>>({});
-
-function getRowImageSrc(file: ImageFile): string {
-  if (!file.id) return assetUrl(file.path);
-  return thumbnailMap.value[file.id] || getThumbnailUrlSync(file) || assetUrl(file.path);
-}
-
-async function loadThumbnailFor(file: ImageFile) {
-  if (!file.id || thumbnailMap.value[file.id]) return;
-  const url = await getThumbnailUrl(file);
-  if (file.id) {
-    thumbnailMap.value[file.id] = url;
-  }
-}
-
-watch(
-  visibleFiles,
-  (files) => {
-    if (!files || files.length === 0) return;
-    for (const f of files) {
-      if (f.id && !thumbnailMap.value[f.id]) {
-        void loadThumbnailFor(f);
-      }
-    }
-    void requestBatchThumbnails(files);
-  },
-  { immediate: true },
-);
-
-// Reset local thumbnail cache on file list replacement
-watch(
-  () => props.files,
-  () => {
-    thumbnailMap.value = {};
-    if (containerRef.value) {
-      containerRef.value.scrollTop = 0;
-      scrollTop.value = 0;
-    }
-  },
-);
-
-/** First `max` chars, with an ellipsis when truncated. */
-function snippet(text: string | null | undefined, max: number): string {
+function snippet(text: string | null | undefined, max = 48): string {
   if (!text) return "—";
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-/** Display width × height for a file's extracted metadata, or "—". */
 function size(meta: ImageFile["metadata"]): string {
   if (!meta?.width || !meta?.height) return "—";
   return `${meta.width} × ${meta.height}`;
@@ -139,8 +149,8 @@ function size(meta: ImageFile["metadata"]): string {
 
 <template>
   <section class="files">
-    <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="!files.length" class="empty">Select a folder to see its indexed files.</p>
+    <p v-if="loading" class="empty">{{ t.view.loading }}</p>
+    <p v-else-if="!files.length" class="empty">{{ t.view.selectFolderPrompt }}</p>
 
     <div v-else ref="containerRef" class="scroll" @scroll.passive="onScroll">
       <table class="table">
@@ -150,19 +160,19 @@ function size(meta: ImageFile["metadata"]): string {
               <input
                 type="checkbox"
                 :checked="files.length > 0 && selectedFilePaths?.size === files.length"
-                title="Select/Deselect All"
+                :title="t.view.selectAll"
                 @click.stop="emit('toggleAll')"
               />
             </th>
-            <th class="th-preview">Preview</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Size</th>
-            <th>Modified</th>
-            <th>Format</th>
-            <th>Prompt</th>
-            <th>Dimensions</th>
-            <th>Model</th>
+            <th class="th-preview">{{ t.preview.preview }}</th>
+            <th>{{ t.sort.name }}</th>
+            <th>{{ t.preview.format }}</th>
+            <th>{{ t.sort.size }}</th>
+            <th>{{ t.sort.modified }}</th>
+            <th>{{ t.preview.format }}</th>
+            <th>{{ t.preview.prompt }}</th>
+            <th>{{ t.preview.dimensions }}</th>
+            <th>{{ t.preview.modelName }}</th>
           </tr>
         </thead>
         <tbody>

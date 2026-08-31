@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ImageFile, Tag } from "../types";
 import { assetUrl, formatBytes, formatPlatformName, getFileName, normalizePath } from "../utils/image";
 import { getThumbnailUrl } from "../utils/thumbnail";
+import { t } from "../i18n";
 
 const props = defineProps<{
   file: ImageFile | null;
@@ -39,7 +40,7 @@ watch(
     } else {
       thumbUrl.value = "";
     }
-    loadTags();
+    await loadTags();
   },
   { immediate: true },
 );
@@ -51,44 +52,9 @@ async function loadTags() {
   }
   try {
     fileTags.value = await invoke<Tag[]>("get_file_tags", { fileId: props.file.id });
-  } catch (err) {
-    console.error("Failed to load tags:", err);
-  }
-}
-
-async function toggleFavorite() {
-  if (!props.file?.id) return;
-  const nextVal = !props.file.is_favorite;
-  try {
-    await invoke("set_file_favorite", { fileId: props.file.id, isFavorite: nextVal });
-    props.file.is_favorite = nextVal;
-    emit("updateFile", props.file);
-  } catch (err) {
-    console.error("Failed to toggle favorite:", err);
-  }
-}
-
-async function toggleNsfw() {
-  if (!props.file?.id) return;
-  const nextVal = !props.file.is_nsfw;
-  try {
-    await invoke("set_file_nsfw", { fileId: props.file.id, isNsfw: nextVal });
-    props.file.is_nsfw = nextVal;
-    emit("updateFile", props.file);
-  } catch (err) {
-    console.error("Failed to toggle nsfw:", err);
-  }
-}
-
-async function setRating(r: number) {
-  if (!props.file?.id) return;
-  const newRating = props.file.rating === r ? null : r;
-  try {
-    await invoke("set_file_rating", { fileId: props.file.id, rating: newRating });
-    props.file.rating = newRating ?? undefined;
-    emit("updateFile", props.file);
-  } catch (err) {
-    console.error("Failed to set rating:", err);
+  } catch (e) {
+    console.error("Failed to load file tags:", e);
+    fileTags.value = [];
   }
 }
 
@@ -97,30 +63,62 @@ async function removeTag(tagId: number) {
   try {
     await invoke("untag_file", { fileId: props.file.id, tagId });
     await loadTags();
-  } catch (err) {
-    console.error("Failed to remove tag:", err);
+  } catch (e) {
+    console.error("Failed to remove tag:", e);
+  }
+}
+
+async function setRating(rating: number) {
+  if (!props.file) return;
+  const newRating = props.file.rating === rating ? 0 : rating;
+  try {
+    await invoke("update_file_rating", { path: props.file.path, rating: newRating });
+    emit("updateFile", { ...props.file, rating: newRating });
+  } catch (e) {
+    console.error("Failed to update rating:", e);
+  }
+}
+
+async function toggleFavorite() {
+  if (!props.file) return;
+  const isFavorite = !props.file.is_favorite;
+  try {
+    await invoke("update_file_favorite", { path: props.file.path, isFavorite });
+    emit("updateFile", { ...props.file, is_favorite: isFavorite });
+  } catch (e) {
+    console.error("Failed to toggle favorite:", e);
+  }
+}
+
+async function toggleNsfw() {
+  if (!props.file) return;
+  const isNsfw = !props.file.is_nsfw;
+  try {
+    await invoke("update_file_nsfw", { path: props.file.path, isNsfw });
+    emit("updateFile", { ...props.file, is_nsfw: isNsfw });
+  } catch (e) {
+    console.error("Failed to toggle nsfw:", e);
   }
 }
 
 async function copyText(text: string, type: "prompt" | "negative" | "seed" | "raw") {
-  if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
     if (type === "prompt") {
       promptCopied.value = true;
-      setTimeout(() => (promptCopied.value = false), 1500);
+      setTimeout(() => (promptCopied.value = false), 2000);
     } else if (type === "negative") {
       negativePromptCopied.value = true;
-      setTimeout(() => (negativePromptCopied.value = false), 1500);
+      setTimeout(() => (negativePromptCopied.value = false), 2000);
     } else if (type === "seed") {
       seedCopied.value = true;
-      setTimeout(() => (seedCopied.value = false), 1500);
+      setTimeout(() => (seedCopied.value = false), 2000);
     } else if (type === "raw") {
       rawCopied.value = true;
-      setTimeout(() => (rawCopied.value = false), 1500);
+      setTimeout(() => (rawCopied.value = false), 2000);
     }
   } catch (err) {
-    console.error("Failed to copy:", err);
+    console.error("Failed to copy text: ", err);
   }
 }
 
@@ -128,9 +126,9 @@ const promptTokens = computed(() => {
   const p = props.file?.metadata?.prompt;
   if (!p) return [];
   return p
-    .split(",")
-    .map((token: string) => token.trim())
-    .filter(Boolean);
+    .split(/[,|\n]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 });
 </script>
 
@@ -139,15 +137,15 @@ const promptTokens = computed(() => {
     <!-- Header -->
     <div class="inspector-header">
       <div class="header-left">
-        <span class="inspector-title">检查器</span>
+        <span class="inspector-title">{{ t.preview.inspector }}</span>
         <span v-if="selectedCount && selectedCount > 1" class="multi-badge">
-          已选 {{ selectedCount }} 项
+          {{ selectedCount }} {{ t.batch.selectedCount }}
         </span>
       </div>
       <button
         type="button"
         class="close-btn"
-        title="关闭检查器 (I)"
+        :title="`${t.preview.close} (I)`"
         @click="emit('close')"
       >
         <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
@@ -159,8 +157,8 @@ const promptTokens = computed(() => {
     <!-- Empty State -->
     <div v-if="!file" class="empty-inspector">
       <span class="empty-icon">🖼️</span>
-      <p class="empty-text">未选择图片</p>
-      <span class="empty-sub">点击画廊中的任意图片查看详细 AIGC 元数据与生成参数</span>
+      <p class="empty-text">{{ t.preview.noSelection }}</p>
+      <span class="empty-sub">{{ t.preview.noSelectionSub }}</span>
     </div>
 
     <!-- Content when file selected -->
@@ -179,10 +177,10 @@ const promptTokens = computed(() => {
             class="nsfw-overlay"
             @click.stop="revealedNsfw = true"
           >
-            <span>🔞 点击查看敏感内容</span>
+            <span>{{ t.preview.clickToReveal }}</span>
           </div>
-          <div class="expand-badge" title="全屏预览 (Space / Enter)">
-            🔍 预览
+          <div class="expand-badge" :title="`${t.preview.preview} (Space / Enter)`">
+            {{ t.preview.preview }}
           </div>
         </div>
 
@@ -205,7 +203,7 @@ const promptTokens = computed(() => {
       <!-- Quick Actions (Rating, Fav, NSFW, Album, Tag) -->
       <div class="quick-actions-bar">
         <!-- Stars -->
-        <div class="rating-stars" title="评分 (快捷键 0-5)">
+        <div class="rating-stars" :title="t.preview.ratingShortcut">
           <button
             v-for="star in 5"
             :key="star"
@@ -224,7 +222,7 @@ const promptTokens = computed(() => {
             type="button"
             class="action-btn"
             :class="{ active: file.is_favorite }"
-            :title="file.is_favorite ? '取消收藏 (F)' : '加入收藏 (F)'"
+            :title="file.is_favorite ? t.preview.removeFavorite : t.preview.addFavorite"
             @click="toggleFavorite"
           >
             {{ file.is_favorite ? '❤️' : '🤍' }}
@@ -235,7 +233,7 @@ const promptTokens = computed(() => {
             type="button"
             class="action-btn"
             :class="{ active: file.is_nsfw }"
-            :title="file.is_nsfw ? '标记为安全' : '标记为敏感内容'"
+            :title="file.is_nsfw ? t.preview.markSfw : t.preview.markNsfw"
             @click="toggleNsfw"
           >
             🔞
@@ -245,7 +243,7 @@ const promptTokens = computed(() => {
           <button
             type="button"
             class="action-btn"
-            title="添加到相册"
+            :title="t.preview.addToAlbum"
             @click="file.id && emit('openAlbumModal', file.id)"
           >
             🗂️
@@ -255,7 +253,7 @@ const promptTokens = computed(() => {
           <button
             type="button"
             class="action-btn"
-            title="添加标签"
+            :title="t.preview.addTag"
             @click="file.id && emit('openTagModal', file.id)"
           >
             🏷️
@@ -266,7 +264,7 @@ const promptTokens = computed(() => {
       <!-- Tags Section -->
       <div v-if="fileTags.length > 0" class="section tags-section">
         <div class="section-header">
-          <span class="section-title">标签</span>
+          <span class="section-title">{{ t.nav.tags }}</span>
         </div>
         <div class="tag-chips">
           <span
@@ -280,7 +278,6 @@ const promptTokens = computed(() => {
             <button
               type="button"
               class="tag-del-btn"
-              title="移除标签"
               @click="removeTag(tag.id)"
             >
               ×
@@ -292,14 +289,14 @@ const promptTokens = computed(() => {
       <!-- Prompts Section -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">提示词 (Prompt)</span>
+          <span class="section-title">{{ t.preview.prompt }}</span>
           <button
             v-if="file.metadata?.prompt"
             type="button"
             class="copy-btn"
             @click="copyText(file.metadata.prompt, 'prompt')"
           >
-            {{ promptCopied ? '已复制 ✓' : '复制' }}
+            {{ promptCopied ? t.preview.copied : t.preview.copyPrompt }}
           </button>
         </div>
         <div v-if="file.metadata?.prompt" class="prompt-box">
@@ -309,42 +306,42 @@ const promptTokens = computed(() => {
               {{ token }}
             </span>
             <span v-if="promptTokens.length > 16" class="token-more">
-              +{{ promptTokens.length - 16 }} 项
+              +{{ promptTokens.length - 16 }}
             </span>
           </div>
         </div>
-        <p v-else class="empty-field">无正向提示词元数据</p>
+        <p v-else class="empty-field">—</p>
       </div>
 
       <!-- Negative Prompt Section -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">负向提示词 (Negative)</span>
+          <span class="section-title">{{ t.preview.negativePrompt }}</span>
           <button
             v-if="file.metadata?.negative_prompt"
             type="button"
             class="copy-btn"
             @click="copyText(file.metadata.negative_prompt, 'negative')"
           >
-            {{ negativePromptCopied ? '已复制 ✓' : '复制' }}
+            {{ negativePromptCopied ? t.preview.copied : t.preview.copyNegative }}
           </button>
         </div>
         <div v-if="file.metadata?.negative_prompt" class="prompt-box negative">
           <p class="prompt-text">{{ file.metadata.negative_prompt }}</p>
         </div>
-        <p v-else class="empty-field">无负向提示词</p>
+        <p v-else class="empty-field">—</p>
       </div>
 
       <!-- Generation Parameters Section -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">生成参数</span>
+          <span class="section-title">{{ t.preview.generationParams }}</span>
         </div>
 
         <div class="params-grid">
           <!-- Model -->
           <div v-if="file.metadata?.model_name" class="param-row full-width">
-            <span class="param-label">模型</span>
+            <span class="param-label">{{ t.preview.modelName }}</span>
             <div class="param-value-box">
               <span class="param-val truncate" :title="file.metadata.model_name">
                 {{ file.metadata.model_name }}
@@ -352,7 +349,7 @@ const promptTokens = computed(() => {
               <button
                 type="button"
                 class="filter-icon-btn"
-                title="以此模型筛选"
+                :title="t.modelsModal.filterModel"
                 @click="emit('filterByModel', file.metadata!.model_name!)"
               >
                 🔍
@@ -362,13 +359,13 @@ const promptTokens = computed(() => {
 
           <!-- Model Hash -->
           <div v-if="file.metadata?.model_hash" class="param-row">
-            <span class="param-label">Hash</span>
+            <span class="param-label">{{ t.preview.modelHash }}</span>
             <div class="param-value-box">
               <span class="param-val">{{ file.metadata.model_hash }}</span>
               <button
                 type="button"
                 class="filter-icon-btn"
-                title="以此 Hash 筛选"
+                :title="t.modelsModal.filterHash"
                 @click="emit('filterByHash', file.metadata!.model_hash!)"
               >
                 🔍
@@ -378,31 +375,30 @@ const promptTokens = computed(() => {
 
           <!-- Sampler -->
           <div v-if="file.metadata?.sampler" class="param-row">
-            <span class="param-label">采样器</span>
+            <span class="param-label">{{ t.preview.sampler }}</span>
             <span class="param-val">{{ file.metadata.sampler }}</span>
           </div>
 
           <!-- Steps -->
           <div v-if="file.metadata?.steps != null" class="param-row">
-            <span class="param-label">步数</span>
+            <span class="param-label">{{ t.preview.steps }}</span>
             <span class="param-val">{{ file.metadata.steps }}</span>
           </div>
 
           <!-- CFG Scale -->
           <div v-if="file.metadata?.cfg_scale != null" class="param-row">
-            <span class="param-label">CFG</span>
+            <span class="param-label">{{ t.preview.cfgScale }}</span>
             <span class="param-val">{{ file.metadata.cfg_scale }}</span>
           </div>
 
           <!-- Seed -->
           <div v-if="file.metadata?.seed != null" class="param-row">
-            <span class="param-label">种子 (Seed)</span>
+            <span class="param-label">{{ t.preview.seed }}</span>
             <div class="param-value-box">
               <span class="param-val">{{ file.metadata.seed }}</span>
               <button
                 type="button"
                 class="filter-icon-btn"
-                title="复制种子"
                 @click="copyText(String(file.metadata!.seed), 'seed')"
               >
                 {{ seedCopied ? '✓' : '📋' }}
@@ -415,7 +411,7 @@ const promptTokens = computed(() => {
       <!-- File Path & Location -->
       <div class="section">
         <div class="section-header">
-          <span class="section-title">文件路径</span>
+          <span class="section-title">{{ t.view.files }}</span>
         </div>
         <p class="file-path-text" :title="file.path">{{ normalizePath(file.path) }}</p>
       </div>
@@ -423,14 +419,14 @@ const promptTokens = computed(() => {
       <!-- Raw Metadata / Workflow JSON -->
       <div v-if="file.metadata?.raw" class="section">
         <div class="section-header cursor-pointer" @click="showRaw = !showRaw">
-          <span class="section-title">原始工作流 / 元数据</span>
+          <span class="section-title">{{ t.preview.copyAll }}</span>
           <div class="header-right-actions">
             <button
               type="button"
               class="copy-btn"
               @click.stop="copyText(file.metadata!.raw!, 'raw')"
             >
-              {{ rawCopied ? '已复制 ✓' : '复制 Raw' }}
+              {{ rawCopied ? t.preview.copied : 'Raw' }}
             </button>
             <span class="collapse-icon">{{ showRaw ? '▲' : '▼' }}</span>
           </div>

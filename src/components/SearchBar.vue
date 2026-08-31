@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
+import { t } from "../i18n";
 
 const props = withDefaults(
   defineProps<{
@@ -9,7 +10,7 @@ const props = withDefaults(
     resultCount?: number | null;
   }>(),
   {
-    placeholder: "搜索提示词、模型、参数... (/ 聚焦)",
+    placeholder: "",
     loading: false,
     resultCount: null,
   },
@@ -98,18 +99,18 @@ onUnmounted(() => {
         :value="localQuery"
         type="text"
         class="search-input"
-        :placeholder="placeholder"
+        :placeholder="placeholder || t.search.placeholder"
         @input="onInput"
         @keydown.enter="onEnter"
       />
 
-      <span v-if="loading" class="spinner" title="搜索中...">⏳</span>
+      <span v-if="loading" class="spinner" :title="t.view.loading">⏳</span>
 
       <button
         v-if="localQuery"
         type="button"
         class="clear-btn"
-        title="清除"
+        :title="t.search.clearSearch"
         @click="clear"
       >
         ✕

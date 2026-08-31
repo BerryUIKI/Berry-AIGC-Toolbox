@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ImageFile, Tag } from "../types";
 import { assetUrl, formatBytes, formatPlatformName, getFileName, normalizePath } from "../utils/image";
+import { getThumbnailUrl } from "../utils/thumbnail";
 
 const props = defineProps<{
   file: ImageFile | null;
@@ -26,11 +27,18 @@ const seedCopied = ref(false);
 const rawCopied = ref(false);
 const showRaw = ref(false);
 const revealedNsfw = ref(false);
+const thumbUrl = ref("");
 
 watch(
-  () => props.file?.id,
-  () => {
+  () => props.file,
+  async (newFile) => {
     revealedNsfw.value = false;
+    if (newFile) {
+      thumbUrl.value = assetUrl(newFile.path); // instant fallback
+      thumbUrl.value = await getThumbnailUrl(newFile);
+    } else {
+      thumbUrl.value = "";
+    }
     loadTags();
   },
   { immediate: true },
@@ -161,7 +169,7 @@ const promptTokens = computed(() => {
       <div class="preview-card" @click="emit('openLightbox', file)">
         <div class="img-wrapper">
           <img
-            :src="assetUrl(file.path)"
+            :src="thumbUrl || assetUrl(file.path)"
             :alt="getFileName(file.path)"
             :class="{ blurred: file.is_nsfw && !revealedNsfw }"
             loading="lazy"

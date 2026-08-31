@@ -77,6 +77,10 @@ pub fn run() {
             commands::get_database_stats,
             commands::restore_database,
             commands::open_external_url,
+            commands::get_or_create_thumbnail,
+            commands::batch_generate_thumbnails,
+            commands::get_thumbnail_cache_stats,
+            commands::clear_thumbnail_cache,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

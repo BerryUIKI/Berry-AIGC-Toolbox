@@ -7,5 +7,10 @@
 //! files that disappeared from disk. The Tauri shell only wires this up.
 
 pub mod scanner;
+pub mod thumbnail;
 
 pub use scanner::{ScanError, ScanProgress, ScanStats, Scanner};
+pub use thumbnail::{
+    batch_generate_thumbnails, clear_thumbnail_cache, ensure_thumbnail, get_thumbnail_cache_stats,
+    get_thumbnail_path, ThumbnailCacheStats,
+};

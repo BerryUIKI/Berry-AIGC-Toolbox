@@ -8,6 +8,7 @@ import {
   getFileName,
   normalizePath,
 } from "../utils/image";
+import { getThumbnailUrl, requestBatchThumbnails } from "../utils/thumbnail";
 
 const props = withDefaults(
   defineProps<{
@@ -135,6 +136,31 @@ const visibleFiles = computed(() => {
 });
 
 const translateY = computed(() => startRow.value * rowHeight.value);
+
+const thumbnailMap = ref<Record<number, string>>({});
+
+async function loadThumbnailFor(file: ImageFile) {
+  if (!file.id || thumbnailMap.value[file.id]) return;
+  const url = await getThumbnailUrl(file);
+  if (file.id) {
+    thumbnailMap.value[file.id] = url;
+  }
+}
+
+watch(
+  visibleFiles,
+  (files) => {
+    if (!files || files.length === 0) return;
+    for (const f of files) {
+      if (f.id && !thumbnailMap.value[f.id]) {
+        void loadThumbnailFor(f);
+      }
+    }
+    // Background batch generate for visible slice
+    void requestBatchThumbnails(files);
+  },
+  { immediate: true, deep: true },
+);
 
 function selectFile(file: ImageFile, event?: MouseEvent) {
   emit("select", file, event);
@@ -301,7 +327,7 @@ watch(
                   file.container !== 'txt' &&
                   !failedImages.has(file.path)
                 "
-                :src="assetUrl(file.path)"
+                :src="(file.id ? thumbnailMap[file.id] : null) || assetUrl(file.path)"
                 :alt="getFileName(file.path)"
                 class="thumbnail-img"
                 :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw.has(file.path) }"

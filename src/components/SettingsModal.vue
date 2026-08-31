@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import type { AppInfo } from "../types";
+import {
+  clearThumbnailCache,
+  getThumbnailCacheStats,
+  getThumbnailMaxEdge,
+  setThumbnailMaxEdge,
+  type ThumbnailCacheStats,
+} from "../utils/thumbnail";
+import { formatBytes } from "../utils/image";
 
-defineProps<{
+const props = defineProps<{
   show: boolean;
   info: AppInfo | null;
 }>();
@@ -18,12 +26,56 @@ const autoScanOnStartup = ref(localStorage.getItem("berry_autoscan") !== "false"
 const blurNsfwDefault = ref(localStorage.getItem("berry_blur_nsfw") !== "false");
 const showCardBadges = ref(localStorage.getItem("berry_card_badges") !== "false");
 const defaultView = ref(localStorage.getItem("berry_default_view") || "grid");
+const thumbnailMaxEdge = ref(getThumbnailMaxEdge());
+
+// Cache stats
+const cacheStats = ref<ThumbnailCacheStats | null>(null);
+const clearingCache = ref(false);
+const cacheMessage = ref("");
+
+async function loadCacheStats() {
+  try {
+    cacheStats.value = await getThumbnailCacheStats();
+  } catch (e) {
+    console.error("Failed to load thumbnail cache stats:", e);
+  }
+}
+
+async function handleClearCache() {
+  clearingCache.value = true;
+  cacheMessage.value = "";
+  try {
+    const count = await clearThumbnailCache();
+    cacheMessage.value = `已清理 ${count} 个缩略图缓存文件`;
+    await loadCacheStats();
+  } catch (e) {
+    cacheMessage.value = `清理失败: ${e}`;
+  } finally {
+    clearingCache.value = false;
+  }
+}
+
+watch(
+  () => props.show,
+  (val) => {
+    if (val) {
+      void loadCacheStats();
+    }
+  },
+);
+
+onMounted(() => {
+  if (props.show) {
+    void loadCacheStats();
+  }
+});
 
 function saveSettings() {
   localStorage.setItem("berry_autoscan", String(autoScanOnStartup.value));
   localStorage.setItem("berry_blur_nsfw", String(blurNsfwDefault.value));
   localStorage.setItem("berry_card_badges", String(showCardBadges.value));
   localStorage.setItem("berry_default_view", defaultView.value);
+  setThumbnailMaxEdge(thumbnailMaxEdge.value);
   emit("close");
 }
 </script>
@@ -120,6 +172,40 @@ function saveSettings() {
                 <span class="row-desc">在网格图片卡片上显示格式、尺寸与评分徽章</span>
               </div>
               <input v-model="showCardBadges" type="checkbox" class="toggle-checkbox" />
+            </div>
+
+            <div class="setting-row">
+              <div class="row-info">
+                <span class="row-label">缩略图分辨率规格 (64倍数优化)</span>
+                <span class="row-desc">依据 AIGC 图像尺寸特性（1024/1536/2048 等）生成最佳质量/性能比的本地 WebP 缩略图</span>
+              </div>
+              <select v-model.number="thumbnailMaxEdge" class="select-input">
+                <option :value="256">256px (紧凑 / 64×4 - 极省内存)</option>
+                <option :value="384">384px (标准 / 64×6 - 推荐平衡)</option>
+                <option :value="448">448px (高清 / 64×7 - 宽幅清晰)</option>
+                <option :value="512">512px (超清 / 64×8 - 适合大屏)</option>
+              </select>
+            </div>
+
+            <div class="setting-row">
+              <div class="row-info">
+                <span class="row-label">磁盘缩略图缓存管理</span>
+                <span class="row-desc">
+                  当前占用:
+                  <strong style="color:#12b5cb;">
+                    {{ cacheStats ? `${formatBytes(cacheStats.total_bytes)} (${cacheStats.file_count} 张缩略图)` : '计算中...' }}
+                  </strong>
+                  <span v-if="cacheMessage" style="margin-left: 8px; color: #4ade80;">{{ cacheMessage }}</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                class="btn secondary"
+                :disabled="clearingCache"
+                @click="handleClearCache"
+              >
+                {{ clearingCache ? '正在清理...' : '🗑️ 清理缩略图缓存' }}
+              </button>
             </div>
           </div>
 

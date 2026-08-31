@@ -39,6 +39,7 @@ import SettingsModal from "./components/SettingsModal.vue";
 import UpdateModal from "./components/UpdateModal.vue";
 import { t } from "./i18n";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
+import { requestBatchThumbnails } from "./utils/thumbnail";
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
@@ -600,6 +601,10 @@ async function loadFiles() {
         criteria.tag_id = activeTarget.value.tag.id;
       }
       files.value = await invoke<ImageFile[]>("search_files", { criteria });
+    }
+    // Background async batch generation for initial slice of files
+    if (files.value.length > 0) {
+      void requestBatchThumbnails(files.value.slice(0, 100));
     }
   } catch (e) {
     error.value = String(e);

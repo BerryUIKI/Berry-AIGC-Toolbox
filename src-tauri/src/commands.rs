@@ -14,8 +14,8 @@ use berry_domain::{
 };
 use berry_scan::{ScanStats, Scanner};
 use berry_storage::Database;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::AppState;
 
@@ -923,4 +923,69 @@ pub fn open_external_url(url: String) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+/// Request a single thumbnail (lazy on-demand generation).
+#[tauri::command]
+pub fn get_or_create_thumbnail(
+    app_handle: AppHandle,
+    file_id: i64,
+    file_path: String,
+    modified_at: i64,
+    max_edge: Option<u32>,
+) -> Result<String, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let max_edge = max_edge.unwrap_or(384);
+    berry_scan::ensure_thumbnail(&data_dir, file_id, &file_path, modified_at, max_edge)
+}
+
+#[derive(Deserialize)]
+pub struct BatchThumbnailItem {
+    pub file_id: i64,
+    pub file_path: String,
+    pub modified_at: i64,
+}
+
+/// Request background batch thumbnail generation.
+#[tauri::command]
+pub fn batch_generate_thumbnails(
+    app_handle: AppHandle,
+    items: Vec<BatchThumbnailItem>,
+    max_edge: Option<u32>,
+) -> Result<usize, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    let max_edge = max_edge.unwrap_or(384);
+    let tuples: Vec<(i64, String, i64)> = items
+        .into_iter()
+        .map(|i| (i.file_id, i.file_path, i.modified_at))
+        .collect();
+    Ok(berry_scan::batch_generate_thumbnails(&data_dir, tuples, max_edge))
+}
+
+/// Get stats for thumbnail cache on disk.
+#[tauri::command]
+pub fn get_thumbnail_cache_stats(
+    app_handle: AppHandle,
+) -> Result<berry_scan::ThumbnailCacheStats, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    berry_scan::get_thumbnail_cache_stats(&data_dir)
+}
+
+/// Clear thumbnail cache files from disk.
+#[tauri::command]
+pub fn clear_thumbnail_cache(app_handle: AppHandle) -> Result<usize, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {e}"))?;
+    berry_scan::clear_thumbnail_cache(&data_dir)
 }

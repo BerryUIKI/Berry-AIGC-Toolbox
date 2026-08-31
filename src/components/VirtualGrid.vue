@@ -8,7 +8,11 @@ import {
   getFileName,
   normalizePath,
 } from "../utils/image";
-import { getThumbnailUrl, requestBatchThumbnails } from "../utils/thumbnail";
+import {
+  getThumbnailUrl,
+  getThumbnailUrlSync,
+  requestBatchThumbnails,
+} from "../utils/thumbnail";
 
 const props = withDefaults(
   defineProps<{
@@ -25,7 +29,7 @@ const props = withDefaults(
     loading: false,
     itemMinWidth: 180,
     gap: 16,
-    overscan: 2,
+    overscan: 4,
   },
 );
 
@@ -82,6 +86,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+  if (prefetchDebounceTimer) clearTimeout(prefetchDebounceTimer);
   resizeObserver?.disconnect();
   window.removeEventListener("keydown", handleKeyDown);
 });
@@ -144,6 +149,11 @@ const translateY = computed(() => startRow.value * rowHeight.value);
 
 const thumbnailMap = ref<Record<number, string>>({});
 
+function getCardImageSrc(file: ImageFile): string {
+  if (!file.id) return assetUrl(file.path);
+  return thumbnailMap.value[file.id] || getThumbnailUrlSync(file) || assetUrl(file.path);
+}
+
 async function loadThumbnailFor(file: ImageFile) {
   if (!file.id || thumbnailMap.value[file.id]) return;
   const url = await getThumbnailUrl(file);
@@ -152,17 +162,36 @@ async function loadThumbnailFor(file: ImageFile) {
   }
 }
 
+let prefetchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 watch(
   visibleFiles,
   (files) => {
     if (!files || files.length === 0) return;
+
+    // 1. Immediately request thumbnails for currently visible items
     for (const f of files) {
       if (f.id && !thumbnailMap.value[f.id]) {
         void loadThumbnailFor(f);
       }
     }
-    // Background batch generate for visible slice
     void requestBatchThumbnails(files);
+
+    // 2. Proactive Lookahead Preload: pre-generate next 100 items in background
+    if (prefetchDebounceTimer) clearTimeout(prefetchDebounceTimer);
+    prefetchDebounceTimer = setTimeout(() => {
+      const aheadStart = endIndex.value + 1;
+      const aheadEnd = Math.min(props.files.length, endIndex.value + 101);
+      if (aheadStart < aheadEnd) {
+        const aheadSlice = props.files.slice(aheadStart, aheadEnd);
+        void requestBatchThumbnails(aheadSlice);
+      }
+      const behindStart = Math.max(0, startIndex.value - 40);
+      if (behindStart < startIndex.value) {
+        const behindSlice = props.files.slice(behindStart, startIndex.value);
+        void requestBatchThumbnails(behindSlice);
+      }
+    }, 40);
   },
   { immediate: true, deep: true },
 );
@@ -338,11 +367,12 @@ watch(
                   file.container !== 'txt' &&
                   !failedImages.has(file.path)
                 "
-                :src="(file.id ? thumbnailMap[file.id] : null) || assetUrl(file.path)"
+                :src="getCardImageSrc(file)"
                 :alt="getFileName(file.path)"
                 class="thumbnail-img"
                 :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw.has(file.path) }"
                 loading="lazy"
+                decoding="async"
                 @error="onImageError(file.path)"
               />
               <div v-else class="thumbnail-fallback">

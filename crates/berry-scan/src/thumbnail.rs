@@ -14,8 +14,11 @@ static THUMB_POOL: OnceLock<ThreadPool> = OnceLock::new();
 
 fn get_thumb_pool() -> &'static ThreadPool {
     THUMB_POOL.get_or_init(|| {
+        let threads = std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).clamp(2, 6))
+            .unwrap_or(4);
         rayon::ThreadPoolBuilder::new()
-            .num_threads(2)
+            .num_threads(threads)
             .thread_name(|idx| format!("berry-thumb-{idx}"))
             .build()
             .expect("Failed to initialize thumbnail worker thread pool")

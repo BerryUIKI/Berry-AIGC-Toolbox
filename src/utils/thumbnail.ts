@@ -47,6 +47,15 @@ export function setThumbnailMaxEdge(maxEdge: number): void {
 }
 
 /**
+ * Check if thumbnail URL is already available in memory cache synchronously.
+ */
+export function getThumbnailUrlSync(file: ImageFile): string | null {
+  const fileId = file.id ?? 0;
+  if (!fileId) return null;
+  return memoryCache.get(fileId) ?? null;
+}
+
+/**
  * Get or asynchronously generate thumbnail URL for a given image file.
  */
 export async function getThumbnailUrl(

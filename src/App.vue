@@ -628,7 +628,7 @@ async function loadFiles() {
     }
     // Background async batch generation for initial slice of files
     if (files.value.length > 0) {
-      void requestBatchThumbnails(files.value.slice(0, 100));
+      void requestBatchThumbnails(files.value.slice(0, 200));
     }
   } catch (e) {
     error.value = String(e);

@@ -134,7 +134,7 @@
       <!-- Primary Smart Download CTA & Actions -->
       <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto mb-6">
         <!-- Smart Detected Download Button -->
-        <a id="smartDownloadBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#12b5cb] via-[#0ea5e9] to-[#fab82b] text-[#0b0b0e] text-[16px] font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#12b5cb]/25 glow-cyan">
+        <a id="smartDownloadBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_x64_en-US.msi" onclick="handleSmartDownload(event)" class="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 rounded-xl bg-gradient-to-r from-[#12b5cb] via-[#0ea5e9] to-[#fab82b] text-[#0b0b0e] text-[16px] font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-[#12b5cb]/25 glow-cyan">
           <span id="smartOsIcon" class="text-xl">🪟</span>
           <div class="text-left">
             <div class="text-[15px] font-bold leading-tight" id="smartDownloadTitle">Download for Windows (x64)</div>
@@ -324,15 +324,15 @@
             <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.winDesc">Compatible with Windows 10 / 11 (64-bit).</p>
             
             <div class="flex flex-col gap-2.5 mb-6">
-              <a id="winMsiBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+              <a id="winMsiBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_x64_en-US.msi" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
                 <span class="flex items-center gap-2"><span>📦</span> Windows Installer (.msi)</span>
                 <span class="text-[11px] text-[#67e8f9] font-semibold" data-i18n="download.recommended">Recommended</span>
               </a>
-              <a id="winExeBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="winExeBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_x64-setup.exe" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>⚙️</span> Setup Executable (.exe)</span>
                 <span class="text-[11px] text-[#64748b]">x64</span>
               </a>
-              <a id="winZipBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="winZipBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_Windows_x64.zip" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>🗜️</span> Portable Archive (.zip)</span>
                 <span class="text-[11px] text-[#64748b]">No-Install</span>
               </a>
@@ -354,15 +354,15 @@
             <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.macDesc">Compatible with macOS 11.0 Big Sur or later.</p>
             
             <div class="flex flex-col gap-2.5 mb-6">
-              <a id="macArmBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+              <a id="macArmBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_aarch64.dmg" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
                 <span class="flex items-center gap-2"><span>🍏</span> Apple Silicon (.dmg)</span>
                 <span class="text-[11px] text-[#67e8f9] font-semibold">M1 / M2 / M3 / M4</span>
               </a>
-              <a id="macIntelBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="macIntelBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_x64.dmg" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>🖥️</span> Intel x64 (.dmg)</span>
                 <span class="text-[11px] text-[#64748b]">x86_64</span>
               </a>
-              <a id="macTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="macTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_macOS_universal.tar.gz" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>📦</span> App Bundle (.tar.gz)</span>
                 <span class="text-[11px] text-[#64748b]">Universal</span>
               </a>
@@ -384,15 +384,15 @@
             <p class="text-[#94a3b8] text-[13px] mb-6" data-i18n="download.linuxDesc">Supports Ubuntu, Debian, Arch, Fedora and others.</p>
             
             <div class="flex flex-col gap-2.5 mb-6">
-              <a id="linuxAppImageBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
+              <a id="linuxAppImageBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_amd64.AppImage" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/10 text-[13px] text-white font-medium transition-colors">
                 <span class="flex items-center gap-2"><span>🚀</span> Universal AppImage</span>
                 <span class="text-[11px] text-[#67e8f9] font-semibold" data-i18n="download.recommended">Recommended</span>
               </a>
-              <a id="linuxDebBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="linuxDebBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_0.1.1_amd64.deb" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>📦</span> Debian / Ubuntu (.deb)</span>
                 <span class="text-[11px] text-[#64748b]">apt</span>
               </a>
-              <a id="linuxTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="linuxTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.1/Berry-AIGC-Toolbox_Linux_x64.tar.gz" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>🗜️</span> Generic Tarball (.tar.gz)</span>
                 <span class="text-[11px] text-[#64748b]">Binary</span>
               </a>
@@ -563,6 +563,18 @@
       </div>
     </div>
   </footer>
+
+  <!-- ═══════════ Direct Download Feedback Toast ═══════════ -->
+  <div id="downloadToast" class="fixed bottom-6 right-6 z-50 transform translate-y-24 opacity-0 pointer-events-none transition-all duration-300 flex items-center gap-3 p-4 rounded-xl bg-[#141418] border border-[#12b5cb]/40 shadow-2xl shadow-[#12b5cb]/20 max-w-sm">
+    <div class="w-10 h-10 rounded-lg bg-[#12b5cb]/20 text-[#67e8f9] flex items-center justify-center text-xl shrink-0">
+      🚀
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-[13px] font-bold text-white" id="toastTitle">Download Started!</div>
+      <div class="text-[11px] text-[#94a3b8] truncate" id="toastDesc">Berry-AIGC-Toolbox installation package is downloading...</div>
+    </div>
+    <button type="button" onclick="hideDownloadToast()" class="text-[#64748b] hover:text-white text-sm px-1">✕</button>
+  </div>
 
   <!-- ═══════════ i18n & Smart OS Detection Script ═══════════ -->
   <script>
@@ -1077,6 +1089,77 @@
       return { os: "windows", arch: "x64", icon: "🪟", name: "Windows" };
     }
 
+    // Toast Notification logic
+    function showToast(filename) {
+      const toast = document.getElementById("downloadToast");
+      const titleEl = document.getElementById("toastTitle");
+      const descEl = document.getElementById("toastDesc");
+
+      const titles = {
+        en: "Direct Download Started!",
+        "zh-CN": "正在拉起安装包下载...",
+        "zh-TW": "正在拉起安裝包下載...",
+        ja: "ダウンロードを開始しました！",
+        de: "Download gestartet!",
+        fr: "Téléchargement lancé !",
+        es: "¡Descarga iniciada!"
+      };
+
+      const descs = {
+        en: `Downloading ${filename}. Thank you for choosing Berry!`,
+        "zh-CN": `安装包「${filename}」已开始直接下载，感谢使用！`,
+        "zh-TW": `安裝包「${filename}」已開始直接下載，感謝使用！`,
+        ja: `「${filename}」を直接ダウンロードしています。ご利用ありがとうございます！`,
+        de: `${filename} wird heruntergeladen. Vielen Dank!`,
+        fr: `Téléchargement de ${filename}. Merci d'utiliser Berry !`,
+        es: `Descargando ${filename}. ¡Gracias por usar Berry!`
+      };
+
+      titleEl.textContent = titles[currentLang] || titles.en;
+      descEl.textContent = descs[currentLang] || descs.en;
+
+      toast.classList.remove("translate-y-24", "opacity-0", "pointer-events-none");
+      toast.classList.add("translate-y-0", "opacity-100");
+
+      if (window.toastTimer) clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => {
+        hideDownloadToast();
+      }, 4500);
+    }
+
+    function hideDownloadToast() {
+      const toast = document.getElementById("downloadToast");
+      if (toast) {
+        toast.classList.remove("translate-y-0", "opacity-100");
+        toast.classList.add("translate-y-24", "opacity-0", "pointer-events-none");
+      }
+    }
+
+    function handleDirectDownload(event, el) {
+      if (event) event.preventDefault();
+      const url = el.getAttribute("href");
+      if (!url) return;
+
+      const filename = url.split("/").pop() || "Berry-AIGC-Toolbox-setup";
+      
+      // Trigger invisible direct file download
+      const tempLink = document.createElement("a");
+      tempLink.href = url;
+      tempLink.setAttribute("download", filename);
+      tempLink.style.display = "none";
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      document.body.removeChild(tempLink);
+
+      showToast(filename);
+    }
+
+    function handleSmartDownload(event) {
+      if (event) event.preventDefault();
+      const btn = document.getElementById("smartDownloadBtn");
+      handleDirectDownload(event, btn);
+    }
+
     function updateSmartDownloadCTA() {
       const client = detectClientOS();
       const titleEl = document.getElementById("smartDownloadTitle");
@@ -1087,19 +1170,23 @@
       iconEl.textContent = client.icon;
 
       let fileFormatHint = "Installer (.msi / .exe)";
-      let directUrl = `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/latest`;
+      let directUrl = `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/${latestVersion}/Berry-AIGC-Toolbox_0.1.1_x64_en-US.msi`;
 
       if (client.os === "windows") {
         fileFormatHint = `${latestVersion} · Installer (.msi / .exe)`;
-        // Find matching Windows msi or exe in releaseAssets if available
+        directUrl = `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/${latestVersion}/Berry-AIGC-Toolbox_0.1.1_x64_en-US.msi`;
         const matched = releaseAssets.find(a => a.name.endsWith(".msi") || a.name.endsWith(".exe"));
         if (matched) directUrl = matched.browser_download_url;
       } else if (client.os === "macos") {
         fileFormatHint = client.arch === "arm64" ? `${latestVersion} · Apple Silicon (.dmg)` : `${latestVersion} · Intel x64 (.dmg)`;
+        directUrl = client.arch === "arm64" 
+          ? `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/${latestVersion}/Berry-AIGC-Toolbox_0.1.1_aarch64.dmg`
+          : `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/${latestVersion}/Berry-AIGC-Toolbox_0.1.1_x64.dmg`;
         const matched = releaseAssets.find(a => a.name.endsWith(".dmg") || a.name.endsWith(".tar.gz"));
         if (matched) directUrl = matched.browser_download_url;
       } else if (client.os === "linux") {
         fileFormatHint = `${latestVersion} · Universal AppImage (.AppImage / .deb)`;
+        directUrl = `https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/${latestVersion}/Berry-AIGC-Toolbox_0.1.1_amd64.AppImage`;
         const matched = releaseAssets.find(a => a.name.endsWith(".AppImage") || a.name.endsWith(".deb"));
         if (matched) directUrl = matched.browser_download_url;
       }

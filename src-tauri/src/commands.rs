@@ -949,7 +949,7 @@ pub struct BatchThumbnailItem {
     pub modified_at: i64,
 }
 
-/// Request background batch thumbnail generation.
+/// Request background batch thumbnail generation with progress event emission.
 #[tauri::command]
 pub fn batch_generate_thumbnails(
     app_handle: AppHandle,
@@ -961,11 +961,39 @@ pub fn batch_generate_thumbnails(
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
     let max_edge = max_edge.unwrap_or(384);
+    let total = items.len();
     let tuples: Vec<(i64, String, i64)> = items
         .into_iter()
         .map(|i| (i.file_id, i.file_path, i.modified_at))
         .collect();
-    Ok(berry_scan::batch_generate_thumbnails(&data_dir, tuples, max_edge))
+
+    let app_clone = app_handle.clone();
+    let count = berry_scan::batch_generate_thumbnails(
+        &data_dir,
+        tuples,
+        max_edge,
+        Some(move |current: usize, total: usize| {
+            let _ = app_clone.emit(
+                "thumbnail-progress",
+                berry_scan::ThumbnailProgress {
+                    current,
+                    total,
+                    done: current >= total,
+                },
+            );
+        }),
+    );
+
+    let _ = app_handle.emit(
+        "thumbnail-progress",
+        berry_scan::ThumbnailProgress {
+            current: total,
+            total,
+            done: true,
+        },
+    );
+
+    Ok(count)
 }
 
 /// Get stats for thumbnail cache on disk.

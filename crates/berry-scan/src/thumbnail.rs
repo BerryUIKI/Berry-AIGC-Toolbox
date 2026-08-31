@@ -1,9 +1,26 @@
-//! High-performance thumbnail generation and disk cache management.
+//! High-performance thumbnail generation with limited concurrency and disk cache management.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use rayon::prelude::*;
+use rayon::ThreadPool;
 use image::ImageReader;
+
+/// Dedicated background thread pool with strictly limited concurrency (max 2 threads)
+/// to ensure the main UI and WebView are never starved of CPU or disk I/O.
+static THUMB_POOL: OnceLock<ThreadPool> = OnceLock::new();
+
+fn get_thumb_pool() -> &'static ThreadPool {
+    THUMB_POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .thread_name(|idx| format!("berry-thumb-{idx}"))
+            .build()
+            .expect("Failed to initialize thumbnail worker thread pool")
+    })
+}
 
 /// Stats for the thumbnail cache on disk.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -11,6 +28,14 @@ pub struct ThumbnailCacheStats {
     pub total_bytes: u64,
     pub file_count: usize,
     pub cache_dir: String,
+}
+
+/// Thumbnail generation progress event payload.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ThumbnailProgress {
+    pub current: usize,
+    pub total: usize,
+    pub done: bool,
 }
 
 /// Compute canonical destination path for a thumbnail.
@@ -102,26 +127,49 @@ pub fn ensure_thumbnail(
     Ok(dst.to_string_lossy().to_string())
 }
 
-/// Batch generate thumbnails in parallel using Rayon worker pool.
-pub fn batch_generate_thumbnails(
+/// Batch generate thumbnails in parallel using limited Rayon worker pool (max 2 threads).
+pub fn batch_generate_thumbnails<F>(
     cache_dir: &Path,
     items: Vec<(i64, String, i64)>, // (file_id, file_path, modified_at)
     max_edge: u32,
-) -> usize {
-    let count = items
-        .into_par_iter()
-        .filter_map(|(file_id, file_path, modified_at)| {
-            let dst = get_thumbnail_path(cache_dir, file_id, modified_at, max_edge);
-            if dst.exists() {
-                return None;
-            }
-            let src = Path::new(&file_path);
-            match generate_thumbnail(src, &dst, max_edge) {
-                Ok(_) => Some(1),
-                Err(_) => None,
-            }
-        })
-        .count();
+    progress_callback: Option<F>,
+) -> usize
+where
+    F: Fn(usize, usize) + Send + Sync,
+{
+    let total = items.len();
+    if total == 0 {
+        return 0;
+    }
+
+    let completed_counter = AtomicUsize::new(0);
+    let pool = get_thumb_pool();
+
+    let count = pool.install(|| {
+        items
+            .into_par_iter()
+            .filter_map(|(file_id, file_path, modified_at)| {
+                let dst = get_thumbnail_path(cache_dir, file_id, modified_at, max_edge);
+                let generated = if dst.exists() {
+                    false
+                } else {
+                    let src = Path::new(&file_path);
+                    generate_thumbnail(src, &dst, max_edge).is_ok()
+                };
+
+                let current = completed_counter.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(ref cb) = progress_callback {
+                    cb(current, total);
+                }
+
+                if generated {
+                    Some(1)
+                } else {
+                    None
+                }
+            })
+            .count()
+    });
 
     count
 }

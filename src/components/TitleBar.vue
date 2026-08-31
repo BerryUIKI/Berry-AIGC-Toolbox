@@ -64,6 +64,9 @@ async function onClose() {
 <template>
   <header class="titlebar" data-tauri-drag-region @dblclick="onToggleMaximize">
     <div class="titlebar-left">
+      <!-- Leading Slot (e.g. Sidebar toggle button before logo) -->
+      <slot name="leading"></slot>
+
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="brand-icon">
           <img src="../assets/logo.png" alt="Berry Logo" width="18" height="18" class="brand-logo-img" />

@@ -8,12 +8,18 @@ const props = defineProps<{
   selectedCount: number;
   info: AppInfo | null;
   progress: ScanProgress | null;
+  thumbProgress?: { current: number; total: number; active: boolean } | null;
   hasFilter?: boolean;
 }>();
 
 const progressPercent = computed(() => {
   if (!props.progress || props.progress.found === 0) return 0;
   return Math.min(100, Math.round((props.progress.scanned / props.progress.found) * 100));
+});
+
+const thumbPercent = computed(() => {
+  if (!props.thumbProgress || props.thumbProgress.total === 0) return 0;
+  return Math.min(100, Math.round((props.thumbProgress.current / props.thumbProgress.total) * 100));
 });
 </script>
 
@@ -43,9 +49,20 @@ const progressPercent = computed(() => {
       </span>
     </div>
 
-    <!-- Right: Background Scan Progress -->
+    <!-- Right: Background Scan / Thumbnail Progress -->
     <div class="status-right">
-      <div v-if="progress && progress.found > 0 && progress.scanned < progress.found" class="scan-status">
+      <!-- Thumbnail generation progress -->
+      <div v-if="thumbProgress?.active && thumbProgress.total > 0 && thumbProgress.current < thumbProgress.total" class="scan-status">
+        <span class="scan-label" style="color: #67e8f9;">
+          ⚡ 正在生成缩略图: {{ thumbProgress.current }} / {{ thumbProgress.total }} ({{ thumbPercent }}%)
+        </span>
+        <div class="mini-progress-track">
+          <div class="mini-progress-fill cyan" :style="{ width: `${thumbPercent}%` }"></div>
+        </div>
+      </div>
+
+      <!-- Scan Progress -->
+      <div v-else-if="progress && progress.found > 0 && progress.scanned < progress.found" class="scan-status">
         <span class="scan-label">
           正在后台扫描: {{ progress.scanned }} / {{ progress.found }} ({{ progressPercent }}%)
         </span>
@@ -143,6 +160,10 @@ const progressPercent = computed(() => {
   height: 100%;
   background: linear-gradient(90deg, #38bdf8, #818cf8);
   transition: width 0.2s ease;
+}
+
+.mini-progress-fill.cyan {
+  background: linear-gradient(90deg, #12b5cb, #fab82b);
 }
 
 .ready-badge {

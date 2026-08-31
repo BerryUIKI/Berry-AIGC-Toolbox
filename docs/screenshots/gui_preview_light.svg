@@ -1,60 +1,78 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="100%" height="100%" style="background:#e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="100%" height="100%" style="background:#e4e4e7; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
   <defs>
     <!-- Gradients -->
-    <linearGradient id="windowBgLight" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="windowBgMacLight" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#ffffff" />
       <stop offset="100%" stop-color="#f8fafc" />
     </linearGradient>
-    <linearGradient id="headerGradLight" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#ffffff" />
-      <stop offset="100%" stop-color="#f1f5f9" />
+    <linearGradient id="headerGradMacLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f1f5f9" />
+      <stop offset="100%" stop-color="#e2e8f0" />
     </linearGradient>
-    <linearGradient id="cardGrad1Light" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#e0e7ff" />
-      <stop offset="100%" stop-color="#c7d2fe" />
+    <linearGradient id="cardGradL1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5d0fe" />
+      <stop offset="100%" stop-color="#ddd6fe" />
     </linearGradient>
-    <linearGradient id="cardGrad2Light" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ccfbf1" />
-      <stop offset="100%" stop-color="#99f6e4" />
+    <linearGradient id="cardGradL2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#bae6fd" />
+      <stop offset="100%" stop-color="#a7f3d0" />
     </linearGradient>
-    <linearGradient id="cardGrad3Light" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fef3c7" />
-      <stop offset="100%" stop-color="#fde68a" />
+    <linearGradient id="cardGradL3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="100%" stop-color="#fed7aa" />
     </linearGradient>
-    <linearGradient id="cardGrad4Light" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#e2e8f0" />
-      <stop offset="100%" stop-color="#cbd5e1" />
+    <linearGradient id="cardGradL4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fed7aa" />
+      <stop offset="100%" stop-color="#fbcfe8" />
     </linearGradient>
 
-    <!-- Drop Shadow Filter -->
-    <filter id="winShadowLight" x="-5%" y="-5%" width="110%" height="110%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#64748b" flood-opacity="0.35" />
+    <!-- macOS Soft Drop Shadow Filter (Light mode) -->
+    <filter id="macShadowLight" x="-6%" y="-6%" width="112%" height="116%">
+      <feDropShadow dx="0" dy="20" stdDeviation="28" flood-color="#000000" flood-opacity="0.18" />
     </filter>
   </defs>
 
-  <!-- App Window Container with Shadow -->
-  <g filter="url(#winShadowLight)">
-    <rect x="20" y="20" width="1240" height="760" rx="12" fill="url(#windowBgLight)" stroke="#cbd5e1" stroke-width="1" />
+  <!-- macOS App Window Container with Shadow -->
+  <g filter="url(#macShadowLight)">
+    <rect x="20" y="20" width="1240" height="760" rx="14" fill="url(#windowBgMacLight)" stroke="rgba(0,0,0,0.12)" stroke-width="1" />
 
-    <!-- 1. TitleBar & MenuBar (Custom Frameless Header) -->
-    <path d="M 20 32 Q 20 20 32 20 L 1248 20 Q 1260 20 1260 32 L 1260 58 L 20 58 Z" fill="url(#headerGradLight)" />
-    <line x1="20" y1="58" x2="1260" y2="58" stroke="#e2e8f0" stroke-width="1" />
+    <!-- 1. macOS TitleBar Header -->
+    <path d="M 20 34 Q 20 20 34 20 L 1246 20 Q 1260 20 1260 34 L 1260 58 L 20 58 Z" fill="url(#headerGradMacLight)" />
+    <line x1="20" y1="58" x2="1260" y2="58" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
 
-    <!-- Logo Icon -->
-    <g transform="translate(36, 29)">
-      <circle cx="10" cy="10" r="8" fill="none" stroke="#0284c7" stroke-width="2.8" stroke-dasharray="32 18" />
-      <circle cx="13" cy="7" r="2.2" fill="#d97706" />
-      <circle cx="7" cy="13" r="2.2" fill="#0284c7" />
-      <circle cx="10" cy="10" r="8" fill="none" stroke="#d97706" stroke-width="2.8" stroke-dasharray="18 32" transform="rotate(180 10 10)" />
+    <!-- macOS Traffic Light Controls (Top-Left) -->
+    <g transform="translate(38, 39)">
+      <!-- Close (Red) -->
+      <circle cx="0" cy="0" r="6" fill="#ff5f56" stroke="#e0443e" stroke-width="0.5" />
+      <!-- Minimize (Yellow) -->
+      <circle cx="18" cy="0" r="6" fill="#ffbd2e" stroke="#dea123" stroke-width="0.5" />
+      <!-- Maximize / Fullscreen (Green) -->
+      <circle cx="36" cy="0" r="6" fill="#27c93f" stroke="#1aab29" stroke-width="0.5" />
     </g>
 
-    <!-- App Title & Version Badge -->
-    <text x="64" y="42" fill="#0f172a" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AIGC Toolbox</text>
-    <rect x="194" y="31" width="46" height="18" rx="9" fill="rgba(2,132,199,0.12)" stroke="rgba(2,132,199,0.3)" stroke-width="1" />
-    <text x="217" y="43" fill="#0284c7" font-size="10.5" font-weight="600" text-anchor="middle">v0.1.1</text>
+    <!-- macOS Sidebar Toggle Button (Right after traffic lights) -->
+    <g transform="translate(94, 28)">
+      <rect x="0" y="0" width="28" height="22" rx="5" fill="rgba(0,0,0,0.05)" stroke="rgba(0,0,0,0.1)" />
+      <rect x="4" y="5" width="20" height="12" rx="2" fill="none" stroke="#475569" stroke-width="1.2" />
+      <line x1="10" y1="5" x2="10" y2="17" stroke="#475569" stroke-width="1.2" />
+    </g>
 
-    <!-- Top MenuBar -->
-    <g transform="translate(254, 30)">
+    <!-- App Brand & Title -->
+    <g transform="translate(132, 28)">
+      <!-- Dual-Ring Logo -->
+      <g transform="translate(2, 1)">
+        <circle cx="10" cy="10" r="8" fill="none" stroke="#0891b2" stroke-width="2.6" stroke-dasharray="32 18" />
+        <circle cx="13" cy="7" r="2.2" fill="#d97706" />
+        <circle cx="7" cy="13" r="2.2" fill="#0891b2" />
+        <circle cx="10" cy="10" r="8" fill="none" stroke="#d97706" stroke-width="2.6" stroke-dasharray="18 32" transform="rotate(180 10 10)" />
+      </g>
+      <text x="28" y="15" fill="#0f172a" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AIGC Toolbox</text>
+      <rect x="156" y="2" width="46" height="18" rx="9" fill="rgba(8,145,178,0.12)" stroke="rgba(8,145,178,0.3)" stroke-width="1" />
+      <text x="179" y="14" fill="#0891b2" font-size="10.5" font-weight="600" text-anchor="middle">v0.1.1</text>
+    </g>
+
+    <!-- Top MenuBar (macOS App-Menu Style) -->
+    <g transform="translate(348, 29)">
       <rect x="0" y="0" width="38" height="20" rx="4" fill="transparent" />
       <text x="8" y="14" fill="#334155" font-size="12">File</text>
 
@@ -71,33 +89,26 @@
       <text x="186" y="14" fill="#334155" font-size="12">Help</text>
     </g>
 
-    <!-- Right Window Controls -->
-    <g transform="translate(1185, 30)">
-      <!-- Minimize -->
-      <rect x="0" y="0" width="22" height="20" rx="3" fill="rgba(0,0,0,0.04)" />
-      <line x1="6" y1="10" x2="16" y2="10" stroke="#64748b" stroke-width="1.2" stroke-linecap="round" />
-      <!-- Maximize -->
-      <rect x="25" y="0" width="22" height="20" rx="3" fill="rgba(0,0,0,0.04)" />
-      <rect x="30" y="5" width="12" height="10" fill="none" stroke="#64748b" stroke-width="1.2" rx="1" />
-      <!-- Close -->
-      <rect x="50" y="0" width="22" height="20" rx="3" fill="rgba(239,68,68,0.1)" />
-      <line x1="56" y1="6" x2="66" y2="14" stroke="#ef4444" stroke-width="1.2" stroke-linecap="round" />
-      <line x1="66" y1="6" x2="56" y2="14" stroke="#ef4444" stroke-width="1.2" stroke-linecap="round" />
+    <!-- Right Header Actions (Inspector Toggle) -->
+    <g transform="translate(1218, 28)">
+      <rect x="0" y="0" width="28" height="22" rx="5" fill="rgba(0,0,0,0.05)" stroke="rgba(0,0,0,0.1)" />
+      <rect x="4" y="5" width="20" height="12" rx="2" fill="none" stroke="#475569" stroke-width="1.2" />
+      <line x1="18" y1="5" x2="18" y2="17" stroke="#475569" stroke-width="1.2" />
     </g>
 
     <!-- 2. Left Sidebar (Eagle Studio Navigation) -->
     <rect x="20" y="58" width="220" height="692" fill="#f8fafc" />
-    <line x1="240" y1="58" x2="240" y2="750" stroke="#e2e8f0" stroke-width="1" />
+    <line x1="240" y1="58" x2="240" y2="750" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 
     <!-- Sidebar: Library Section -->
     <text x="36" y="85" fill="#64748b" font-size="10.5" font-weight="700" letter-spacing="0.5">LIBRARY</text>
 
     <!-- Nav Item: All Images (Active) -->
-    <rect x="30" y="96" width="200" height="30" rx="6" fill="rgba(2,132,199,0.1)" />
-    <rect x="30" y="101" width="3" height="20" rx="1.5" fill="#0284c7" />
+    <rect x="30" y="96" width="200" height="30" rx="6" fill="rgba(8,145,178,0.12)" />
+    <rect x="30" y="101" width="3" height="20" rx="1.5" fill="#0891b2" />
     <text x="44" y="116" font-size="13">🖼️</text>
-    <text x="66" y="116" fill="#0284c7" font-size="12.5" font-weight="700">All Images</text>
-    <rect x="186" y="103" width="36" height="16" rx="8" fill="#0284c7" />
+    <text x="66" y="116" fill="#0f172a" font-size="12.5" font-weight="600">All Images</text>
+    <rect x="186" y="103" width="36" height="16" rx="8" fill="#0891b2" />
     <text x="204" y="115" fill="#ffffff" font-size="10" font-weight="700" text-anchor="middle">1,248</text>
 
     <!-- Nav Item: Favorites -->
@@ -112,7 +123,7 @@
 
     <!-- Sidebar: Folders Section -->
     <text x="36" y="218" fill="#64748b" font-size="10.5" font-weight="700" letter-spacing="0.5">FOLDERS</text>
-    <text x="216" y="218" fill="#0284c7" font-size="13" font-weight="700" text-anchor="end">+</text>
+    <text x="216" y="218" fill="#0891b2" font-size="13" font-weight="700" text-anchor="end">+</text>
 
     <!-- Folder 1 -->
     <text x="44" y="244" font-size="13">📁</text>
@@ -134,79 +145,79 @@
     <!-- Sidebar: Color Tags -->
     <text x="36" y="414" fill="#64748b" font-size="10.5" font-weight="700" letter-spacing="0.5">TAGS</text>
     <g transform="translate(36, 428)">
-      <rect x="0" y="0" width="70" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0" />
-      <circle cx="10" cy="11" r="4" fill="#3b82f6" />
+      <rect x="0" y="0" width="70" height="22" rx="11" fill="#f1f5f9" stroke="rgba(0,0,0,0.06)" />
+      <circle cx="10" cy="11" r="4" fill="#2563eb" />
       <text x="20" y="15" fill="#334155" font-size="11">Sci-Fi</text>
 
-      <rect x="76" y="0" width="80" height="22" rx="11" fill="#ffffff" stroke="#e2e8f0" />
-      <circle cx="86" cy="11" r="4" fill="#10b981" />
+      <rect x="76" y="0" width="80" height="22" rx="11" fill="#f1f5f9" stroke="rgba(0,0,0,0.06)" />
+      <circle cx="86" cy="11" r="4" fill="#059669" />
       <text x="96" y="15" fill="#334155" font-size="11">Portrait</text>
     </g>
 
     <!-- Sidebar Footer Shortcuts -->
     <g transform="translate(32, 712)">
-      <rect x="0" y="0" width="34" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="34" height="28" rx="6" fill="#f1f5f9" />
       <text x="17" y="18" font-size="13" text-anchor="middle">📊</text>
-      <rect x="40" y="0" width="34" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="40" y="0" width="34" height="28" rx="6" fill="#f1f5f9" />
       <text x="57" y="18" font-size="13" text-anchor="middle">🧠</text>
-      <rect x="80" y="0" width="34" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="80" y="0" width="34" height="28" rx="6" fill="#f1f5f9" />
       <text x="97" y="18" font-size="13" text-anchor="middle">🗄️</text>
-      <rect x="120" y="0" width="34" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="120" y="0" width="34" height="28" rx="6" fill="#f1f5f9" />
       <text x="137" y="18" font-size="13" text-anchor="middle">⚙️</text>
-      <rect x="160" y="0" width="34" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="160" y="0" width="34" height="28" rx="6" fill="#f1f5f9" />
       <text x="177" y="18" font-size="13" text-anchor="middle">⌨️</text>
     </g>
 
     <!-- 3. Center Gallery Canvas -->
-    <rect x="240" y="58" width="740" height="692" fill="#ffffff" />
+    <rect x="240" y="58" width="740" height="692" fill="#f8fafc" />
 
     <!-- Gallery TopBar Toolbar -->
-    <rect x="240" y="58" width="740" height="42" fill="#ffffff" />
-    <line x1="240" y1="100" x2="980" y2="100" stroke="#e2e8f0" stroke-width="1" />
+    <rect x="240" y="58" width="740" height="42" fill="#f8fafc" />
+    <line x1="240" y1="100" x2="980" y2="100" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 
     <!-- Breadcrumb -->
     <text x="256" y="84" fill="#0f172a" font-size="13" font-weight="700">All Images</text>
-    <text x="325" y="84" fill="#64748b" font-size="11.5">(1,248)</text>
+    <text x="325" y="84" fill="#94a3b8" font-size="11.5">(1,248)</text>
 
     <!-- Search Input Box -->
-    <rect x="380" y="65" width="280" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" />
+    <rect x="380" y="65" width="280" height="28" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.12)" stroke-width="1" />
     <text x="394" y="83" fill="#94a3b8" font-size="12">🔍</text>
     <text x="414" y="83" fill="#64748b" font-size="11.5">Search prompt, model, steps... (/)</text>
 
     <!-- Filter Button -->
-    <rect x="668" y="65" width="70" height="28" rx="6" fill="rgba(2,132,199,0.08)" stroke="rgba(2,132,199,0.3)" />
+    <rect x="668" y="65" width="70" height="28" rx="6" fill="rgba(8,145,178,0.1)" stroke="rgba(8,145,178,0.3)" />
     <text x="680" y="83" font-size="11.5">🔍</text>
-    <text x="696" y="83" fill="#0284c7" font-size="11.5" font-weight="600">Filter</text>
+    <text x="696" y="83" fill="#0891b2" font-size="11.5" font-weight="600">Filter</text>
 
     <!-- Sort Selector -->
-    <rect x="746" y="65" width="76" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" />
+    <rect x="746" y="65" width="76" height="28" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.12)" />
     <text x="756" y="83" fill="#334155" font-size="11.5">Date ↓</text>
 
     <!-- Zoom Slider -->
-    <rect x="830" y="65" width="86" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" />
+    <rect x="830" y="65" width="86" height="28" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.12)" />
     <text x="838" y="82" fill="#94a3b8" font-size="9">▪</text>
     <line x1="850" y1="79" x2="898" y2="79" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round" />
-    <line x1="850" y1="79" x2="876" y2="79" stroke="#0284c7" stroke-width="3" stroke-linecap="round" />
-    <circle cx="876" cy="79" r="4.5" fill="#0284c7" />
+    <line x1="850" y1="79" x2="876" y2="79" stroke="#0891b2" stroke-width="3" stroke-linecap="round" />
+    <circle cx="876" cy="79" r="4.5" fill="#0891b2" />
     <text x="904" y="83" fill="#94a3b8" font-size="12">◼</text>
 
     <!-- View Mode Switch -->
-    <rect x="924" y="65" width="46" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" />
-    <rect x="925" y="66" width="22" height="26" rx="5" fill="rgba(2,132,199,0.15)" />
-    <text x="931" y="83" fill="#0284c7" font-size="12">⊞</text>
+    <rect x="924" y="65" width="46" height="28" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.12)" />
+    <rect x="925" y="66" width="22" height="26" rx="5" fill="rgba(8,145,178,0.18)" />
+    <text x="931" y="83" fill="#0891b2" font-size="12">⊞</text>
     <text x="953" y="83" fill="#94a3b8" font-size="12">☰</text>
 
     <!-- Gallery Virtual Grid Cards -->
     <!-- Card 1 (Active/Selected) -->
     <g transform="translate(256, 114)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#0284c7" stroke-width="2" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad1Light)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#0891b2" stroke-width="2" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL1)" />
       <!-- Generator Badge -->
-      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(2,132,199,0.9)" />
+      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(8,145,178,0.9)" />
       <text x="32" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">WebUI</text>
       <!-- Rating Star -->
-      <rect x="128" y="8" width="32" height="18" rx="4" fill="rgba(0,0,0,0.4)" />
-      <text x="144" y="21" fill="#facc15" font-size="10" font-weight="700" text-anchor="middle">★ 5</text>
+      <rect x="128" y="8" width="32" height="18" rx="4" fill="rgba(255,255,255,0.85)" />
+      <text x="144" y="21" fill="#d97706" font-size="10" font-weight="700" text-anchor="middle">★ 5</text>
       <!-- Info Footer -->
       <text x="10" y="182" fill="#0f172a" font-size="11.5" font-weight="600">cyber_samurai_01.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1024 × 1536 · PNG · 3.4 MB</text>
@@ -214,90 +225,91 @@
 
     <!-- Card 2 -->
     <g transform="translate(436, 114)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad2Light)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL2)" />
       <rect x="8" y="8" width="58" height="18" rx="4" fill="rgba(124,58,237,0.9)" />
       <text x="37" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">ComfyUI</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5" font-weight="500">space_nebula_render.png</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5" font-weight="500">space_nebula_render.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1280 × 768 · PNG · 2.1 MB</text>
     </g>
 
     <!-- Card 3 -->
     <g transform="translate(616, 114)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad3Light)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL3)" />
       <rect x="8" y="8" width="52" height="18" rx="4" fill="rgba(217,119,6,0.9)" />
       <text x="34" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">NovelAI</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5" font-weight="500">fantasy_castle_sunset.webp</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5" font-weight="500">fantasy_castle_sunset.webp</text>
       <text x="10" y="200" fill="#64748b" font-size="10">832 × 1216 · WEBP · 1.4 MB</text>
     </g>
 
     <!-- Card 4 -->
     <g transform="translate(796, 114)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad4Light)" />
-      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(2,132,199,0.9)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL4)" />
+      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(8,145,178,0.9)" />
       <text x="32" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">WebUI</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5" font-weight="500">mecha_titan_battle.png</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5" font-weight="500">mecha_titan_battle.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1024 × 1024 · PNG · 2.9 MB</text>
     </g>
 
     <!-- Row 2 Cards -->
     <g transform="translate(256, 342)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad4Light)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL4)" />
       <rect x="8" y="8" width="50" height="18" rx="4" fill="rgba(5,150,105,0.9)" />
       <text x="33" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">Fooocus</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5">cyber_punk_street.png</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5">cyber_punk_street.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1152 × 896 · PNG · 3.8 MB</text>
     </g>
     <g transform="translate(436, 342)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad1Light)" />
-      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(2,132,199,0.9)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL1)" />
+      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(8,145,178,0.9)" />
       <text x="32" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">WebUI</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5">crystal_dragon_09.png</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5">crystal_dragon_09.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1024 × 1536 · PNG · 4.1 MB</text>
     </g>
     <g transform="translate(616, 342)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL2)" />
       <!-- NSFW Blur Simulation -->
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="rgba(241,245,249,0.9)" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="rgba(241,245,249,0.85)" />
       <text x="84" y="85" font-size="20" text-anchor="middle">🔞</text>
-      <text x="84" y="105" fill="#ef4444" font-size="10.5" font-weight="700" text-anchor="middle">NSFW BLURRED</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5">anime_beach_cg.png</text>
+      <text x="84" y="105" fill="#dc2626" font-size="10.5" font-weight="700" text-anchor="middle">NSFW BLURRED</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5">anime_beach_cg.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">896 × 1152 · PNG · 1.8 MB</text>
     </g>
     <g transform="translate(796, 342)">
-      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="#e2e8f0" />
-      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGrad3Light)" />
+      <rect x="0" y="0" width="168" height="216" rx="8" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
+      <rect x="0" y="0" width="168" height="160" rx="8" fill="url(#cardGradL3)" />
       <rect x="8" y="8" width="58" height="18" rx="4" fill="rgba(124,58,237,0.9)" />
       <text x="37" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">ComfyUI</text>
-      <text x="10" y="182" fill="#1e293b" font-size="11.5">pro_photograph_dslr.png</text>
+      <text x="10" y="182" fill="#334155" font-size="11.5">pro_photograph_dslr.png</text>
       <text x="10" y="200" fill="#64748b" font-size="10">1024 × 1024 · PNG · 2.5 MB</text>
     </g>
 
     <!-- 4. Right Inspector Pane (Eagle Studio Inspector) -->
     <rect x="980" y="58" width="280" height="692" fill="#f8fafc" />
-    <line x1="980" y1="58" x2="980" y2="750" stroke="#e2e8f0" stroke-width="1" />
+    <line x1="980" y1="58" x2="980" y2="750" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 
     <!-- Inspector Header -->
     <text x="996" y="84" fill="#0f172a" font-size="13" font-weight="700">Inspector</text>
-    <text x="1244" y="84" fill="#64748b" font-size="12" text-anchor="end">✕</text>
-    <line x1="980" y1="100" x2="1260" y2="100" stroke="#e2e8f0" stroke-width="1" />
+    <text x="1244" y="84" fill="#94a3b8" font-size="12" text-anchor="end">✕</text>
+    <line x1="980" y1="100" x2="1260" y2="100" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 
     <!-- Large Preview Card -->
     <g transform="translate(996, 114)">
-      <rect x="0" y="0" width="248" height="130" rx="6" fill="url(#cardGrad1Light)" stroke="#cbd5e1" />
-      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(2,132,199,0.9)" />
+      <rect x="0" y="0" width="248" height="130" rx="6" fill="url(#cardGradL1)" stroke="rgba(0,0,0,0.08)" />
+      <rect x="8" y="8" width="48" height="18" rx="4" fill="rgba(8,145,178,0.9)" />
       <text x="32" y="21" fill="#ffffff" font-size="9.5" font-weight="700" text-anchor="middle">WebUI</text>
-      <rect x="180" y="100" width="60" height="22" rx="4" fill="rgba(15,23,42,0.7)" />
-      <text x="210" y="115" fill="#ffffff" font-size="10.5" text-anchor="middle">🔍 Quick Look</text>
+      <rect x="180" y="100" width="60" height="22" rx="4" fill="rgba(255,255,255,0.85)" />
+      <text x="210" y="115" fill="#0f172a" font-size="10.5" text-anchor="middle">🔍 Quick Look</text>
     </g>
 
     <!-- Quick Rating & Favorite Actions -->
     <g transform="translate(996, 256)">
-      <text x="0" y="16" fill="#f59e0b" font-size="14" letter-spacing="2">★★★★★</text>
+      <text x="0" y="16" fill="#d97706" font-size="14" letter-spacing="2">★★★★★</text>
       <text x="175" y="16" font-size="14">❤️</text>
       <text x="202" y="16" font-size="14">🔞</text>
       <text x="230" y="16" font-size="14">📚</text>
@@ -305,21 +317,21 @@
 
     <!-- Positive Prompt Section -->
     <text x="996" y="296" fill="#475569" font-size="11" font-weight="700">PROMPT</text>
-    <text x="1244" y="296" fill="#0284c7" font-size="10.5" font-weight="600" text-anchor="end">Copy 📋</text>
+    <text x="1244" y="296" fill="#0891b2" font-size="10.5" font-weight="600" text-anchor="end">Copy 📋</text>
 
     <g transform="translate(996, 306)">
-      <rect x="0" y="0" width="248" height="66" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="248" height="66" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
       <!-- Prompt Tokens -->
       <g transform="translate(6, 6)">
-        <rect x="0" y="0" width="82" height="18" rx="4" fill="rgba(2,132,199,0.12)" />
-        <text x="6" y="13" fill="#0284c7" font-size="9.5">masterpiece, 8k</text>
-        <rect x="88" y="0" width="76" height="18" rx="4" fill="rgba(2,132,199,0.12)" />
-        <text x="94" y="13" fill="#0284c7" font-size="9.5">cyber samurai</text>
-        <rect x="0" y="22" width="94" height="18" rx="4" fill="rgba(2,132,199,0.12)" />
-        <text x="6" y="35" fill="#0284c7" font-size="9.5">neon rain city street</text>
-        <rect x="100" y="22" width="60" height="18" rx="4" fill="rgba(2,132,199,0.12)" />
-        <text x="106" y="35" fill="#0284c7" font-size="9.5">katana glow</text>
-        <rect x="0" y="44" width="72" height="16" rx="4" fill="#f1f5f9" stroke="#e2e8f0" />
+        <rect x="0" y="0" width="82" height="18" rx="4" fill="rgba(8,145,178,0.12)" />
+        <text x="6" y="13" fill="#0891b2" font-size="9.5">masterpiece, 8k</text>
+        <rect x="88" y="0" width="76" height="18" rx="4" fill="rgba(8,145,178,0.12)" />
+        <text x="94" y="13" fill="#0891b2" font-size="9.5">cyber samurai</text>
+        <rect x="0" y="22" width="94" height="18" rx="4" fill="rgba(8,145,178,0.12)" />
+        <text x="6" y="35" fill="#0891b2" font-size="9.5">neon rain city street</text>
+        <rect x="100" y="22" width="60" height="18" rx="4" fill="rgba(8,145,178,0.12)" />
+        <text x="106" y="35" fill="#0891b2" font-size="9.5">katana glow</text>
+        <rect x="0" y="44" width="72" height="16" rx="4" fill="rgba(0,0,0,0.05)" />
         <text x="6" y="56" fill="#64748b" font-size="9">+14 tokens</text>
       </g>
     </g>
@@ -327,7 +339,7 @@
     <!-- Negative Prompt Section -->
     <text x="996" y="392" fill="#475569" font-size="11" font-weight="700">NEGATIVE PROMPT</text>
     <g transform="translate(996, 400)">
-      <rect x="0" y="0" width="248" height="34" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="248" height="34" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
       <text x="8" y="16" fill="#dc2626" font-size="10">worst quality, low quality, blurry, deformed</text>
       <text x="8" y="28" fill="#dc2626" font-size="10">extra limbs, mutated hands</text>
     </g>
@@ -336,47 +348,47 @@
     <text x="996" y="454" fill="#475569" font-size="11" font-weight="700">PARAMETERS</text>
     <g transform="translate(996, 464)">
       <!-- Model -->
-      <rect x="0" y="0" width="248" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="248" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="8" y="16" fill="#64748b" font-size="10.5">Model</text>
       <text x="70" y="16" fill="#0f172a" font-size="10.5" font-weight="600">animagine-xl-3.1.safetensors</text>
 
       <!-- Hash -->
-      <rect x="0" y="28" width="248" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="28" width="248" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="8" y="44" fill="#64748b" font-size="10.5">Hash</text>
       <text x="70" y="44" fill="#334155" font-size="10.5" font-family="monospace">e3c92da1fe</text>
 
       <!-- Sampler -->
-      <rect x="0" y="56" width="120" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="56" width="120" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="8" y="72" fill="#64748b" font-size="10.5">Sampler</text>
       <text x="56" y="72" fill="#0f172a" font-size="10">DPM++ 2M</text>
 
       <!-- Steps -->
-      <rect x="128" y="56" width="120" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="128" y="56" width="120" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="136" y="72" fill="#64748b" font-size="10.5">Steps</text>
       <text x="180" y="72" fill="#0f172a" font-size="10.5" font-weight="600">28</text>
 
       <!-- CFG -->
-      <rect x="0" y="84" width="120" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="84" width="120" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="8" y="100" fill="#64748b" font-size="10.5">CFG</text>
       <text x="56" y="100" fill="#0f172a" font-size="10.5" font-weight="600">7.0</text>
 
       <!-- Seed -->
-      <rect x="128" y="84" width="120" height="24" rx="4" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="128" y="84" width="120" height="24" rx="4" fill="#ffffff" stroke="rgba(0,0,0,0.06)" />
       <text x="136" y="100" fill="#64748b" font-size="10.5">Seed</text>
       <text x="172" y="100" fill="#0f172a" font-size="10.5" font-family="monospace">284910294</text>
     </g>
 
     <!-- Raw Metadata Collapse Banner -->
     <g transform="translate(996, 584)">
-      <rect x="0" y="0" width="248" height="28" rx="6" fill="#ffffff" stroke="#e2e8f0" />
+      <rect x="0" y="0" width="248" height="28" rx="6" fill="#ffffff" stroke="rgba(0,0,0,0.08)" />
       <text x="10" y="18" fill="#334155" font-size="11">⚙️ Raw Workflow JSON</text>
-      <text x="234" y="18" fill="#64748b" font-size="11" text-anchor="end">▼</text>
+      <text x="234" y="18" fill="#94a3b8" font-size="11" text-anchor="end">▼</text>
     </g>
 
     <!-- 5. Bottom StatusBar -->
-    <path d="M 20 750 L 1260 750 L 1260 768 Q 1260 780 1248 780 L 32 780 Q 20 780 20 768 Z" fill="#f1f5f9" />
-    <line x1="20" y1="750" x2="1260" y2="750" stroke="#e2e8f0" stroke-width="1" />
-    <text x="36" y="768" fill="#64748b" font-size="11">Total: <tspan fill="#0f172a" font-weight="600">1,248 items</tspan> | Selected: <tspan fill="#0284c7" font-weight="600">1 item (3.4 MB)</tspan></text>
+    <path d="M 20 750 L 1260 750 L 1260 766 Q 1260 780 1246 780 L 34 780 Q 20 780 20 766 Z" fill="#f1f5f9" />
+    <line x1="20" y1="750" x2="1260" y2="750" stroke="rgba(0,0,0,0.08)" stroke-width="1" />
+    <text x="36" y="768" fill="#64748b" font-size="11">Total: <tspan fill="#0f172a" font-weight="600">1,248 items</tspan> | Selected: <tspan fill="#0891b2" font-weight="600">1 item (3.4 MB)</tspan></text>
     <text x="1244" y="768" fill="#16a34a" font-size="11" text-anchor="end">● Database Connected (SQLite v0.1.1)</text>
   </g>
 </svg>

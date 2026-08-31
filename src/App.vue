@@ -272,6 +272,10 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   }
 }
 
+const thumbProgress = ref<{ current: number; total: number; active: boolean } | null>(null);
+let unlistenThumb: UnlistenFn | null = null;
+let thumbProgressHideTimer: ReturnType<typeof setTimeout> | null = null;
+
 onMounted(async () => {
   window.addEventListener("keydown", handleWindowKeyDown);
   try {
@@ -288,11 +292,30 @@ onMounted(async () => {
   unlisten = await listen<ScanProgress>("scan-progress", (event) => {
     progress.value = event.payload;
   });
+
+  unlistenThumb = await listen<{ current: number; total: number; done: boolean }>(
+    "thumbnail-progress",
+    (event) => {
+      const p = event.payload;
+      if (thumbProgressHideTimer) clearTimeout(thumbProgressHideTimer);
+      thumbProgress.value = {
+        current: p.current,
+        total: p.total,
+        active: !p.done && p.total > 0 && p.current < p.total,
+      };
+      if (p.done || p.current >= p.total) {
+        thumbProgressHideTimer = setTimeout(() => {
+          thumbProgress.value = null;
+        }, 1500);
+      }
+    },
+  );
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleWindowKeyDown);
   unlisten?.();
+  unlistenThumb?.();
 });
 
 async function reloadFolders() {
@@ -763,6 +786,22 @@ function onResetZoom() {
       :title="t.app.title"
       :subtitle="info ? `v${info.app_version}` : undefined"
     >
+      <template #leading>
+        <!-- Toggle Sidebar Button (Eagle style at far left before software name) -->
+        <button
+          type="button"
+          class="titlebar-quick-btn"
+          :class="{ active: sidebarOpen }"
+          :title="sidebarOpen ? '隐藏导航栏 (B)' : '显示导航栏 (B)'"
+          style="margin-left: 8px;"
+          @click="sidebarOpen = !sidebarOpen"
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H5V3H2.5zm3.5 10h7.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H6v10z"/>
+          </svg>
+        </button>
+      </template>
+
       <template #menu>
         <MenuBar
           @add-folder="onAddFolderFromMenu"
@@ -773,15 +812,9 @@ function onResetZoom() {
           @select-all="onSelectAll"
           @clear-selection="onClearSelection"
           @batch-album="onBatchAddToAlbum"
-          @batch-tag="onBatchTag"
-          @batch-trash="onBatchTrash"
-          @batch-move="onBatchMove"
-          @batch-copy="onBatchCopy"
-          @batch-rate="onBatchRate"
-          @set-view-mode="viewMode = $event"
           @toggle-sidebar="sidebarOpen = !sidebarOpen"
           @toggle-inspector="inspectorOpen = !inspectorOpen"
-          @open-lightbox="selectedFile ? onActivateFile(selectedFile) : (files.length > 0 && onActivateFile(files[0]))"
+          @open-lightbox="selectedFile ? onActivateFile(selectedFile) : null"
           @zoom-in="onZoomIn"
           @zoom-out="onZoomOut"
           @reset-zoom="onResetZoom"
@@ -794,19 +827,6 @@ function onResetZoom() {
       </template>
 
       <template #actions>
-        <!-- Toggle Sidebar Button -->
-        <button
-          type="button"
-          class="titlebar-quick-btn"
-          :class="{ active: sidebarOpen }"
-          :title="sidebarOpen ? '隐藏导航栏 (B)' : '显示导航栏 (B)'"
-          @click="sidebarOpen = !sidebarOpen"
-        >
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-            <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h11A1.5 1.5 0 0 1 15 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9zM2.5 3a.5.5 0 0 0-.5.5v9a.5.5 0 0 0 .5.5H5V3H2.5zm3.5 10h7.5a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5H6v10z"/>
-          </svg>
-        </button>
-
         <!-- Toggle Inspector Button -->
         <button
           type="button"
@@ -999,6 +1019,7 @@ function onResetZoom() {
       :selected-count="selectedFilesList.length"
       :info="info"
       :progress="progress"
+      :thumb-progress="thumbProgress"
       :has-filter="!!searchQuery.trim() || activeFilterCount > 0"
     />
 

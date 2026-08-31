@@ -1,17 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="100%" height="100%" style="background:#0d0d10; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="100%" height="100%" style="background:#0b0b0e; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
   <defs>
     <!-- Gradients -->
-    <linearGradient id="windowBg" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="windowBgMacDark" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#18181c" />
-      <stop offset="100%" stop-color="#141416" />
+      <stop offset="100%" stop-color="#131316" />
     </linearGradient>
-    <linearGradient id="headerGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#141416" />
-      <stop offset="100%" stop-color="#1a1a1e" />
-    </linearGradient>
-    <linearGradient id="cyanAmber" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#12b5cb" />
-      <stop offset="100%" stop-color="#fab82b" />
+    <linearGradient id="headerGradMacDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#242429" />
+      <stop offset="100%" stop-color="#1c1c21" />
     </linearGradient>
     <linearGradient id="cardGrad1" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#2a2238" />
@@ -30,35 +26,53 @@
       <stop offset="100%" stop-color="#141924" />
     </linearGradient>
 
-    <!-- Drop Shadow Filter -->
-    <filter id="winShadow" x="-5%" y="-5%" width="110%" height="110%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.75" />
+    <!-- macOS Soft Drop Shadow Filter -->
+    <filter id="macShadowDark" x="-6%" y="-6%" width="112%" height="116%">
+      <feDropShadow dx="0" dy="24" stdDeviation="30" flood-color="#000000" flood-opacity="0.85" />
     </filter>
   </defs>
 
-  <!-- App Window Container with Shadow -->
-  <g filter="url(#winShadow)">
-    <rect x="20" y="20" width="1240" height="760" rx="12" fill="url(#windowBg)" stroke="rgba(255,255,255,0.12)" stroke-width="1" />
+  <!-- macOS App Window Container with Shadow -->
+  <g filter="url(#macShadowDark)">
+    <rect x="20" y="20" width="1240" height="760" rx="14" fill="url(#windowBgMacDark)" stroke="rgba(255,255,255,0.14)" stroke-width="1" />
 
-    <!-- 1. TitleBar & MenuBar (Custom Frameless Header) -->
-    <path d="M 20 32 Q 20 20 32 20 L 1248 20 Q 1260 20 1260 32 L 1260 58 L 20 58 Z" fill="url(#headerGrad)" />
+    <!-- 1. macOS TitleBar Header -->
+    <path d="M 20 34 Q 20 20 34 20 L 1246 20 Q 1260 20 1260 34 L 1260 58 L 20 58 Z" fill="url(#headerGradMacDark)" />
     <line x1="20" y1="58" x2="1260" y2="58" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
 
-    <!-- Logo Icon -->
-    <g transform="translate(36, 29)">
-      <circle cx="10" cy="10" r="8" fill="none" stroke="#12b5cb" stroke-width="2.8" stroke-dasharray="32 18" />
-      <circle cx="13" cy="7" r="2.2" fill="#fab82b" />
-      <circle cx="7" cy="13" r="2.2" fill="#12b5cb" />
-      <circle cx="10" cy="10" r="8" fill="none" stroke="#fab82b" stroke-width="2.8" stroke-dasharray="18 32" transform="rotate(180 10 10)" />
+    <!-- macOS Traffic Light Controls (Top-Left) -->
+    <g transform="translate(38, 39)">
+      <!-- Close (Red) -->
+      <circle cx="0" cy="0" r="6" fill="#ff5f56" stroke="#e0443e" stroke-width="0.5" />
+      <!-- Minimize (Yellow) -->
+      <circle cx="18" cy="0" r="6" fill="#ffbd2e" stroke="#dea123" stroke-width="0.5" />
+      <!-- Maximize / Fullscreen (Green) -->
+      <circle cx="36" cy="0" r="6" fill="#27c93f" stroke="#1aab29" stroke-width="0.5" />
     </g>
 
-    <!-- App Title & Version Badge -->
-    <text x="64" y="42" fill="#f8fafc" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AIGC Toolbox</text>
-    <rect x="194" y="31" width="46" height="18" rx="9" fill="rgba(18,181,203,0.16)" stroke="rgba(18,181,203,0.35)" stroke-width="1" />
-    <text x="217" y="43" fill="#67e8f9" font-size="10.5" font-weight="600" text-anchor="middle">v0.1.1</text>
+    <!-- macOS Sidebar Toggle Button (Right after traffic lights) -->
+    <g transform="translate(94, 28)">
+      <rect x="0" y="0" width="28" height="22" rx="5" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.06)" />
+      <rect x="4" y="5" width="20" height="12" rx="2" fill="none" stroke="#cbd5e1" stroke-width="1.2" />
+      <line x1="10" y1="5" x2="10" y2="17" stroke="#cbd5e1" stroke-width="1.2" />
+    </g>
 
-    <!-- Top MenuBar -->
-    <g transform="translate(254, 30)">
+    <!-- App Brand & Title -->
+    <g transform="translate(132, 28)">
+      <!-- Dual-Ring Logo -->
+      <g transform="translate(2, 1)">
+        <circle cx="10" cy="10" r="8" fill="none" stroke="#12b5cb" stroke-width="2.6" stroke-dasharray="32 18" />
+        <circle cx="13" cy="7" r="2.2" fill="#fab82b" />
+        <circle cx="7" cy="13" r="2.2" fill="#12b5cb" />
+        <circle cx="10" cy="10" r="8" fill="none" stroke="#fab82b" stroke-width="2.6" stroke-dasharray="18 32" transform="rotate(180 10 10)" />
+      </g>
+      <text x="28" y="15" fill="#f8fafc" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AIGC Toolbox</text>
+      <rect x="156" y="2" width="46" height="18" rx="9" fill="rgba(18,181,203,0.16)" stroke="rgba(18,181,203,0.35)" stroke-width="1" />
+      <text x="179" y="14" fill="#67e8f9" font-size="10.5" font-weight="600" text-anchor="middle">v0.1.1</text>
+    </g>
+
+    <!-- Top MenuBar (macOS App-Menu Style) -->
+    <g transform="translate(348, 29)">
       <rect x="0" y="0" width="38" height="20" rx="4" fill="transparent" />
       <text x="8" y="14" fill="#cbd5e1" font-size="12">File</text>
 
@@ -75,18 +89,11 @@
       <text x="186" y="14" fill="#cbd5e1" font-size="12">Help</text>
     </g>
 
-    <!-- Right Window Controls -->
-    <g transform="translate(1185, 30)">
-      <!-- Minimize -->
-      <rect x="0" y="0" width="22" height="20" rx="3" fill="rgba(255,255,255,0.04)" />
-      <line x1="6" y1="10" x2="16" y2="10" stroke="#a1a1aa" stroke-width="1.2" stroke-linecap="round" />
-      <!-- Maximize -->
-      <rect x="25" y="0" width="22" height="20" rx="3" fill="rgba(255,255,255,0.04)" />
-      <rect x="30" y="5" width="12" height="10" fill="none" stroke="#a1a1aa" stroke-width="1.2" rx="1" />
-      <!-- Close -->
-      <rect x="50" y="0" width="22" height="20" rx="3" fill="rgba(239,68,68,0.12)" />
-      <line x1="56" y1="6" x2="66" y2="14" stroke="#f87171" stroke-width="1.2" stroke-linecap="round" />
-      <line x1="66" y1="6" x2="56" y2="14" stroke="#f87171" stroke-width="1.2" stroke-linecap="round" />
+    <!-- Right Header Actions (Inspector Toggle) -->
+    <g transform="translate(1218, 28)">
+      <rect x="0" y="0" width="28" height="22" rx="5" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.06)" />
+      <rect x="4" y="5" width="20" height="12" rx="2" fill="none" stroke="#cbd5e1" stroke-width="1.2" />
+      <line x1="18" y1="5" x2="18" y2="17" stroke="#cbd5e1" stroke-width="1.2" />
     </g>
 
     <!-- 2. Left Sidebar (Eagle Studio Navigation) -->
@@ -368,7 +375,7 @@
       <!-- Seed -->
       <rect x="128" y="84" width="120" height="24" rx="4" fill="#202024" />
       <text x="136" y="100" fill="#71717a" font-size="10.5">Seed</text>
-      <text x="172" y="100" fill="#f8fafc" font-size="10" font-family="monospace">284910294</text>
+      <text x="172" y="100" fill="#f8fafc" font-size="10.5" font-family="monospace">284910294</text>
     </g>
 
     <!-- Raw Metadata Collapse Banner -->
@@ -379,9 +386,9 @@
     </g>
 
     <!-- 5. Bottom StatusBar -->
-    <path d="M 20 750 L 1260 750 L 1260 768 Q 1260 780 1248 780 L 32 780 Q 20 780 20 768 Z" fill="#141417" />
+    <path d="M 20 750 L 1260 750 L 1260 766 Q 1260 780 1246 780 L 34 780 Q 20 780 20 766 Z" fill="#141417" />
     <line x1="20" y1="750" x2="1260" y2="750" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
     <text x="36" y="768" fill="#94a3b8" font-size="11">Total: <tspan fill="#f8fafc" font-weight="600">1,248 items</tspan> | Selected: <tspan fill="#12b5cb" font-weight="600">1 item (3.4 MB)</tspan></text>
-    <text x="1244" y="768" fill="#4ade80" font-size="11" text-anchor="end">● Database Connected (SQLite v0.1.0)</text>
+    <text x="1244" y="768" fill="#4ade80" font-size="11" text-anchor="end">● Database Connected (SQLite v0.1.1)</text>
   </g>
 </svg>

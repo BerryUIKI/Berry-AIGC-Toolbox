@@ -1329,6 +1329,8 @@ function onResetZoom() {
   position: relative;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Responsive Adaptive Breakpoints */

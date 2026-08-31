@@ -64,12 +64,16 @@ function updateDimensions() {
 }
 
 let resizeObserver: ResizeObserver | null = null;
+let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 onMounted(() => {
   if (containerRef.value) {
     updateDimensions();
     resizeObserver = new ResizeObserver(() => {
-      updateDimensions();
+      if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+      resizeDebounceTimer = setTimeout(() => {
+        updateDimensions();
+      }, 50);
     });
     resizeObserver.observe(containerRef.value);
   }
@@ -77,6 +81,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
   resizeObserver?.disconnect();
   window.removeEventListener("keydown", handleKeyDown);
 });
@@ -266,11 +271,12 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   }
 }
 
-// When files change or reset, scroll to top if needed
+// When files change or reset, scroll to top and reset thumbnail cache
 watch(
   () => props.files,
   () => {
     failedImages.value.clear();
+    thumbnailMap.value = {};
   },
 );
 </script>
@@ -286,6 +292,8 @@ watch(
       v-else
       ref="containerRef"
       class="virtual-grid-container"
+      role="grid"
+      aria-label="Image gallery grid"
       tabindex="0"
       @scroll.passive="onScroll"
     >
@@ -302,6 +310,8 @@ watch(
             v-for="file in visibleFiles"
             :key="file.id ?? file.path"
             class="grid-card"
+            role="gridcell"
+            :aria-selected="selectedFile?.path === file.path"
             :class="{
               active: selectedFile?.path === file.path,
               'multi-selected': selectedFilePaths?.has(file.path),
@@ -316,6 +326,7 @@ watch(
                 type="button"
                 class="card-select-btn"
                 :class="{ checked: selectedFilePaths?.has(file.path) }"
+                :aria-label="selectedFilePaths?.has(file.path) ? 'Deselect image' : 'Select image'"
                 :title="selectedFilePaths?.has(file.path) ? 'Deselect image' : 'Select image'"
                 @click.stop="toggleSelect(file)"
               >

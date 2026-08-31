@@ -1,12 +1,12 @@
 //! High-performance thumbnail generation with limited concurrency and disk cache management.
 
+use image::ImageReader;
+use rayon::prelude::*;
+use rayon::ThreadPool;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::OnceLock;
-use rayon::prelude::*;
-use rayon::ThreadPool;
-use image::ImageReader;
 
 /// Dedicated background thread pool with strictly limited concurrency (max 2 threads)
 /// to ensure the main UI and WebView are never starved of CPU or disk I/O.
@@ -50,13 +50,12 @@ pub fn get_thumbnail_path(
 }
 
 /// Generate a downscaled thumbnail and save to `dst_path` as WebP or JPEG.
-pub fn generate_thumbnail(
-    src_path: &Path,
-    dst_path: &Path,
-    max_edge: u32,
-) -> Result<(), String> {
+pub fn generate_thumbnail(src_path: &Path, dst_path: &Path, max_edge: u32) -> Result<(), String> {
     if !src_path.exists() {
-        return Err(format!("Source image does not exist: {}", src_path.display()));
+        return Err(format!(
+            "Source image does not exist: {}",
+            src_path.display()
+        ));
     }
 
     // Ensure parent directory exists
@@ -217,10 +216,8 @@ pub fn clear_thumbnail_cache(cache_dir: &Path) -> Result<usize, String> {
     if let Ok(entries) = fs::read_dir(&thumb_dir) {
         for entry in entries.flatten() {
             if let Ok(meta) = entry.metadata() {
-                if meta.is_file() {
-                    if fs::remove_file(entry.path()).is_ok() {
-                        removed += 1;
-                    }
+                if meta.is_file() && fs::remove_file(entry.path()).is_ok() {
+                    removed += 1;
                 }
             }
         }

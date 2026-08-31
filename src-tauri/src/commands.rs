@@ -688,7 +688,13 @@ pub fn move_files(
             // Cross-device fallback: copy then remove
             std::fs::copy(src_path, &dest_path)
                 .map_err(|e| format!("Failed to move file to {}: {e}", dest_path.display()))?;
-            let _ = std::fs::remove_file(src_path);
+            std::fs::remove_file(src_path).map_err(|e| {
+                format!(
+                    "Copied to {} but failed to remove source file {}: {e}",
+                    dest_path.display(),
+                    src_path.display()
+                )
+            })?;
         }
 
         // Check and move sibling sidecars (.txt, .json)
@@ -696,9 +702,8 @@ pub fn move_files(
         if sidecar_txt.exists() {
             let dest_txt = dest_path.with_extension("txt");
             let _ = std::fs::rename(&sidecar_txt, &dest_txt).or_else(|_| {
-                std::fs::copy(&sidecar_txt, &dest_txt).map(|_| {
-                    let _ = std::fs::remove_file(&sidecar_txt);
-                })
+                std::fs::copy(&sidecar_txt, &dest_txt)
+                    .and_then(|_| std::fs::remove_file(&sidecar_txt))
             });
         }
 
@@ -819,6 +824,9 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        if path.contains('"') {
+            return Err("Path contains invalid characters for Explorer".to_string());
+        }
         std::process::Command::new("explorer")
             .arg(format!("/select,\"{path}\""))
             .spawn()
@@ -853,7 +861,7 @@ pub fn backup_database(destination_path: String, state: State<'_, AppState>) -> 
         .map_err(|e| e.to_string())
 }
 
-/// Get database size and record counts.
+/// Retrieve database storage and table statistics.
 #[tauri::command]
 pub fn get_database_stats(state: State<'_, AppState>) -> Result<DatabaseStats, String> {
     db(&state)?.get_database_stats().map_err(|e| e.to_string())
@@ -882,6 +890,16 @@ pub fn restore_database(
         .map_err(|e| format!("Failed to get app data dir: {e}"))?;
     let active_db_path = data_dir.join("berry.db");
 
+    // Release connection on active database file to avoid Windows lock collision
+    {
+        let mut guard = state
+            .db
+            .lock()
+            .map_err(|_| "Database lock poisoned".to_string())?;
+        *guard = Database::connect_in_memory()
+            .map_err(|e| format!("Failed to create temporary DB: {e}"))?;
+    }
+
     // Copy backup to active database location
     std::fs::copy(src, &active_db_path)
         .map_err(|e| format!("Failed to copy backup database to active location: {e}"))?;
@@ -900,28 +918,15 @@ pub fn restore_database(
 
 /// Open an external URL in the system's default browser.
 #[tauri::command]
-pub fn open_external_url(url: String) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &url])
-            .spawn()
-            .map_err(|e| e.to_string())?;
+pub fn open_external_url(url: String, app_handle: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(format!("Refusing to open non-HTTP(S) URL: {url}"));
     }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
-    #[cfg(target_os = "linux")]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(&url)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-    }
+    app_handle
+        .opener()
+        .open_url(&url, None::<&str>)
+        .map_err(|e| format!("Failed to open URL: {e}"))?;
     Ok(())
 }
 
@@ -951,7 +956,7 @@ pub struct BatchThumbnailItem {
 
 /// Request background batch thumbnail generation with progress event emission.
 #[tauri::command]
-pub fn batch_generate_thumbnails(
+pub async fn batch_generate_thumbnails(
     app_handle: AppHandle,
     items: Vec<BatchThumbnailItem>,
     max_edge: Option<u32>,
@@ -968,21 +973,25 @@ pub fn batch_generate_thumbnails(
         .collect();
 
     let app_clone = app_handle.clone();
-    let count = berry_scan::batch_generate_thumbnails(
-        &data_dir,
-        tuples,
-        max_edge,
-        Some(move |current: usize, total: usize| {
-            let _ = app_clone.emit(
-                "thumbnail-progress",
-                berry_scan::ThumbnailProgress {
-                    current,
-                    total,
-                    done: current >= total,
-                },
-            );
-        }),
-    );
+    let count = tauri::async_runtime::spawn_blocking(move || {
+        berry_scan::batch_generate_thumbnails(
+            &data_dir,
+            tuples,
+            max_edge,
+            Some(move |current: usize, total: usize| {
+                let _ = app_clone.emit(
+                    "thumbnail-progress",
+                    berry_scan::ThumbnailProgress {
+                        current,
+                        total,
+                        done: current >= total,
+                    },
+                );
+            }),
+        )
+    })
+    .await
+    .map_err(|e| format!("Thumbnail generation task failed: {e}"))?;
 
     let _ = app_handle.emit(
         "thumbnail-progress",

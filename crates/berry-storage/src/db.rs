@@ -16,6 +16,8 @@ use crate::migrations::{LATEST_VERSION, MIGRATIONS};
 pub enum DatabaseError {
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
     #[error("unknown container id stored in database: {0}")]
@@ -151,7 +153,7 @@ impl Database {
     pub fn backup_database(&self, destination_path: &str) -> Result<(), DatabaseError> {
         let dest = Path::new(destination_path);
         if dest.exists() {
-            let _ = std::fs::remove_file(dest);
+            std::fs::remove_file(dest)?;
         }
         self.conn.execute("VACUUM INTO ?1", [destination_path])?;
         Ok(())
@@ -1257,6 +1259,38 @@ impl Database {
             results.push(r?);
         }
         Ok(results)
+    }
+
+    /// Returns `(path, size_bytes, modified_at, has_metadata)` tuples for all
+    /// files in a folder — lightweight version of `list_files` that avoids
+    /// deserializing the JSON `metadata` column.
+    pub fn list_file_fingerprints(
+        &self,
+        folder_id: i64,
+    ) -> Result<Vec<(String, u64, i64, bool)>, DatabaseError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size_bytes, modified_at, (metadata IS NOT NULL)
+             FROM files WHERE folder_id = ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![folder_id], |row| {
+                let size: i64 = row.get(1)?;
+                let has_meta: i64 = row.get(3)?;
+                Ok((
+                    row.get::<_, String>(0)?,
+                    size as u64,
+                    row.get::<_, i64>(2)?,
+                    has_meta != 0,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+}
+
+impl Drop for Database {
+    fn drop(&mut self) {
+        let _ = self.conn.execute("PRAGMA optimize;", []);
     }
 }
 

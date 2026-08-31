@@ -42,8 +42,9 @@ pub fn extract_metadata(container: Container, path: &Path) -> Option<ExtractedMe
 
 /// Extract metadata from a PNG file across all supported generator formats.
 fn extract_png_metadata(path: &Path) -> Option<ExtractedMetadata> {
-    let bytes = std::fs::read(path).ok()?;
-    let chunks = pnginfo::text_chunks(&bytes).ok()?;
+    let file = std::fs::File::open(path).ok()?;
+    let reader = std::io::BufReader::new(file);
+    let chunks = pnginfo::read_text_chunks_from_reader(reader).ok()?;
 
     // 1. Look for ComfyUI `prompt` / `workflow`
     for chunk in &chunks {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -48,7 +48,7 @@ const albums = ref<Album[]>([]);
 const albumCounts = ref<Record<number, number>>({});
 const tags = ref<Tag[]>([]);
 const activeTarget = ref<NavTarget>({ type: "all" });
-const files = ref<ImageFile[]>([]);
+const files = shallowRef<ImageFile[]>([]);
 const filesLoading = ref(false);
 const searchQuery = ref("");
 const gridItemWidth = ref(200);
@@ -251,23 +251,6 @@ function handleWindowKeyDown(e: KeyboardEvent) {
       }
       onBatchTrash();
       return;
-    }
-  }
-
-  // Arrow Keys Navigation when not in lightbox
-  if (!lightboxFile.value && files.value.length > 0) {
-    const currentIdx = selectedFile.value
-      ? files.value.findIndex((f) => f.path === selectedFile.value?.path)
-      : -1;
-
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
-      e.preventDefault();
-      const nextIdx = currentIdx < files.value.length - 1 ? currentIdx + 1 : 0;
-      selectedFile.value = files.value[nextIdx];
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
-      e.preventDefault();
-      const prevIdx = currentIdx > 0 ? currentIdx - 1 : files.value.length - 1;
-      selectedFile.value = files.value[prevIdx];
     }
   }
 }
@@ -485,7 +468,9 @@ function onLightboxNavigate(file: ImageFile) {
 function onFileRated(fileId: number, rating: number | null) {
   const idx = files.value.findIndex((f) => f.id === fileId);
   if (idx !== -1) {
-    files.value[idx].rating = rating ?? undefined;
+    const updated = [...files.value];
+    updated[idx] = { ...updated[idx], rating: rating ?? undefined };
+    files.value = updated;
   }
   if (selectedFile.value?.id === fileId) {
     selectedFile.value.rating = rating ?? undefined;
@@ -534,8 +519,15 @@ async function onBatchToggleFavorite(isFavorite: boolean) {
   if (ids.length === 0) return;
   try {
     await invoke("set_files_favorite", { fileIds: ids, isFavorite });
-    for (const f of selectedFilesList.value) {
-      f.is_favorite = isFavorite;
+    const updated = files.value.map((f) => {
+      if (selectedFilePaths.value.has(f.path)) {
+        return { ...f, is_favorite: isFavorite };
+      }
+      return f;
+    });
+    files.value = updated;
+    if (selectedFile.value && selectedFilePaths.value.has(selectedFile.value.path)) {
+      selectedFile.value.is_favorite = isFavorite;
     }
   } catch (err) {
     error.value = String(err);
@@ -549,8 +541,15 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
   if (ids.length === 0) return;
   try {
     await invoke("set_files_nsfw", { fileIds: ids, isNsfw });
-    for (const f of selectedFilesList.value) {
-      f.is_nsfw = isNsfw;
+    const updated = files.value.map((f) => {
+      if (selectedFilePaths.value.has(f.path)) {
+        return { ...f, is_nsfw: isNsfw };
+      }
+      return f;
+    });
+    files.value = updated;
+    if (selectedFile.value && selectedFilePaths.value.has(selectedFile.value.path)) {
+      selectedFile.value.is_nsfw = isNsfw;
     }
   } catch (err) {
     error.value = String(err);
@@ -584,7 +583,9 @@ async function onFileOpCompleted() {
 function onUpdateFile(file: ImageFile) {
   const idx = files.value.findIndex((f) => f.id === file.id);
   if (idx !== -1) {
-    files.value[idx] = { ...file };
+    const updated = [...files.value];
+    updated[idx] = { ...file };
+    files.value = updated;
   }
   if (selectedFile.value?.id === file.id) {
     selectedFile.value = { ...file };

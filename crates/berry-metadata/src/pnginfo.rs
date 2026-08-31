@@ -45,6 +45,70 @@ pub struct PngTextChunk {
     pub text: String,
 }
 
+use std::io::{Read, Seek, SeekFrom};
+
+/// Walk a PNG's chunk stream from a reader and return every decodable text chunk,
+/// in file order. Seeks past non-text chunks (such as IDAT pixel data) to avoid
+/// reading large images into RAM. Stops at `IEND`.
+pub fn read_text_chunks_from_reader<R: Read + Seek>(
+    mut reader: R,
+) -> Result<Vec<PngTextChunk>, PngError> {
+    let mut sig = [0u8; 8];
+    reader
+        .read_exact(&mut sig)
+        .map_err(|_| PngError::BadSignature)?;
+    if sig != PNG_SIGNATURE {
+        return Err(PngError::BadSignature);
+    }
+
+    let mut chunks = Vec::new();
+    let mut header = [0u8; 8];
+
+    while reader.read_exact(&mut header).is_ok() {
+        let length = u32::from_be_bytes(header[0..4].try_into().unwrap()) as usize;
+        let chunk_type = &header[4..8];
+
+        match chunk_type {
+            b"IEND" => break,
+            b"tEXt" => {
+                let mut data = vec![0u8; length];
+                reader
+                    .read_exact(&mut data)
+                    .map_err(|_| PngError::Truncated)?;
+                // Read and discard 4-byte CRC
+                let mut crc = [0u8; 4];
+                reader
+                    .read_exact(&mut crc)
+                    .map_err(|_| PngError::Truncated)?;
+                chunks.push(parse_text(&data)?);
+            }
+            b"iTXt" => {
+                let mut data = vec![0u8; length];
+                reader
+                    .read_exact(&mut data)
+                    .map_err(|_| PngError::Truncated)?;
+                // Read and discard 4-byte CRC
+                let mut crc = [0u8; 4];
+                reader
+                    .read_exact(&mut crc)
+                    .map_err(|_| PngError::Truncated)?;
+                if let Some(chunk) = parse_itxt(&data)? {
+                    chunks.push(chunk);
+                }
+            }
+            _ => {
+                // Seek past chunk data and 4-byte CRC
+                let skip = (length as u64).saturating_add(4);
+                reader
+                    .seek(SeekFrom::Current(skip as i64))
+                    .map_err(|_| PngError::Truncated)?;
+            }
+        }
+    }
+
+    Ok(chunks)
+}
+
 /// Walk a PNG's chunk stream and return every decodable text chunk, in file
 /// order. Stops at `IEND`; compressed chunks and non-text chunks are ignored.
 pub fn text_chunks(bytes: &[u8]) -> Result<Vec<PngTextChunk>, PngError> {
@@ -59,13 +123,13 @@ pub fn text_chunks(bytes: &[u8]) -> Result<Vec<PngTextChunk>, PngError> {
     while offset < total {
         // Each chunk: 4-byte big-endian length, 4-byte type, `length` data
         // bytes, 4-byte CRC.
-        if total - offset < 8 {
+        if total.saturating_sub(offset) < 8 {
             return Err(PngError::Truncated);
         }
         let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
         let chunk_type = &bytes[offset + 4..offset + 8];
         let data_start = offset + 8;
-        if total - data_start < length + 4 {
+        if total.saturating_sub(data_start) < length.saturating_add(4) {
             return Err(PngError::Truncated);
         }
         let data = &bytes[data_start..data_start + length];
@@ -304,5 +368,24 @@ mod tests {
     fn missing_parameters_chunk_returns_none() {
         let file = png(&[&ihdr(), &tex("Comment", "x"), &iend()]);
         assert_eq!(extract_parameters(&file), None);
+    }
+
+    #[test]
+    fn reads_text_chunks_from_reader_skipping_idat() {
+        let idat_data = vec![0x78, 0x9c, 0x63, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01];
+        let file = png(&[
+            &ihdr(),
+            &tex("parameters", "prompt before idat"),
+            &chunk(b"IDAT", &idat_data),
+            &tex("Comment", "comment after idat"),
+            &iend(),
+        ]);
+        let cursor = std::io::Cursor::new(file);
+        let chunks = read_text_chunks_from_reader(cursor).unwrap();
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].keyword, "parameters");
+        assert_eq!(chunks[0].text, "prompt before idat");
+        assert_eq!(chunks[1].keyword, "Comment");
+        assert_eq!(chunks[1].text, "comment after idat");
     }
 }

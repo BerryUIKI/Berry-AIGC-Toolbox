@@ -180,9 +180,9 @@ impl Scanner {
         // without reopening them.
         let db = Database::connect(&self.db_path)?;
         let existing: HashMap<String, (u64, i64, bool)> = db
-            .list_files(folder_id)?
+            .list_file_fingerprints(folder_id)?
             .into_iter()
-            .map(|f| (f.path, (f.size_bytes, f.modified_at, f.metadata.is_some())))
+            .map(|(path, size, mtime, has_meta)| (path, (size, mtime, has_meta)))
             .collect();
 
         // Paths seen this run; rows indexed before but not seen are removed at

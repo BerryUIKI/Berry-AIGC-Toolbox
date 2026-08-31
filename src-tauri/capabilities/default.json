@@ -12,6 +12,7 @@
     "core:window:allow-is-maximized",
     "core:window:allow-close",
     "core:window:allow-start-dragging",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "opener:default"
   ]
 }

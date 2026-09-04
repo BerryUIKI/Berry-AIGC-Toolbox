@@ -85,6 +85,8 @@ export const es: typeof en = {
     seed: "Semilla (Seed)",
     dimensions: "Dimensiones",
     format: "Formato",
+    container: "Contenedor",
+    platform: "Plataforma",
     rating: "Puntuación",
     unrated: "Sin puntuar",
     clickToReveal: "Haga clic para revelar contenido sensible",

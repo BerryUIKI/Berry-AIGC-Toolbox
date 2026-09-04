@@ -13,6 +13,10 @@ use std::fmt;
 /// PNG signature (8 bytes): `\x89PNG\r\n\x1a\n`.
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
+/// Maximum allowed length (in bytes) for a PNG text chunk (64 MB).
+/// Protects against memory exhaustion / DoS when encountering malformed or crafted files.
+pub const MAX_TEXT_CHUNK_LEN: usize = 64 * 1024 * 1024;
+
 /// Errors produced while walking a PNG's chunk stream.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PngError {
@@ -71,6 +75,13 @@ pub fn read_text_chunks_from_reader<R: Read + Seek>(
         match chunk_type {
             b"IEND" => break,
             b"tEXt" => {
+                if length > MAX_TEXT_CHUNK_LEN {
+                    let skip = (length as u64).saturating_add(4);
+                    reader
+                        .seek(SeekFrom::Current(skip as i64))
+                        .map_err(|_| PngError::Truncated)?;
+                    continue;
+                }
                 let mut data = vec![0u8; length];
                 reader
                     .read_exact(&mut data)
@@ -83,6 +94,13 @@ pub fn read_text_chunks_from_reader<R: Read + Seek>(
                 chunks.push(parse_text(&data)?);
             }
             b"iTXt" => {
+                if length > MAX_TEXT_CHUNK_LEN {
+                    let skip = (length as u64).saturating_add(4);
+                    reader
+                        .seek(SeekFrom::Current(skip as i64))
+                        .map_err(|_| PngError::Truncated)?;
+                    continue;
+                }
                 let mut data = vec![0u8; length];
                 reader
                     .read_exact(&mut data)
@@ -136,13 +154,13 @@ pub fn text_chunks(bytes: &[u8]) -> Result<Vec<PngTextChunk>, PngError> {
 
         match chunk_type {
             b"IEND" => break,
-            b"tEXt" => chunks.push(parse_text(data)?),
-            b"iTXt" => {
+            b"tEXt" if length <= MAX_TEXT_CHUNK_LEN => chunks.push(parse_text(data)?),
+            b"iTXt" if length <= MAX_TEXT_CHUNK_LEN => {
                 if let Some(chunk) = parse_itxt(data)? {
                     chunks.push(chunk);
                 }
             }
-            // zTXt and compressed iTXt are skipped; we only read plain text.
+            // zTXt, compressed iTXt, oversized, and non-text chunks are skipped.
             _ => {}
         }
 
@@ -387,5 +405,30 @@ mod tests {
         assert_eq!(chunks[0].text, "prompt before idat");
         assert_eq!(chunks[1].keyword, "Comment");
         assert_eq!(chunks[1].text, "comment after idat");
+    }
+
+    #[test]
+    fn rejects_oversized_text_chunk_without_oom() {
+        // Declares a 2GB chunk without providing the payload
+        let mut file = SIGNATURE.to_vec();
+        file.extend_from_slice(&2_000_000_000u32.to_be_bytes());
+        file.extend_from_slice(b"tEXt");
+        let cursor = std::io::Cursor::new(file);
+        // It must NOT allocate 2GB and OOM; it must safely seek past and return Ok([])
+        let chunks = read_text_chunks_from_reader(cursor).unwrap();
+        assert_eq!(chunks.len(), 0);
+    }
+
+    #[test]
+    fn text_chunks_skips_oversized_chunks() {
+        // A chunk with declared length > MAX_TEXT_CHUNK_LEN
+        let mut file = SIGNATURE.to_vec();
+        file.extend_from_slice(&ihdr());
+        // Add oversized chunk header
+        let oversized_len = (MAX_TEXT_CHUNK_LEN as u32) + 100;
+        file.extend_from_slice(&oversized_len.to_be_bytes());
+        file.extend_from_slice(b"tEXt");
+        // Because the buffer doesn't have `oversized_len` bytes, text_chunks returns Truncated
+        assert_eq!(text_chunks(&file).unwrap_err(), PngError::Truncated);
     }
 }

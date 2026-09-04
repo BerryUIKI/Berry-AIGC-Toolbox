@@ -85,6 +85,8 @@ export const fr: typeof en = {
     seed: "Seed",
     dimensions: "Dimensions",
     format: "Format",
+    container: "Conteneur",
+    platform: "Plateforme",
     rating: "Note",
     unrated: "Non noté",
     clickToReveal: "Cliquer pour afficher le contenu sensible",

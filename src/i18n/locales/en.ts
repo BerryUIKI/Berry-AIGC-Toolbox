@@ -83,6 +83,8 @@ export const en = {
     seed: "Seed",
     dimensions: "Dimensions",
     format: "Format",
+    container: "Container",
+    platform: "Platform",
     rating: "Rating",
     unrated: "Unrated",
     clickToReveal: "Click to reveal sensitive content",

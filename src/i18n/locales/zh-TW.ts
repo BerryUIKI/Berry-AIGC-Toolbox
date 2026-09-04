@@ -85,6 +85,8 @@ export const zhTW: typeof en = {
     seed: "隨機種子 (Seed)",
     dimensions: "圖像解析度",
     format: "元數據格式",
+    container: "容器",
+    platform: "生成平台",
     rating: "評分",
     unrated: "未評分",
     clickToReveal: "點擊檢視敏感內容",

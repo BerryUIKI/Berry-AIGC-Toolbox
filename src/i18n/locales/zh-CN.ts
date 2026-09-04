@@ -85,6 +85,8 @@ export const zhCN: typeof en = {
     seed: "随机种子 (Seed)",
     dimensions: "图像分辨率",
     format: "元数据格式",
+    container: "容器",
+    platform: "生成平台",
     rating: "评分",
     unrated: "未评分",
     clickToReveal: "点击查看敏感内容",

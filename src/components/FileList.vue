@@ -166,10 +166,10 @@ function size(meta: ImageFile["metadata"]): string {
             </th>
             <th class="th-preview">{{ t.preview.preview }}</th>
             <th>{{ t.sort.name }}</th>
-            <th>{{ t.preview.format }}</th>
+            <th>{{ t.preview.container }}</th>
             <th>{{ t.sort.size }}</th>
             <th>{{ t.sort.modified }}</th>
-            <th>{{ t.preview.format }}</th>
+            <th>{{ t.preview.platform }}</th>
             <th>{{ t.preview.prompt }}</th>
             <th>{{ t.preview.dimensions }}</th>
             <th>{{ t.preview.modelName }}</th>

@@ -85,6 +85,8 @@ export const ja: typeof en = {
     seed: "シード値",
     dimensions: "解像度",
     format: "メタデータ形式",
+    container: "コンテナ",
+    platform: "生成ツール",
     rating: "評価",
     unrated: "未評価",
     clickToReveal: "クリックしてセンシティブ画像を表示",

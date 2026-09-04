@@ -24,6 +24,8 @@ const props = withDefaults(
     itemMinWidth?: number;
     gap?: number;
     overscan?: number;
+    blurNsfw?: boolean;
+    showCardBadges?: boolean;
   }>(),
   {
     selectedFile: null,
@@ -31,6 +33,8 @@ const props = withDefaults(
     itemMinWidth: 180,
     gap: 16,
     overscan: 4,
+    blurNsfw: true,
+    showCardBadges: true,
   },
 );
 
@@ -265,13 +269,6 @@ function handleKeyDown(e: KeyboardEvent) {
         nextIndex = currentIndex - cols.value;
       }
       break;
-    case "Enter":
-    case " ":
-      if (currentIndex >= 0 && props.files[currentIndex]) {
-        e.preventDefault();
-        activateFile(props.files[currentIndex]);
-      }
-      return;
     default:
       return;
   }
@@ -388,7 +385,7 @@ watch(
                 :src="getCardImageSrc(file)"
                 :alt="getFileName(file.path)"
                 class="thumbnail-img"
-                :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw.has(file.path) }"
+                :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
                 loading="lazy"
                 decoding="async"
                 @error="onImageError(file.path)"
@@ -399,7 +396,7 @@ watch(
 
               <!-- NSFW blur overlay -->
               <div
-                v-if="file.is_nsfw && !revealedNsfw.has(file.path)"
+                v-if="blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path)"
                 class="nsfw-overlay"
                 :title="t.preview.clickToReveal"
                 @click.stop="toggleNsfwReveal(file.path)"
@@ -410,41 +407,44 @@ watch(
                 </div>
               </div>
 
-              <!-- Favorite badge -->
-              <span
-                v-if="file.is_favorite"
-                class="card-badge badge-fav"
-                title="Favorite"
-              >
-                ★
-              </span>
+              <!-- Badges Container -->
+              <template v-if="showCardBadges">
+                <!-- Favorite badge -->
+                <span
+                  v-if="file.is_favorite"
+                  class="card-badge badge-fav"
+                  title="Favorite"
+                >
+                  ★
+                </span>
 
-              <!-- NSFW badge -->
-              <span
-                v-if="file.is_nsfw"
-                class="card-badge badge-nsfw"
-                title="18+ NSFW Content"
-              >
-                18+
-              </span>
+                <!-- NSFW badge -->
+                <span
+                  v-if="file.is_nsfw"
+                  class="card-badge badge-nsfw"
+                  title="18+ NSFW Content"
+                >
+                  18+
+                </span>
 
-              <!-- Format badge -->
-              <span
-                v-if="file.metadata?.format"
-                class="card-badge badge-format"
-                :title="`Format: ${formatPlatformName(file.metadata.format)}`"
-              >
-                {{ formatPlatformName(file.metadata.format) }}
-              </span>
+                <!-- Format badge -->
+                <span
+                  v-if="file.metadata?.format"
+                  class="card-badge badge-format"
+                  :title="`Format: ${formatPlatformName(file.metadata.format)}`"
+                >
+                  {{ formatPlatformName(file.metadata.format) }}
+                </span>
 
-              <!-- Rating badge -->
-              <span
-                v-if="file.rating"
-                class="card-badge badge-rating"
-                :title="`Rating: ${file.rating}/10`"
-              >
-                ★ {{ file.rating }}
-              </span>
+                <!-- Rating badge -->
+                <span
+                  v-if="file.rating"
+                  class="card-badge badge-rating"
+                  :title="`Rating: ${file.rating}/10`"
+                >
+                  ★ {{ file.rating }}
+                </span>
+              </template>
             </div>
 
             <div class="card-info">

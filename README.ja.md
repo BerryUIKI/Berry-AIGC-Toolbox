@@ -1,4 +1,4 @@
-# 🍇 Berry-AIGC-Toolbox
+# 🍇 Berry AI Studio
 
 <div align="center">
 
@@ -18,7 +18,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gui_preview_dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/gui_preview_light.svg">
-  <img alt="Berry AIGC Toolbox 画面プレビュー" src="docs/screenshots/gui_preview_dark.svg" width="100%">
+  <img alt="Berry AI Studio Preview" src="docs/screenshots/gui_preview_dark.svg" width="100%">
 </picture>
 
 </div>
@@ -27,7 +27,7 @@
 
 ## 🌟 概要
 
-**Berry-AIGC-Toolbox** は、AI画像クリエイターやプロンプトエンジニア向けに設計されたデスクトップ特化型画像アセット管理スタジオです。主要なAIGC生成ツールで作成された画像メタデータ（プロンプト、モデル名、サンプラー、ステップ数、CFG、シード値、ワークフローJSON）をローカルのSQLiteに高速インデックス化。**Eagleスタイルの3ペインスタジオワークスペース**、スムーズな仮想スクロールグリッド、トークン化プロンプトインスペクター、全画面ライトボックスビューア、スマート整理機能を提供します。
+**Berry AI Studio**（旧 *Berry-AIGC-Toolbox*）は、AI画像クリエイターやプロンプトエンジニア向けに設計されたデスクトップ特化型画像アセット管理スタジオです。主要なAI画像生成ツールで作成された画像メタデータ（プロンプト、モデル名、サンプラー、ステップ数、CFG、シード値、ワークフローJSON）をローカルのSQLiteに高速インデックス化。**3ペインスタジオワークスペース**、スムーズな仮想スクロールグリッド、トークン化プロンプトインスペクター、全画面ライトボックスビューア、スマート整理機能を提供します。
 
 > 🚀 **新アーキテクチャへの刷新**: Berry v0.1.0+ は **Tauri 2 + Rust + Vue 3** を採用してゼロから再構築されました。従来の旧 C#/.NET 版は `archive/old-main` タグおよび `old/main` ブランチにアーカイブされています。
 
@@ -35,7 +35,7 @@
 
 ## ✨ 主な機能
 
-### 🎨 Eagleスタイル 3ペインスタジオ UI
+### 🎨 3ペインスタジオ UI
 - **ネイティブ品質のフレームレスウィンドウ**: 統合メニューバー（`ファイル`、`編集`、`表示`、`ツール`、`ヘルプ`）、ドラッグ領域、コントロールボタンを備えたタイトルバー。
 - **左側ナビゲーションサイドバー**: メディアライブラリ（すべての画像、お気に入り、センシティブ 18+）、フォルダ階層ツリー（リアルタイムスキャン表示）、カラータグ、スマートアルバム。
 - **中央ギャラリーキャンバス＆仮想グリッド**: 数万枚の画像を軽快に表示する仮想スクロール、サムネイル拡大縮小スライダー（130px〜360px）、グリッド（⊞）/ リスト（☰）切り替え。

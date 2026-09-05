@@ -1,4 +1,4 @@
-# 🍇 Berry-AIGC-Toolbox
+# 🍇 Berry AI Studio
 
 <div align="center">
 
@@ -18,7 +18,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gui_preview_dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/gui_preview_light.svg">
-  <img alt="Berry AIGC Toolbox Studio" src="docs/screenshots/gui_preview_dark.svg" width="100%">
+  <img alt="Berry AI Studio Preview" src="docs/screenshots/gui_preview_dark.svg" width="100%">
 </picture>
 
 </div>
@@ -27,7 +27,7 @@
 
 ## 🌟 Overview
 
-**Berry-AIGC-Toolbox** is a modern, desktop-first asset manager built for digital artists, AI creators, and prompt engineers. It indexes and parses prompt metadata and generation parameters across all major AIGC platforms into a fast, local SQLite database, providing an **Eagle-style 3-Pane Studio Workspace** with smooth virtual grid navigation, tokenized prompt inspectors, instant full-screen lightbox preview, and smart categorization.
+**Berry AI Studio** (formerly *Berry-AIGC-Toolbox*) is a modern, desktop-first asset manager built for digital artists, AI creators, and prompt engineers. It indexes and parses prompt metadata and generation parameters across all major AI image platforms into a fast, local SQLite database, providing an **All-in-One 3-Pane Studio Workspace** with smooth virtual grid navigation, tokenized prompt inspectors, instant full-screen lightbox preview, and smart categorization.
 
 > 🚀 **Clean-Slate Architecture**: Berry v0.1.0+ is a ground-up rewrite in **Tauri 2 + Rust + Vue 3**. The legacy C#/.NET codebase is archived in the `archive/old-main` tag and `old/main` branch.
 
@@ -35,7 +35,7 @@
 
 ## ✨ Key Features
 
-### 🎨 Eagle-Style 3-Pane Studio Interface
+### 🎨 All-in-One 3-Pane Studio Workspace
 - **Frameless Window with Native Quality**: Custom frameless title bar with integrated desktop menu bar (`File`, `Edit`, `View`, `Tools`, `Help`), drag region, and window controls.
 - **Left Navigation Sidebar**: Quick filters (All Images, Favorites, Sensitive 18+), hierarchical folder tree with real-time scan indicators, color-coded tags, and smart albums.
 - **Center Canvas & Virtual Grid**: Ultra-fast virtual scrolling rendering tens of thousands of images, smooth thumbnail zoom slider (130px–360px), and Grid (⊞) / Table (☰) view switcher.

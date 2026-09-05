@@ -2,7 +2,7 @@ import type { en } from "./en";
 
 export const es: typeof en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "Indexador y visor de metadatos para imágenes de IA",
     version: "v",
     schema: "esquema v",
@@ -230,14 +230,14 @@ export const es: typeof en = {
     language: "Idioma",
     shortcuts: "Atajos de teclado",
     checkUpdates: "Buscar actualizaciones...",
-    about: "Acerca de Berry AIGC Toolbox",
+    about: "Acerca de Berry AI Studio",
   },
   updater: {
     title: "Buscar actualizaciones",
     checkingTitle: "Buscando actualizaciones...",
     checkingDesc: "Conectando con GitHub Releases para comprobar la última versión.",
     upToDateTitle: "¡Está actualizado!",
-    upToDateDesc: "Berry AIGC Toolbox está en la última versión disponible.",
+    upToDateDesc: "Berry AI Studio está en la última versión disponible.",
     latestRelease: "Última versión",
     newVersionFound: "Nueva versión disponible",
     currentInstalled: "Instalada actualmente",
@@ -288,7 +288,7 @@ export const es: typeof en = {
     clearCache: "🗑️ Limpiar caché de miniaturas",
     clearing: "Limpiando...",
     parsersTitle: "Motores de extracción de metadatos integrados",
-    parsersSubtitle: "Berry AIGC Toolbox admite la extracción sin pérdidas de parámetros para:",
+    parsersSubtitle: "Berry AI Studio admite la extracción sin pérdidas de parámetros para:",
     enabled: "✓ Habilitado",
     aboutTitle: "Acerca de & Almacenamiento",
     aboutDesc: "Estación de trabajo de escritorio de alto rendimiento para gestión de imágenes AIGC con Tauri 2 + Rust + Vue 3.",

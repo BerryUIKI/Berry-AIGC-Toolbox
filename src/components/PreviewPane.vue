@@ -317,6 +317,18 @@ watch(
               :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw }"
             />
 
+            <!-- Native HTML5 video player for MP4 video files -->
+            <video
+              v-else-if="file.container === 'mp4'"
+              :src="assetUrl(file.path)"
+              class="main-image main-video"
+              :class="{ 'nsfw-blurred': file.is_nsfw && !revealedNsfw }"
+              controls
+              autoplay
+              loop
+              playsinline
+            />
+
             <!-- NSFW Preview Overlay -->
             <div
               v-if="file.is_nsfw && !revealedNsfw"
@@ -336,9 +348,9 @@ watch(
                 </button>
               </div>
             </div>
-            <div v-else-if="file.container === 'mp4' || file.container === 'txt'" class="non-image-placeholder">
-              <span class="placeholder-icon">{{ file.container.toUpperCase() }}</span>
-              <p>Preview not available for this container type.</p>
+            <div v-else-if="file.container === 'txt'" class="non-image-placeholder">
+              <span class="placeholder-icon">TXT</span>
+              <p>Preview not available for text sidecars.</p>
             </div>
           </div>
 
@@ -710,6 +722,11 @@ watch(
   border-radius: 4px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   user-select: none;
+}
+
+.main-video {
+  background: #000;
+  outline: none;
 }
 
 .non-image-placeholder {

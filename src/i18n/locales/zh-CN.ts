@@ -2,7 +2,7 @@ import type { en } from "./en";
 
 export const zhCN: typeof en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "AI 生成图像的元数据索引与查看器",
     version: "v",
     schema: "数据库版本 v",
@@ -230,14 +230,14 @@ export const zhCN: typeof en = {
     language: "语言",
     shortcuts: "快捷键指南",
     checkUpdates: "检查更新...",
-    about: "关于 Berry AIGC Toolbox",
+    about: "关于 Berry AI Studio",
   },
   updater: {
     title: "检查更新",
     checkingTitle: "正在检查更新...",
     checkingDesc: "正在连接 GitHub Releases 获取最新版本信息。",
     upToDateTitle: "当前已是最新版本！",
-    upToDateDesc: "Berry AIGC Toolbox 处于最新可用版本。",
+    upToDateDesc: "Berry AI Studio 处于最新可用版本。",
     latestRelease: "最新正式版",
     newVersionFound: "发现新版本",
     currentInstalled: "当前已安装",
@@ -288,7 +288,7 @@ export const zhCN: typeof en = {
     clearCache: "🗑️ 清理缩略图缓存",
     clearing: "正在清理...",
     parsersTitle: "内置元数据解析引擎",
-    parsersSubtitle: "Berry AIGC Toolbox 支持以下生成工具的生成参数与工作流无损解析：",
+    parsersSubtitle: "Berry AI Studio 支持以下生成工具的生成参数与工作流无损解析：",
     enabled: "✓ 已启用",
     aboutTitle: "关于与存储",
     aboutDesc: "基于 Tauri 2 + Rust + Vue 3 的高性能本地 AIGC 图像资产管理工作台。",

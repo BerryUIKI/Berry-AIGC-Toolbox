@@ -300,7 +300,7 @@ function saveSettings() {
                 <img src="../assets/logo.png" alt="Berry Logo" width="48" height="48" class="about-logo-img" />
               </div>
               <div class="about-details">
-                <h5 class="about-name">Berry AIGC Toolbox</h5>
+                <h5 class="about-name">Berry AI Studio</h5>
                 <p class="about-ver">v{{ info?.app_version || '0.1.1' }}</p>
                 <p class="about-desc">{{ t.settings.aboutDesc }}</p>
               </div>

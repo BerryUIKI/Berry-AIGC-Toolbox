@@ -1,6 +1,6 @@
 export const en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "Metadata indexer and viewer for AI-generated images",
     version: "v",
     schema: "schema v",
@@ -228,14 +228,14 @@ export const en = {
     language: "Language",
     shortcuts: "Keyboard Shortcuts",
     checkUpdates: "Check for Updates...",
-    about: "About Berry AIGC Toolbox",
+    about: "About Berry AI Studio",
   },
   updater: {
     title: "Check for Updates",
     checkingTitle: "Checking for Updates...",
     checkingDesc: "Connecting to GitHub Releases to check for the latest version.",
     upToDateTitle: "You're up to date!",
-    upToDateDesc: "Berry AIGC Toolbox is on the latest available version.",
+    upToDateDesc: "Berry AI Studio is on the latest available version.",
     latestRelease: "Latest Release",
     newVersionFound: "New Version Available",
     currentInstalled: "Current Installed",
@@ -286,7 +286,7 @@ export const en = {
     clearCache: "🗑️ Clear Thumbnail Cache",
     clearing: "Clearing...",
     parsersTitle: "Built-in Metadata Extraction Engines",
-    parsersSubtitle: "Berry AIGC Toolbox supports lossless generation parameter and workflow extraction for:",
+    parsersSubtitle: "Berry AI Studio supports lossless generation parameter and workflow extraction for:",
     enabled: "✓ Enabled",
     aboutTitle: "About & Storage",
     aboutDesc: "High-performance desktop AIGC image asset manager built with Tauri 2 + Rust + Vue 3.",

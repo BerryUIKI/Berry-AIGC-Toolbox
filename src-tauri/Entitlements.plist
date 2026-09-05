@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Enable App Sandbox (Mandatory for Mac App Store) -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- Allow read/write access to files and directories explicitly selected by user (Open Dialog, Drag & Drop) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Outgoing network connections (Civitai hash query, updates/links, thumbnail/remote metadata) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

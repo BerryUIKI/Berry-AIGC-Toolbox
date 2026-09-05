@@ -209,6 +209,14 @@ function size(meta: ImageFile["metadata"]): string {
                 loading="lazy"
                 decoding="async"
               />
+              <video
+                v-else-if="file.container === 'mp4'"
+                :src="assetUrl(file.path)"
+                class="thumb thumb-video"
+                muted
+                preload="metadata"
+                playsinline
+              />
               <div v-else class="thumb-placeholder">
                 {{ file.container.toUpperCase() }}
               </div>
@@ -327,6 +335,11 @@ function size(meta: ImageFile["metadata"]): string {
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.1);
   display: block;
+}
+
+.thumb-video {
+  background: #000;
+  pointer-events: none;
 }
 
 .thumb-placeholder {

@@ -66,7 +66,7 @@
         <circle cx="7" cy="13" r="2.2" fill="#0891b2" />
         <circle cx="10" cy="10" r="8" fill="none" stroke="#d97706" stroke-width="2.6" stroke-dasharray="18 32" transform="rotate(180 10 10)" />
       </g>
-      <text x="28" y="15" fill="#0f172a" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AIGC Toolbox</text>
+      <text x="28" y="15" fill="#0f172a" font-size="13" font-weight="700" letter-spacing="-0.2">Berry AI Studio</text>
       <rect x="156" y="2" width="46" height="18" rx="9" fill="rgba(8,145,178,0.12)" stroke="rgba(8,145,178,0.3)" stroke-width="1" />
       <text x="179" y="14" fill="#0891b2" font-size="10.5" font-weight="600" text-anchor="middle">v0.1.1</text>
     </g>
@@ -96,7 +96,7 @@
       <line x1="18" y1="5" x2="18" y2="17" stroke="#475569" stroke-width="1.2" />
     </g>
 
-    <!-- 2. Left Sidebar (Eagle Studio Navigation) -->
+    <!-- 2. Left Sidebar (Studio Navigation) -->
     <rect x="20" y="58" width="220" height="692" fill="#f8fafc" />
     <line x1="240" y1="58" x2="240" y2="750" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 
@@ -289,7 +289,7 @@
       <text x="10" y="200" fill="#64748b" font-size="10">1024 × 1024 · PNG · 2.5 MB</text>
     </g>
 
-    <!-- 4. Right Inspector Pane (Eagle Studio Inspector) -->
+    <!-- 4. Right Inspector Pane (Studio Inspector) -->
     <rect x="980" y="58" width="280" height="692" fill="#f8fafc" />
     <line x1="980" y1="58" x2="980" y2="750" stroke="rgba(0,0,0,0.06)" stroke-width="1" />
 

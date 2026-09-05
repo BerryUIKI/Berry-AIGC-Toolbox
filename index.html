@@ -332,10 +332,6 @@
                 <span class="flex items-center gap-2"><span>⚙️</span> Setup Executable (.exe)</span>
                 <span class="text-[11px] text-[#64748b]">x64</span>
               </a>
-              <a id="winZipBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.2/Berry-AIGC-Toolbox_Windows_x64.zip" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
-                <span class="flex items-center gap-2"><span>🗜️</span> Portable Archive (.zip)</span>
-                <span class="text-[11px] text-[#64748b]">No-Install</span>
-              </a>
             </div>
           </div>
           <a href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases" target="_blank" rel="noopener" class="text-center text-[12px] text-[#12b5cb] hover:underline" data-i18n="download.allWinReleases">View all Windows assets on GitHub →</a>
@@ -362,9 +358,9 @@
                 <span class="flex items-center gap-2"><span>🖥️</span> Intel x64 (.dmg)</span>
                 <span class="text-[11px] text-[#64748b]">x86_64</span>
               </a>
-              <a id="macTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.2/Berry-AIGC-Toolbox_macOS_universal.tar.gz" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+              <a id="macArmTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.2/Berry-AIGC-Toolbox_aarch64.app.tar.gz" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
                 <span class="flex items-center gap-2"><span>📦</span> App Bundle (.tar.gz)</span>
-                <span class="text-[11px] text-[#64748b]">Universal</span>
+                <span class="text-[11px] text-[#64748b]">Apple Silicon</span>
               </a>
             </div>
           </div>
@@ -392,9 +388,9 @@
                 <span class="flex items-center gap-2"><span>📦</span> Debian / Ubuntu (.deb)</span>
                 <span class="text-[11px] text-[#64748b]">apt</span>
               </a>
-              <a id="linuxTarBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.2/Berry-AIGC-Toolbox_Linux_x64.tar.gz" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
-                <span class="flex items-center gap-2"><span>🗜️</span> Generic Tarball (.tar.gz)</span>
-                <span class="text-[11px] text-[#64748b]">Binary</span>
+              <a id="linuxRpmBtn" href="https://github.com/BerryUIKI/Berry-AIGC-Toolbox/releases/download/v0.1.2/Berry-AIGC-Toolbox-0.1.2-1.x86_64.rpm" onclick="handleDirectDownload(event, this)" class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 text-[13px] text-[#cbd5e1] transition-colors">
+                <span class="flex items-center gap-2"><span>🗜️</span> Fedora / RHEL (.rpm)</span>
+                <span class="text-[11px] text-[#64748b]">rpm</span>
               </a>
             </div>
           </div>
@@ -1233,11 +1229,8 @@
               if (name.endsWith(".msi")) {
                 const el = document.getElementById("winMsiBtn");
                 if (el) el.href = asset.browser_download_url;
-              } else if (name.endsWith(".exe")) {
+              } else if (name.endsWith("-setup.exe") || name.endsWith(".exe")) {
                 const el = document.getElementById("winExeBtn");
-                if (el) el.href = asset.browser_download_url;
-              } else if (name.endsWith(".zip") && name.includes("win")) {
-                const el = document.getElementById("winZipBtn");
                 if (el) el.href = asset.browser_download_url;
               } else if (name.endsWith(".dmg") && (name.includes("aarch64") || name.includes("arm64"))) {
                 const el = document.getElementById("macArmBtn");
@@ -1245,11 +1238,17 @@
               } else if (name.endsWith(".dmg") && (name.includes("x64") || name.includes("x86_64"))) {
                 const el = document.getElementById("macIntelBtn");
                 if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".app.tar.gz") && (name.includes("aarch64") || name.includes("arm"))) {
+                const el = document.getElementById("macArmTarBtn");
+                if (el) el.href = asset.browser_download_url;
               } else if (name.endsWith(".appimage")) {
                 const el = document.getElementById("linuxAppImageBtn");
                 if (el) el.href = asset.browser_download_url;
               } else if (name.endsWith(".deb")) {
                 const el = document.getElementById("linuxDebBtn");
+                if (el) el.href = asset.browser_download_url;
+              } else if (name.endsWith(".rpm")) {
+                const el = document.getElementById("linuxRpmBtn");
                 if (el) el.href = asset.browser_download_url;
               }
             });

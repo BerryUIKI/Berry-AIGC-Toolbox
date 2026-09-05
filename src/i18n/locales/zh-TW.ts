@@ -2,7 +2,7 @@ import type { en } from "./en";
 
 export const zhTW: typeof en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "AI 生成圖像的元數據索引與檢視器",
     version: "v",
     schema: "資料庫版本 v",
@@ -85,6 +85,8 @@ export const zhTW: typeof en = {
     seed: "隨機種子 (Seed)",
     dimensions: "圖像解析度",
     format: "元數據格式",
+    container: "容器",
+    platform: "生成平台",
     rating: "評分",
     unrated: "未評分",
     clickToReveal: "點擊檢視敏感內容",
@@ -228,14 +230,14 @@ export const zhTW: typeof en = {
     language: "語言",
     shortcuts: "快速鍵手冊",
     checkUpdates: "檢查更新...",
-    about: "關於 Berry AIGC Toolbox",
+    about: "關於 Berry AI Studio",
   },
   updater: {
     title: "檢查更新",
     checkingTitle: "正在檢查更新...",
     checkingDesc: "正在連線至 GitHub Releases 取得最新版本資訊。",
     upToDateTitle: "目前已是最新版本！",
-    upToDateDesc: "Berry AIGC Toolbox 處於最新可用版本。",
+    upToDateDesc: "Berry AI Studio 處於最新可用版本。",
     latestRelease: "最新正式版",
     newVersionFound: "發現新版本",
     currentInstalled: "目前已安裝",
@@ -286,7 +288,7 @@ export const zhTW: typeof en = {
     clearCache: "🗑️ 清理縮圖快取",
     clearing: "正在清理...",
     parsersTitle: "內建元數據解析引擎",
-    parsersSubtitle: "Berry AIGC Toolbox 支援以下生成工具的生成參數與工作流程無損解析：",
+    parsersSubtitle: "Berry AI Studio 支援以下生成工具的生成參數與工作流程無損解析：",
     enabled: "✓ 已啟用",
     aboutTitle: "關於與儲存",
     aboutDesc: "基於 Tauri 2 + Rust + Vue 3 的高效能本機 AIGC 圖像資產管理工作台。",

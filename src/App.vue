@@ -104,7 +104,28 @@ const selectedFilesList = computed(() => {
   return list;
 });
 
-const viewMode = ref<"grid" | "table">("grid");
+const viewMode = ref<"grid" | "table">(
+  (localStorage.getItem("berry_default_view") as "grid" | "table") || "grid",
+);
+const blurNsfw = ref(localStorage.getItem("berry_blur_nsfw") !== "false");
+const showCardBadges = ref(localStorage.getItem("berry_card_badges") !== "false");
+
+function setViewMode(mode: "grid" | "table") {
+  viewMode.value = mode;
+  localStorage.setItem("berry_default_view", mode);
+}
+
+function onSettingsSaved(settings: {
+  autoScan: boolean;
+  blurNsfw: boolean;
+  showCardBadges: boolean;
+  defaultView: "grid" | "table";
+}) {
+  blurNsfw.value = settings.blurNsfw;
+  showCardBadges.value = settings.showCardBadges;
+  setViewMode(settings.defaultView);
+}
+
 const sortField = ref<FileSortField>("modified_at");
 const sortDirection = ref<SortDirection>("desc");
 const progress = ref<ScanProgress | null>(null);
@@ -285,6 +306,10 @@ onMounted(async () => {
     await reloadFiltersMeta();
     await loadAlbumsAndTags();
     await loadFiles();
+
+    if (localStorage.getItem("berry_autoscan") !== "false" && folders.value.length > 0) {
+      void runBackgroundStartupScan();
+    }
   } catch (e) {
     error.value = String(e);
   }
@@ -320,6 +345,18 @@ onUnmounted(() => {
 
 async function reloadFolders() {
   folders.value = await invoke<Folder[]>("list_folders");
+}
+
+async function runBackgroundStartupScan() {
+  for (const f of folders.value) {
+    try {
+      await invoke("scan_folder", { folderId: f.id });
+    } catch (e) {
+      console.warn(`Startup auto-scan skipped for folder ${f.path}:`, e);
+    }
+  }
+  await refreshCounts();
+  await loadFiles();
 }
 
 async function refreshCounts() {
@@ -953,7 +990,7 @@ function onResetZoom() {
                 class="toggle-btn"
                 :class="{ active: viewMode === 'grid' }"
                 :title="t.view.grid"
-                @click="viewMode = 'grid'"
+                @click="setViewMode('grid')"
               >
                 ⊞
               </button>
@@ -962,7 +999,7 @@ function onResetZoom() {
                 class="toggle-btn"
                 :class="{ active: viewMode === 'table' }"
                 :title="t.view.table"
-                @click="viewMode = 'table'"
+                @click="setViewMode('table')"
               >
                 ☰
               </button>
@@ -979,6 +1016,8 @@ function onResetZoom() {
             :selected-file-paths="selectedFilePaths"
             :loading="filesLoading"
             :item-min-width="gridItemWidth"
+            :blur-nsfw="blurNsfw"
+            :show-card-badges="showCardBadges"
             @select="onFileSelected"
             @activate="onActivateFile"
             @toggle-select="toggleSelectFile"
@@ -1120,6 +1159,7 @@ function onResetZoom() {
       :show="settingsModalOpen"
       :info="info"
       @close="settingsModalOpen = false"
+      @save="onSettingsSaved"
     />
 
     <!-- Update Modal -->

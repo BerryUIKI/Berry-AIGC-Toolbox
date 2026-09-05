@@ -2,7 +2,7 @@ import type { en } from "./en";
 
 export const de: typeof en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "Metadaten-Indexer und Viewer für KI-generierte Bilder",
     version: "v",
     schema: "Schema v",
@@ -85,6 +85,8 @@ export const de: typeof en = {
     seed: "Seed",
     dimensions: "Dimensionen",
     format: "Format",
+    container: "Container",
+    platform: "Plattform",
     rating: "Bewertung",
     unrated: "Unbewertet",
     clickToReveal: "Klicken, um sensible Inhalte anzuzeigen",
@@ -228,14 +230,14 @@ export const de: typeof en = {
     language: "Sprache",
     shortcuts: "Tastaturkürzel",
     checkUpdates: "Nach Updates suchen...",
-    about: "Über Berry AIGC Toolbox",
+    about: "Über Berry AI Studio",
   },
   updater: {
     title: "Nach Updates suchen",
     checkingTitle: "Suche nach Updates...",
     checkingDesc: "Verbinde mit GitHub Releases, um nach der neuesten Version zu suchen.",
     upToDateTitle: "Sie sind auf dem neuesten Stand!",
-    upToDateDesc: "Berry AIGC Toolbox ist auf der neuesten verfügbaren Version.",
+    upToDateDesc: "Berry AI Studio ist auf der neuesten verfügbaren Version.",
     latestRelease: "Neueste Version",
     newVersionFound: "Neue Version verfügbar",
     currentInstalled: "Aktuell installiert",
@@ -286,7 +288,7 @@ export const de: typeof en = {
     clearCache: "🗑️ Cache leeren",
     clearing: "Wird geleert...",
     parsersTitle: "Integrierte Metadaten-Extraktionsmodule",
-    parsersSubtitle: "Berry AIGC Toolbox unterstützt die verlustfreie Parameter-Extraktion für:",
+    parsersSubtitle: "Berry AI Studio unterstützt die verlustfreie Parameter-Extraktion für:",
     enabled: "✓ Aktiviert",
     aboutTitle: "Info & Speicher",
     aboutDesc: "Hochperformante Desktop-AIGC-Bildverwaltung mit Tauri 2 + Rust + Vue 3.",

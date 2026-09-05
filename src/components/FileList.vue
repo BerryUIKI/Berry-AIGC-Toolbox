@@ -166,10 +166,10 @@ function size(meta: ImageFile["metadata"]): string {
             </th>
             <th class="th-preview">{{ t.preview.preview }}</th>
             <th>{{ t.sort.name }}</th>
-            <th>{{ t.preview.format }}</th>
+            <th>{{ t.preview.container }}</th>
             <th>{{ t.sort.size }}</th>
             <th>{{ t.sort.modified }}</th>
-            <th>{{ t.preview.format }}</th>
+            <th>{{ t.preview.platform }}</th>
             <th>{{ t.preview.prompt }}</th>
             <th>{{ t.preview.dimensions }}</th>
             <th>{{ t.preview.modelName }}</th>
@@ -208,6 +208,14 @@ function size(meta: ImageFile["metadata"]): string {
                 class="thumb"
                 loading="lazy"
                 decoding="async"
+              />
+              <video
+                v-else-if="file.container === 'mp4'"
+                :src="assetUrl(file.path)"
+                class="thumb thumb-video"
+                muted
+                preload="metadata"
+                playsinline
               />
               <div v-else class="thumb-placeholder">
                 {{ file.container.toUpperCase() }}
@@ -327,6 +335,11 @@ function size(meta: ImageFile["metadata"]): string {
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.1);
   display: block;
+}
+
+.thumb-video {
+  background: #000;
+  pointer-events: none;
 }
 
 .thumb-placeholder {

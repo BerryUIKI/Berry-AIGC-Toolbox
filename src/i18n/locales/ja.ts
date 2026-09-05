@@ -2,7 +2,7 @@ import type { en } from "./en";
 
 export const ja: typeof en = {
   app: {
-    title: "Berry AIGC Toolbox",
+    title: "Berry AI Studio",
     tagline: "AI生成画像のメタデータインデクサー＆ビューア",
     version: "v",
     schema: "スキーマ v",
@@ -85,6 +85,8 @@ export const ja: typeof en = {
     seed: "シード値",
     dimensions: "解像度",
     format: "メタデータ形式",
+    container: "コンテナ",
+    platform: "生成ツール",
     rating: "評価",
     unrated: "未評価",
     clickToReveal: "クリックしてセンシティブ画像を表示",
@@ -228,14 +230,14 @@ export const ja: typeof en = {
     language: "言語",
     shortcuts: "ショートカット一覧",
     checkUpdates: "アップデートを確認...",
-    about: "Berry AIGC Toolbox について",
+    about: "Berry AI Studio について",
   },
   updater: {
     title: "アップデートの確認",
     checkingTitle: "アップデートを確認中...",
     checkingDesc: "GitHub Releases に接続して最新バージョン情報を取得しています。",
     upToDateTitle: "最新バージョンをご利用中です！",
-    upToDateDesc: "Berry AIGC Toolbox は最新の利用可能な状態です。",
+    upToDateDesc: "Berry AI Studio は最新の利用可能な状態です。",
     latestRelease: "最新リリース",
     newVersionFound: "新しいバージョンが見つかりました",
     currentInstalled: "現在のバージョン",
@@ -286,7 +288,7 @@ export const ja: typeof en = {
     clearCache: "🗑️ サムネイルキャッシュを消去",
     clearing: "消去中...",
     parsersTitle: "組み込みメタデータ抽出エンジン",
-    parsersSubtitle: "Berry AIGC Toolbox は以下の生成ツールのパラメータ抽出に対応しています：",
+    parsersSubtitle: "Berry AI Studio は以下の生成ツールのパラメータ抽出に対応しています：",
     enabled: "✓ 有効",
     aboutTitle: "情報とストレージ",
     aboutDesc: "Tauri 2 + Rust + Vue 3 で構築された高性能デスクトップ AIGC 画像管理ワークステーション。",

@@ -24,6 +24,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
+  (e: "save", settings: {
+    locale: LocaleSetting;
+    autoScan: boolean;
+    blurNsfw: boolean;
+    showCardBadges: boolean;
+    defaultView: "grid" | "table";
+    thumbnailMaxEdge: number;
+  }): void;
 }>();
 
 const activeTab = ref<"general" | "display" | "parsers" | "about">("general");
@@ -68,6 +76,11 @@ watch(
   (val) => {
     if (val) {
       selectedLocale.value = currentLocaleSetting.value;
+      autoScanOnStartup.value = localStorage.getItem("berry_autoscan") !== "false";
+      blurNsfwDefault.value = localStorage.getItem("berry_blur_nsfw") !== "false";
+      showCardBadges.value = localStorage.getItem("berry_card_badges") !== "false";
+      defaultView.value = localStorage.getItem("berry_default_view") || "grid";
+      thumbnailMaxEdge.value = getThumbnailMaxEdge();
       void loadCacheStats();
     }
   },
@@ -86,6 +99,14 @@ function saveSettings() {
   localStorage.setItem("berry_card_badges", String(showCardBadges.value));
   localStorage.setItem("berry_default_view", defaultView.value);
   setThumbnailMaxEdge(thumbnailMaxEdge.value);
+  emit("save", {
+    locale: selectedLocale.value,
+    autoScan: autoScanOnStartup.value,
+    blurNsfw: blurNsfwDefault.value,
+    showCardBadges: showCardBadges.value,
+    defaultView: (defaultView.value === "table" ? "table" : "grid"),
+    thumbnailMaxEdge: thumbnailMaxEdge.value,
+  });
   emit("close");
 }
 </script>
@@ -279,7 +300,7 @@ function saveSettings() {
                 <img src="../assets/logo.png" alt="Berry Logo" width="48" height="48" class="about-logo-img" />
               </div>
               <div class="about-details">
-                <h5 class="about-name">Berry AIGC Toolbox</h5>
+                <h5 class="about-name">Berry AI Studio</h5>
                 <p class="about-ver">v{{ info?.app_version || '0.1.1' }}</p>
                 <p class="about-desc">{{ t.settings.aboutDesc }}</p>
               </div>

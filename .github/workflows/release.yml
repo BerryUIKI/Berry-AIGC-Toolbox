@@ -5,12 +5,367 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag
+        required: true
+        default: v0.1.0
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  # ── macOS: Developer ID signing + notarization + Gatekeeper validation ──────
+  build-macos:
+    name: Build macOS (${{ matrix.arch_name }})
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            arch_name: aarch64
+            args: --target aarch64-apple-darwin
+            dmg_asset_name: Berry-AIGC-Toolbox_macOS_aarch64.dmg
+
+          - target: x86_64-apple-darwin
+            arch_name: x86_64
+            args: --target x86_64-apple-darwin
+            dmg_asset_name: Berry-AIGC-Toolbox_macOS_x86_64.dmg
+
+    runs-on: macos-latest
+
+    env:
+      APP_NAME: Berry-AIGC-Toolbox
+      RELEASE_TAG: >-
+        ${{ github.event_name == 'workflow_dispatch'
+            && inputs.tag_name
+            || github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ── Preflight: validate Developer ID certificate ─────────────────────────
+      - name: Validate Developer ID certificate
+        env:
+          MAC_SIGNING_CERT_BASE64: ${{ secrets.MAC_SIGNING_CERT_BASE64 }}
+          MAC_SIGNING_CERT_PASSWORD: ${{ secrets.MAC_SIGNING_CERT_PASSWORD }}
+          MAC_SIGNING_IDENTITY: ${{ vars.MAC_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            MAC_SIGNING_CERT_BASE64 \
+            MAC_SIGNING_CERT_PASSWORD \
+            MAC_SIGNING_IDENTITY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required value: $name"
+              exit 1
+            fi
+          done
+
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          certificate_pem="$RUNNER_TEMP/developer-id.pem"
+
+          printf '%s' "$MAC_SIGNING_CERT_BASE64" |
+            /usr/bin/base64 -D > "$certificate_path"
+
+          openssl pkcs12 \
+            -in "$certificate_path" \
+            -clcerts \
+            -nokeys \
+            -passin env:MAC_SIGNING_CERT_PASSWORD \
+            -out "$certificate_pem" \
+            -legacy 2>/dev/null || \
+          openssl pkcs12 \
+            -in "$certificate_path" \
+            -clcerts \
+            -nokeys \
+            -passin env:MAC_SIGNING_CERT_PASSWORD \
+            -out "$certificate_pem"
+
+          certificate_subject="$(
+            openssl x509 \
+              -in "$certificate_pem" \
+              -noout \
+              -subject \
+              -nameopt RFC2253
+          )"
+
+          echo "Signing certificate: $certificate_subject"
+
+          if [[ "$certificate_subject" != *"Developer ID Application:"* ]]; then
+            echo "::error::The P12 does not contain a Developer ID Application certificate."
+            exit 1
+          fi
+
+          if [[ "$certificate_subject" != *"$MAC_SIGNING_IDENTITY"* ]]; then
+            echo "::error::The P12 identity does not match MAC_SIGNING_IDENTITY."
+            exit 1
+          fi
+
+          if ! openssl pkcs12 \
+            -in "$certificate_path" \
+            -nocerts \
+            -nodes \
+            -passin env:MAC_SIGNING_CERT_PASSWORD \
+            -legacy 2>/dev/null | \
+            openssl pkey -noout >/dev/null 2>&1 && \
+          ! openssl pkcs12 \
+            -in "$certificate_path" \
+            -nocerts \
+            -nodes \
+            -passin env:MAC_SIGNING_CERT_PASSWORD \
+            2>/dev/null | \
+            openssl pkey -noout >/dev/null 2>&1; then
+            echo "::error::The P12 does not contain a usable private key."
+            exit 1
+          fi
+
+          echo "Certificate validation passed."
+
+      # ── Prepare App Store Connect API key ────────────────────────────────────
+      - name: Prepare App Store Connect API key
+        id: notarization
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+        run: |
+          set -euo pipefail
+
+          for name in \
+            APPLE_API_KEY \
+            APPLE_API_ISSUER \
+            APPLE_API_KEY_CONTENT; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing notarization secret: $name"
+              exit 1
+            fi
+          done
+
+          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+
+          printf '%s' "$APPLE_API_KEY_CONTENT" |
+            /usr/bin/base64 -D > "$key_path"
+
+          chmod 600 "$key_path"
+
+          echo "key_path=$key_path" >> "$GITHUB_OUTPUT"
+
+      # ── Build, sign, and notarize the application ────────────────────────────
+      - name: Build, sign, and notarize the application
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          APPLE_CERTIFICATE: ${{ secrets.MAC_SIGNING_CERT_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.MAC_SIGNING_CERT_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.MAC_SIGNING_IDENTITY }}
+
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.notarization.outputs.key_path }}
+        with:
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: 'Berry-AIGC-Toolbox ${{ env.RELEASE_TAG }}'
+          releaseBody: 'See [CHANGELOG.md](CHANGELOG.md) for full release details.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # ── Notarize and staple the final DMG ────────────────────────────────────
+      - name: Notarize and staple the final DMG
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.notarization.outputs.key_path }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          dmg_files=(
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/"*.dmg
+          )
+
+          if (( ${#dmg_files[@]} != 1 )); then
+            echo "::error::Expected exactly one DMG, found ${#dmg_files[@]}."
+            exit 1
+          fi
+
+          dmg_path="${dmg_files[0]}"
+          echo "DMG path: $dmg_path"
+
+          codesign --verify --strict --verbose=2 "$dmg_path"
+
+          dmg_signature="$(
+            codesign --display --verbose=4 "$dmg_path" 2>&1
+          )"
+          echo "$dmg_signature"
+
+          if [[ "$dmg_signature" != *"Authority=Developer ID Application:"* ]]; then
+            echo "::error::The DMG is not signed with Developer ID Application."
+            exit 1
+          fi
+
+          if [[ "$dmg_signature" != *"Timestamp="* ]]; then
+            echo "::error::The DMG signature has no secure timestamp."
+            exit 1
+          fi
+
+          xcrun notarytool submit "$dmg_path" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+
+          xcrun stapler staple "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+
+      # ── Verify application and DMG ────────────────────────────────────────────
+      - name: Verify application and DMG
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          app_path="src-tauri/target/${{ matrix.target }}/release/bundle/macos/${APP_NAME}.app"
+
+          dmg_files=(
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/"*.dmg
+          )
+          dmg_path="${dmg_files[0]}"
+
+          echo "=== Verifying .app ==="
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          codesign --verify --strict --verbose=2 "$dmg_path"
+
+          app_signature="$(
+            codesign --display --verbose=4 "$app_path" 2>&1
+          )"
+          echo "$app_signature"
+
+          if [[ "$app_signature" == *"Signature=adhoc"* ]]; then
+            echo "::error::The app has an ad-hoc signature."
+            exit 1
+          fi
+
+          if [[ "$app_signature" != *"Authority=Developer ID Application:"* ]]; then
+            echo "::error::The app does not use Developer ID Application."
+            exit 1
+          fi
+
+          if [[ "$app_signature" != *"Timestamp="* ]]; then
+            echo "::error::The app signature has no secure timestamp."
+            exit 1
+          fi
+
+          if [[ "$app_signature" == *"TeamIdentifier=not set"* ]]; then
+            echo "::error::The app signature has no Team ID."
+            exit 1
+          fi
+
+          echo "=== Validating stapler tickets ==="
+          xcrun stapler validate "$app_path"
+          xcrun stapler validate "$dmg_path"
+
+          echo "=== Gatekeeper assessment ==="
+          spctl --assess \
+            --type execute \
+            --verbose=4 \
+            "$app_path"
+
+          spctl --assess \
+            --type open \
+            --context context:primary-signature \
+            --verbose=4 \
+            "$dmg_path"
+
+      # ── Verify the application inside the final DMG ───────────────────────────
+      - name: Verify application inside DMG
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          dmg_files=(
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/"*.dmg
+          )
+          dmg_path="${dmg_files[0]}"
+
+          mount_path="$(mktemp -d)"
+
+          cleanup() {
+            hdiutil detach "$mount_path" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          hdiutil attach "$dmg_path" \
+            -readonly \
+            -nobrowse \
+            -mountpoint "$mount_path" \
+            >/dev/null
+
+          mounted_app="$mount_path/${APP_NAME}.app"
+
+          codesign --verify \
+            --deep \
+            --strict \
+            --verbose=2 \
+            "$mounted_app"
+
+          xcrun stapler validate "$mounted_app"
+
+          spctl --assess \
+            --type execute \
+            --verbose=4 \
+            "$mounted_app"
+
+          hdiutil detach "$mount_path" >/dev/null
+          trap - EXIT
+
+      # ── Upload stapled DMG to the draft release ───────────────────────────────
+      - name: Upload stapled DMG to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          dmg_files=(
+            "src-tauri/target/${{ matrix.target }}/release/bundle/dmg/"*.dmg
+          )
+          dmg_path="${dmg_files[0]}"
+
+          final_path="$RUNNER_TEMP/${{ matrix.dmg_asset_name }}"
+          cp "$dmg_path" "$final_path"
+
+          gh release upload "$RELEASE_TAG" \
+            "$final_path" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
+  # ── Windows & Linux: no code-signing changes ─────────────────────────────────
+  build-other:
+    name: Build ${{ matrix.os_name }} (${{ matrix.arch_name }})
     strategy:
       fail-fast: false
       matrix:
@@ -19,20 +374,19 @@ jobs:
             target: 'x86_64-pc-windows-msvc'
             os_name: 'Windows'
             arch_name: 'x64'
-          - platform: 'macos-latest'
-            target: 'aarch64-apple-darwin'
-            os_name: 'macOS'
-            arch_name: 'aarch64'
-          - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
-            os_name: 'macOS'
-            arch_name: 'x64'
           - platform: 'ubuntu-22.04'
             target: 'x86_64-unknown-linux-gnu'
             os_name: 'Linux'
             arch_name: 'x64'
 
     runs-on: ${{ matrix.platform }}
+
+    env:
+      RELEASE_TAG: >-
+        ${{ github.event_name == 'workflow_dispatch'
+            && inputs.tag_name
+            || github.ref_name }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,19 +411,49 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libsoup-3.0-dev
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Tauri Application
+      - name: Build Tauri application
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Berry-AIGC-Toolbox ${{ github.ref_name }}'
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: 'Berry-AIGC-Toolbox ${{ env.RELEASE_TAG }}'
           releaseBody: 'See [CHANGELOG.md](CHANGELOG.md) for full release details.'
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
+
+  # ── Promote draft to published once every platform passes ────────────────────
+  publish-release:
+    name: Publish release
+    needs:
+      - build-macos
+      - build-other
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Promote draft release to published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: >-
+            ${{ github.event_name == 'workflow_dispatch'
+                && inputs.tag_name
+                || github.ref_name }}
+        run: |
+          gh release edit "$RELEASE_TAG" \
+            --draft=false \
+            --repo "$GITHUB_REPOSITORY"

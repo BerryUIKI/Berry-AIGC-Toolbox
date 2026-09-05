@@ -390,9 +390,27 @@ watch(
                 decoding="async"
                 @error="onImageError(file.path)"
               />
+              <video
+                v-else-if="file.container === 'mp4'"
+                :src="assetUrl(file.path)"
+                class="thumbnail-img thumbnail-video"
+                :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
+                muted
+                preload="metadata"
+                playsinline
+              />
               <div v-else class="thumbnail-fallback">
                 <span class="fallback-text">{{ file.container.toUpperCase() }}</span>
               </div>
+
+              <!-- Video badge -->
+              <span
+                v-if="file.container === 'mp4'"
+                class="card-badge badge-video"
+                title="Video (MP4)"
+              >
+                ▶ MP4
+              </span>
 
               <!-- NSFW blur overlay -->
               <div
@@ -628,6 +646,20 @@ watch(
   left: 6px;
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
+}
+
+.badge-video {
+  top: 6px;
+  left: 6px;
+  background: rgba(18, 181, 203, 0.85);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.thumbnail-video {
+  background: #000;
+  pointer-events: none;
 }
 
 .badge-rating {

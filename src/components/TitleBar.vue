@@ -71,7 +71,7 @@ async function onClose() {
         <div class="brand-icon">
           <img src="../assets/logo.png" alt="Berry Logo" width="18" height="18" class="brand-logo-img" />
         </div>
-        <span class="brand-title">{{ title || "Berry AIGC Toolbox" }}</span>
+        <span class="brand-title">{{ title || "Berry AI Studio" }}</span>
         <span v-if="subtitle" class="brand-subtitle">{{ subtitle }}</span>
       </div>
 

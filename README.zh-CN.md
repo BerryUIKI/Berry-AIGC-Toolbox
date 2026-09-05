@@ -1,4 +1,4 @@
-# 🍇 Berry-AIGC-Toolbox
+# 🍇 Berry AI Studio
 
 <div align="center">
 
@@ -18,7 +18,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/gui_preview_dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/gui_preview_light.svg">
-  <img alt="Berry AIGC Toolbox 界面预览" src="docs/screenshots/gui_preview_dark.svg" width="100%">
+  <img alt="Berry AI Studio Preview" src="docs/screenshots/gui_preview_dark.svg" width="100%">
 </picture>
 
 </div>
@@ -27,7 +27,7 @@
 
 ## 🌟 项目概述
 
-**Berry-AIGC-Toolbox** 是一款专为数字艺术家、AI 画师和提示词工程师设计的桌面级图像资产管理系统。软件能够毫秒级扫描并深度解析主流 AIGC 平台生成的图片元数据（提示词、模型、采样器、步数、CFG、Seed 及工作流 JSON），并构建本地高速 SQLite 索引，提供 **Eagle 风格的三栏现代工作台**、流畅的虚拟网格瀑布流、分词高亮属性面板、沉浸式全屏灯箱以及丰富的批量分类能力。
+**Berry AI Studio**（原 *Berry-AIGC-Toolbox*）是一款专为数字艺术家、AI 画师和提示词工程师设计的桌面级图像资产管理系统。软件能够毫秒级扫描并深度解析主流平台生成的图片元数据（提示词、模型、采样器、步数、CFG、Seed 及工作流 JSON），并构建本地高速 SQLite 索引，提供 **沉浸式三栏现代工作台**、流畅的虚拟网格瀑布流、分词高亮属性面板、沉浸式全屏灯箱以及丰富的批量分类能力。
 
 > 🚀 **全栈架构重构**：Berry v0.1.0+ 采用 **Tauri 2 + Rust + Vue 3** 进行了全新重构开发。原先的历史 C#/.NET 版本已永久归档至 `archive/old-main` 标签与 `old/main` 分支中。
 
@@ -35,7 +35,7 @@
 
 ## ✨ 核心特性
 
-### 🎨 Eagle 风格三栏工作室布局
+### 🎨 沉浸式三栏创作工作台
 - **原生质感无边框窗口**：自定义标题栏集成桌面菜单栏（`文件`、`编辑`、`视图`、`工具`、`帮助`）、窗口拖拽区与精致控制按钮。
 - **左侧分类导航栏**：媒体库快捷入口（全部图片、收藏夹、敏感内容 18+）、文件夹层级目录树（支持即时扫描状态反馈）、彩色标签库与智能相册。
 - **中央画廊与虚拟网格**：支持顺滑渲染万级图像的虚拟滚动瀑布流、缩略图自由缩放滑块（130px–360px），以及网格（⊞）与详细列表（☰）一键切换。

@@ -370,6 +370,7 @@ export const zhCN: typeof en = {
     organizeFailed: "图库整理失败，请重试。",
     help: "帮助",
     language: "语言",
+    helpGuide: "功能指南与离线文档",
     shortcuts: "快捷键指南",
     checkUpdates: "检查更新...",
     about: "关于 Omera",

@@ -239,7 +239,7 @@ async function handleOpenOutputFolder() {
               </select>
             </div>
 
-            <div v-if="format === 'webp' || format === 'jpeg'" class="form-group">
+            <div v-if="format === 'jpeg'" class="form-group">
               <div class="label-with-value">
                 <label class="form-label">{{ t.exportModal.quality }}</label>
                 <span class="value-badge">{{ quality }}%</span>

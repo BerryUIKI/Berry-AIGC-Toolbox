@@ -208,6 +208,61 @@ fn from_parameters(parameters: String) -> ExtractedMetadata {
         fps: None,
         video_codec: None,
     }
+/// Inspect metadata prompt, raw text, or parameters to auto-detect adult / NSFW content.
+pub fn detect_nsfw_from_metadata(meta: &ExtractedMetadata) -> bool {
+    const EXACT_KEYWORDS: &[&str] = &[
+        "nsfw",
+        "nude",
+        "naked",
+        "nipples",
+        "pussy",
+        "penis",
+        "vagina",
+        "uncensored",
+        "explicit",
+        "hentai",
+        "erotic",
+        "sex",
+        "blowjob",
+        "fellatio",
+        "penetration",
+        "orgasm",
+        "cum",
+        "rating:explicit",
+        "rating:questionable",
+        "rating:e",
+        "rating:q",
+    ];
+
+    let mut texts = Vec::new();
+    if let Some(ref p) = meta.prompt {
+        texts.push(p.as_str());
+    }
+    if let Some(ref r) = meta.raw {
+        texts.push(r.as_str());
+    }
+    if let Some(ref params) = meta.parameters {
+        texts.push(params.as_str());
+    }
+
+    for text in texts {
+        let lower = text.to_ascii_lowercase();
+        if lower.contains("rating:explicit")
+            || lower.contains("rating:questionable")
+            || lower.contains("nsfw")
+        {
+            return true;
+        }
+
+        for token in lower.split(|c: char| !c.is_alphanumeric() && c != ':') {
+            let t = token.trim();
+            if !t.is_empty() && EXACT_KEYWORDS.contains(&t) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -419,5 +474,37 @@ mod tests {
         assert_eq!(meta.prompt.as_deref(), Some("AnimateDiff animation prompt"));
         assert_eq!(meta.steps, Some(20));
         assert_eq!(meta.seed.as_deref(), Some("42"));
+    }
+
+    #[test]
+    fn test_detect_nsfw_from_metadata() {
+        let mut meta = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            parameters: None,
+            raw: None,
+            prompt: Some("1girl, masterpiece, nsfw, highly detailed".to_string()),
+            negative_prompt: None,
+            width: None,
+            height: None,
+            seed: None,
+            steps: None,
+            cfg_scale: None,
+            sampler: None,
+            model_name: None,
+            model_hash: None,
+            duration_seconds: None,
+            fps: None,
+            video_codec: None,
+        };
+        assert!(detect_nsfw_from_metadata(&meta));
+
+        meta.prompt = Some("cyberpunk city, neon lights, unisex clothing".to_string());
+        assert!(!detect_nsfw_from_metadata(&meta));
+
+        meta.prompt = Some("beautiful portrait, nude, soft lighting".to_string());
+        assert!(detect_nsfw_from_metadata(&meta));
+
+        meta.prompt = Some("anime girl, rating:explicit".to_string());
+        assert!(detect_nsfw_from_metadata(&meta));
     }
 }

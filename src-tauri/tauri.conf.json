@@ -23,10 +23,10 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost http://asset.localhost blob: data:; media-src 'self' asset: https://asset.localhost http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost http://localhost:* http://127.0.0.1:* https://api.civitai.com https://github.com; font-src 'self' data:; object-src 'none'; frame-src 'none';",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": []
       }
     }
   },

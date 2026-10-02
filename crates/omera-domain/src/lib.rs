@@ -27,6 +27,7 @@ mod similarity;
 mod stack;
 mod storage_root;
 mod tag;
+pub mod transform;
 
 pub use album::Album;
 pub use checkpoint::{CheckpointModelStat, ModelCacheEntry};
@@ -67,3 +68,5 @@ pub use similarity::SimilarityMatch;
 pub use stack::StackSummary;
 pub use storage_root::{NormalizedPath, PathResolver, StorageRoot};
 pub use tag::Tag;
+pub use transform::*;
+

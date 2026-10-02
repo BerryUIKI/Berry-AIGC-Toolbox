@@ -298,6 +298,10 @@ impl Scanner {
             };
 
             let metadata = (self.extractor)(container, &file.path);
+            let is_nsfw = metadata
+                .as_ref()
+                .map(omera_metadata::detect_nsfw_from_metadata)
+                .unwrap_or(false);
             pending.push(ImageFile {
                 id: None,
                 folder_id,
@@ -309,7 +313,7 @@ impl Scanner {
                 rating: None,
                 aesthetic_score: None,
                 is_favorite: false,
-                is_nsfw: false,
+                is_nsfw,
                 stack_id: None,
                 stack_order: 0,
             });
@@ -396,6 +400,10 @@ impl Scanner {
                     Ok((file, Some(container))) => {
                         let existing = db.get_file_by_path(&path_str)?;
                         let metadata = (self.extractor)(container, &file.path);
+                        let is_nsfw = metadata
+                            .as_ref()
+                            .map(omera_metadata::detect_nsfw_from_metadata)
+                            .unwrap_or(false);
                         db.upsert_file(&ImageFile {
                             id: None,
                             folder_id,
@@ -407,7 +415,7 @@ impl Scanner {
                             rating: None,
                             aesthetic_score: None,
                             is_favorite: false,
-                            is_nsfw: false,
+                            is_nsfw,
                             stack_id: None,
                             stack_order: 0,
                         })?;
@@ -1045,6 +1053,42 @@ mod tests {
         let meta = after[0].metadata.as_ref().expect("metadata kept");
         assert_eq!(meta.prompt.as_deref(), Some("a robot"));
         assert_eq!(meta.steps, Some(5));
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
+
+    #[test]
+    fn nsfw_auto_detection_and_user_override_preservation() {
+        let env = setup("nsfw_override");
+        write(
+            &env.images.join("art.png"),
+            &a1111_png("1girl, nude, masterpiece, nsfw\nSteps: 20, Sampler: Euler, Size: 512x512"),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        // 1. Initial scan: should auto-detect NSFW from prompt keywords
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files.len(), 1);
+        let fid = files[0].id.unwrap();
+        assert!(files[0].is_nsfw, "Should auto-detect NSFW from keywords");
+
+        // 2. User manually overrides to SFW (false)
+        db.set_file_nsfw(fid, false).unwrap();
+        let updated = db.get_file_by_id(fid).unwrap().unwrap();
+        assert!(!updated.is_nsfw, "User override set is_nsfw to false");
+
+        // 3. Rescan folder: user manual override must be preserved!
+        Scanner::with_forced_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let rescanned = db.get_file_by_id(fid).unwrap().unwrap();
+        assert!(!rescanned.is_nsfw, "Rescan must preserve user manual override!");
 
         drop(db);
         std::fs::remove_dir_all(&env.dir).unwrap();

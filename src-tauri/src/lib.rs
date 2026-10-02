@@ -39,6 +39,13 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -66,6 +73,9 @@ pub fn run() {
                 app.asset_protocol_scope()
                     .allow_directory(&folder.path, true)?;
             }
+            let _ = app
+                .asset_protocol_scope()
+                .allow_directory(data_dir.join("thumbnails"), true);
             let filesystem_watcher =
                 match watcher::LibraryWatcher::new(app.handle().clone(), database_path.clone()) {
                     Ok(watcher) => Some(watcher),

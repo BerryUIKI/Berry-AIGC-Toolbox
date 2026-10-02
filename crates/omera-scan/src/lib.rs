@@ -11,6 +11,7 @@ pub mod file_operations;
 pub mod html_showcase;
 pub mod scanner;
 pub mod thumbnail;
+pub mod transform;
 
 pub use export::{
     execute_batch_export, format_export_filename, sanitize_filename_part, ProcessedExportItem,
@@ -23,3 +24,8 @@ pub use thumbnail::{
     synchronize_thumbnail_manifest, ThumbnailBatchResult, ThumbnailCacheStats, ThumbnailProgress,
     ThumbnailQueueDiagnostics, ThumbnailRequest,
 };
+pub use transform::{
+    execute_library_batch_transform, execute_managed_import_transform, resolve_extension,
+    resolve_publication_path, transform_file_staged, TransformError,
+};
+

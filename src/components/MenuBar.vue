@@ -41,6 +41,7 @@ const emit = defineEmits<{
   openLoraManager: [];
   organizeLibrary: [scope: "current" | "all"];
   openShortcutsHelp: [];
+  openHelpGuide: [];
   openUpdater: [];
   openAbout: [];
 }>();
@@ -358,6 +359,11 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <button type="button" class="dropdown-item" @click="handleAction(() => emit('openHelpGuide'))">
+          <span class="item-icon">📖</span>
+          <span class="item-title">{{ t.menu.helpGuide || 'Feature Guide & Documentation' }}</span>
+          <span class="item-key">F1</span>
+        </button>
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('openShortcutsHelp'))">
           <span class="item-icon">⌨️</span>
           <span class="item-title">{{ t.menu.shortcuts }}</span>

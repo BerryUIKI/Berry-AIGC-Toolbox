@@ -370,6 +370,7 @@ export const ja: typeof en = {
     organizeFailed: "ライブラリの整理に失敗しました。もう一度お試しください。",
     help: "ヘルプ",
     language: "言語",
+    helpGuide: "機能ガイドとドキュメント",
     shortcuts: "ショートカット一覧",
     checkUpdates: "アップデートを確認...",
     about: "Omera について",

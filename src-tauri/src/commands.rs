@@ -2086,46 +2086,51 @@ pub fn get_loaded_tagger_model(state: State<'_, AppState>) -> Result<Option<Mode
 /// Run tag prediction on a single image file.
 /// If `apply_tags` is true, newly recognized tags will be created in the database and linked to the image.
 #[tauri::command]
-pub fn auto_tag_file(
+pub async fn auto_tag_file(
     file_id: i64,
     config: TaggerConfig,
     apply_tags: bool,
-    state: State<'_, AppState>,
+    app_handle: AppHandle,
 ) -> Result<Vec<TagPrediction>, String> {
-    let file = {
-        let database = db(&state)?;
-        database
-            .get_file_by_id(file_id)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("File with id {file_id} not found"))?
-    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let file = {
+            let database = db(&state)?;
+            database
+                .get_file_by_id(file_id)
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("File with id {file_id} not found"))?
+        };
 
-    let predictions = {
-        let guard = tagger_guard(&state)?;
-        let tagger = guard
-            .as_ref()
-            .ok_or_else(|| "No WD14 tagger model loaded. Please load a model first.".to_string())?;
-        tagger
-            .predict_file(Path::new(&file.path), &config)
-            .map_err(|e| e.to_string())?
-    };
+        let predictions = {
+            let guard = tagger_guard(&state)?;
+            let tagger = guard
+                .as_ref()
+                .ok_or_else(|| "No WD14 tagger model loaded. Please load a model first.".to_string())?;
+            tagger
+                .predict_file(Path::new(&file.path), &config)
+                .map_err(|e| e.to_string())?
+        };
 
-    if apply_tags {
-        let database = db(&state)?;
-        for pred in &predictions {
-            let tag = database
-                .get_or_create_tag(&pred.name, None)
-                .map_err(|e| e.to_string())?;
-            let _ = database.tag_file(file_id, tag.id);
+        if apply_tags {
+            let database = db(&state)?;
+            for pred in &predictions {
+                let tag = database
+                    .get_or_create_tag(&pred.name, None)
+                    .map_err(|e| e.to_string())?;
+                let _ = database.tag_file(file_id, tag.id);
+            }
         }
-    }
 
-    Ok(predictions)
+        Ok(predictions)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Batch run tag prediction across multiple image files and attach recognized tags.
 #[tauri::command]
-pub fn batch_auto_tag_files(
+pub async fn batch_auto_tag_files(
     file_ids: Vec<i64>,
     config: TaggerConfig,
     state: State<'_, AppState>,
@@ -3817,10 +3822,14 @@ pub fn send_to_webui(
 
 /// Test connectivity and latency to the configured cloud backup provider.
 #[tauri::command]
-pub fn cloud_backup_test_connection(
+pub async fn cloud_backup_test_connection(
     config: omera_domain::CloudBackupConfig,
 ) -> Result<omera_domain::CloudPingResult, String> {
-    Ok(crate::cloud_backup::test_cloud_connection(&config))
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(crate::cloud_backup::test_cloud_connection(&config))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Create a full point-in-time library snapshot archive and upload to cloud storage.
@@ -3849,10 +3858,14 @@ pub async fn cloud_backup_create_snapshot(
 
 /// List all available snapshot archives from the cloud storage backend.
 #[tauri::command]
-pub fn cloud_backup_list_snapshots(
+pub async fn cloud_backup_list_snapshots(
     config: omera_domain::CloudBackupConfig,
 ) -> Result<Vec<omera_domain::CloudSnapshotMeta>, String> {
-    crate::cloud_backup::list_cloud_snapshots(&config)
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::cloud_backup::list_cloud_snapshots(&config)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Restore a cloud snapshot into the active SQLite database.

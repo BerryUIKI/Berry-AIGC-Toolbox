@@ -368,6 +368,7 @@ export const en = {
     organizeFailed: "Library organization failed. Please try again.",
     help: "Help",
     language: "Language",
+    helpGuide: "Feature Guide & Documentation",
     shortcuts: "Keyboard Shortcuts",
     checkUpdates: "Check for Updates...",
     about: "About Omera",

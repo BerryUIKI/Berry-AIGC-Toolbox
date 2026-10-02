@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
@@ -215,36 +216,89 @@ pub fn process_single_image(
                     .encode_image(&rgb)
                     .map_err(|e| format!("Failed to encode JPEG: {e}"))?;
             }
-            ExportFormat::Png | ExportFormat::Original => {
+            ExportFormat::Png => {
                 img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png)
                     .map_err(|e| format!("Failed to encode PNG: {e}"))?;
+            }
+            ExportFormat::Original => {
+                if target_ext == "jpg" || target_ext == "jpeg" {
+                    let rgb = img.to_rgb8();
+                    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
+                        &mut buffer,
+                        options.quality.clamp(1, 100),
+                    );
+                    encoder
+                        .encode_image(&rgb)
+                        .map_err(|e| format!("Failed to encode JPEG: {e}"))?;
+                } else if target_ext == "webp" {
+                    img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::WebP)
+                        .map_err(|e| format!("Failed to encode WebP: {e}"))?;
+                } else {
+                    img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png)
+                        .map_err(|e| format!("Failed to encode PNG: {e}"))?;
+                }
             }
         }
         (buffer, w, h)
     };
 
-    // Generate optional sidecar
+    // Generate optional sidecar adhering strictly to the privacy policy
     let sidecar = match options.sidecar {
         ExportSidecar::None => None,
         ExportSidecar::TextPrompt => {
-            let prompt_text = file
-                .metadata
-                .as_ref()
-                .and_then(|m| m.prompt.as_deref())
-                .or_else(|| file.metadata.as_ref().and_then(|m| m.raw.as_deref()))
-                .unwrap_or_default()
-                .to_string();
-            let sidecar_filename = format!("{base_stem}.txt");
-            Some((sidecar_filename, prompt_text.into_bytes()))
+            if options.privacy == MetadataPrivacyMode::StripAll {
+                None
+            } else {
+                let prompt_text = file
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.prompt.as_deref())
+                    .or_else(|| file.metadata.as_ref().and_then(|m| m.raw.as_deref()))
+                    .unwrap_or_default()
+                    .to_string();
+                if prompt_text.is_empty() {
+                    None
+                } else {
+                    let sidecar_filename = format!("{base_stem}.txt");
+                    Some((sidecar_filename, prompt_text.into_bytes()))
+                }
+            }
         }
         ExportSidecar::JsonMetadata => {
-            let json_str = file
-                .metadata
-                .as_ref()
-                .and_then(|m| serde_json::to_string_pretty(m).ok())
-                .unwrap_or_else(|| "{}".to_string());
-            let sidecar_filename = format!("{base_stem}.json");
-            Some((sidecar_filename, json_str.into_bytes()))
+            let json_str = match options.privacy {
+                MetadataPrivacyMode::StripAll => None,
+                MetadataPrivacyMode::StripAllAiMetadata => {
+                    let mut m = file.metadata.clone().unwrap_or_default();
+                    m.prompt = None;
+                    m.negative_prompt = None;
+                    m.parameters = None;
+                    m.raw = None;
+                    m.model_name = None;
+                    m.model_hash = None;
+                    m.sampler = None;
+                    m.seed = None;
+                    m.cfg_scale = None;
+                    m.steps = None;
+                    serde_json::to_string_pretty(&m).ok()
+                }
+                MetadataPrivacyMode::StripPromptOnly => {
+                    let mut m = file.metadata.clone().unwrap_or_default();
+                    m.prompt = None;
+                    m.negative_prompt = None;
+                    m.parameters = None;
+                    m.raw = None;
+                    serde_json::to_string_pretty(&m).ok()
+                }
+                MetadataPrivacyMode::KeepAll => {
+                    file.metadata
+                        .as_ref()
+                        .and_then(|m| serde_json::to_string_pretty(m).ok())
+                }
+            };
+            json_str.map(|s| {
+                let sidecar_filename = format!("{base_stem}.json");
+                (sidecar_filename, s.into_bytes())
+            })
         }
     };
 
@@ -368,6 +422,7 @@ where
 
     let processed_counter = AtomicUsize::new(0);
     let mut showcase_items = Vec::new();
+    let mut used_filenames: HashSet<String> = HashSet::new();
 
     // Process files in bounded chunks of 16 to keep memory usage strictly bounded
     for (chunk_idx, chunk) in files.chunks(16).enumerate() {
@@ -383,44 +438,106 @@ where
             match res {
                 Ok(item) => {
                     let image_len = item.image_bytes.len() as u64;
+
+                    // Resolve collisions by appending numeric suffixes
+                    let mut final_image_filename = item.image_filename.clone();
+                    let stem = Path::new(&item.image_filename)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("image")
+                        .to_string();
+                    let ext = Path::new(&item.image_filename)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_string();
+
+                    let mut collision_count = 1;
+                    while used_filenames.contains(&final_image_filename)
+                        || (!options.as_zip && dest_path.join(&final_image_filename).exists())
+                    {
+                        final_image_filename = if ext.is_empty() {
+                            format!("{stem}_{collision_count}")
+                        } else {
+                            format!("{stem}_{collision_count}.{ext}")
+                        };
+                        collision_count += 1;
+                    }
+                    used_filenames.insert(final_image_filename.clone());
+
+                    // Resolve sidecar filename if present
+                    let final_sidecar = item.sidecar.map(|(sc_orig, sc_bytes)| {
+                        let sc_ext = Path::new(&sc_orig)
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("txt");
+                        let new_sc_stem = Path::new(&final_image_filename)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(&stem);
+                        let mut sc_name = format!("{new_sc_stem}.{sc_ext}");
+                        let mut sc_count = 1;
+                        while used_filenames.contains(&sc_name)
+                            || (!options.as_zip && dest_path.join(&sc_name).exists())
+                        {
+                            sc_name = format!("{new_sc_stem}_{sc_count}.{sc_ext}");
+                            sc_count += 1;
+                        }
+                        used_filenames.insert(sc_name.clone());
+                        (sc_name, sc_bytes)
+                    });
+
+                    let mut write_success = false;
+
                     if let Some(ref mut zip) = zip_writer {
                         use std::io::Write;
-                        let _ = zip.start_file(&item.image_filename, zip_options);
-                        let _ = zip.write_all(&item.image_bytes);
-                        total_bytes_written += image_len;
+                        if let Err(e) = zip.start_file(&final_image_filename, zip_options) {
+                            errors.push(format!("Failed to add {final_image_filename} to zip: {e}"));
+                        } else if let Err(e) = zip.write_all(&item.image_bytes) {
+                            errors.push(format!("Failed to write {final_image_filename} to zip: {e}"));
+                        } else {
+                            total_bytes_written += image_len;
+                            write_success = true;
 
-                        if let Some((sidecar_name, sidecar_bytes)) = item.sidecar {
-                            total_bytes_written += sidecar_bytes.len() as u64;
-                            let _ = zip.start_file(&sidecar_name, zip_options);
-                            let _ = zip.write_all(&sidecar_bytes);
+                            if let Some((ref sc_name, ref sc_bytes)) = final_sidecar {
+                                if zip.start_file(sc_name, zip_options).is_ok()
+                                    && zip.write_all(sc_bytes).is_ok()
+                                {
+                                    total_bytes_written += sc_bytes.len() as u64;
+                                }
+                            }
                         }
                     } else {
-                        let out_image_path = dest_path.join(&item.image_filename);
+                        let out_image_path = dest_path.join(&final_image_filename);
                         if let Err(e) = fs::write(&out_image_path, &item.image_bytes) {
                             errors
                                 .push(format!("Failed to write {}: {e}", out_image_path.display()));
                         } else {
                             total_bytes_written += image_len;
-                        }
+                            write_success = true;
 
-                        if let Some((sidecar_name, sidecar_bytes)) = item.sidecar {
-                            let out_sidecar_path = dest_path.join(&sidecar_name);
-                            if let Ok(()) = fs::write(&out_sidecar_path, &sidecar_bytes) {
-                                total_bytes_written += sidecar_bytes.len() as u64;
+                            if let Some((ref sc_name, ref sc_bytes)) = final_sidecar {
+                                let out_sidecar_path = dest_path.join(sc_name);
+                                if fs::write(&out_sidecar_path, sc_bytes).is_ok() {
+                                    total_bytes_written += sc_bytes.len() as u64;
+                                }
                             }
                         }
                     }
 
-                    if let Some(showcase) = item.showcase_item {
-                        showcase_items.push(showcase);
+                    if write_success {
+                        total_exported += 1;
+                        if let Some(mut showcase) = item.showcase_item {
+                            showcase.filename = final_image_filename.clone();
+                            showcase_items.push(showcase);
+                        }
                     }
 
                     progress_callback(ExportProgressEvent {
                         current,
                         total,
-                        current_filename: item.image_filename,
+                        current_filename: final_image_filename,
                     });
-                    total_exported += 1;
                 }
                 Err(err) => {
                     errors.push(err);
@@ -603,5 +720,52 @@ mod tests {
         assert_eq!(showcase.height, 50);
         // Privacy was StripAllAiMetadata so prompt is stripped
         assert!(showcase.prompt.is_none());
+    }
+
+    #[test]
+    fn test_process_single_image_original_jpeg_downscale_preserves_jpeg() {
+        let dir = tempfile::tempdir().unwrap();
+        let src_img_path = dir.path().join("photo.jpg");
+
+        let mut img = RgbImage::new(100, 100);
+        for pixel in img.pixels_mut() {
+            *pixel = Rgb([100, 150, 200]);
+        }
+        img.save(&src_img_path).unwrap();
+
+        let file = ImageFile {
+            id: Some(10),
+            folder_id: 1,
+            path: src_img_path.to_string_lossy().to_string(),
+            container: Container::Jpeg,
+            size_bytes: fs::metadata(&src_img_path).unwrap().len(),
+            modified_at: 1726000000,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+
+        let options = ExportOptions {
+            file_ids: vec![10],
+            format: ExportFormat::Original,
+            quality: 85,
+            privacy: MetadataPrivacyMode::StripAll,
+            sidecar: ExportSidecar::None,
+            filename_template: "{name}".to_string(),
+            destination_path: dir.path().join("out").to_string_lossy().to_string(),
+            as_zip: false,
+            max_edge: Some(50),
+            export_html_showcase: false,
+            html_title: None,
+        };
+
+        let processed = process_single_image(&file, &options, 0).unwrap();
+        assert_eq!(processed.image_filename, "photo.jpg");
+        // Verify output is valid JPEG (SOI marker 0xFF 0xD8) and NOT PNG
+        assert_eq!(&processed.image_bytes[0..2], &[0xFF, 0xD8]);
     }
 }

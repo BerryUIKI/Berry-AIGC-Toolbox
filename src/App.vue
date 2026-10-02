@@ -69,6 +69,7 @@ const ModelManagerModal = defineAsyncComponent(() => import("./components/ModelM
 const FileOperationModal = defineAsyncComponent(() => import("./components/FileOperationModal.vue"));
 const DatabaseManagerModal = defineAsyncComponent(() => import("./components/DatabaseManagerModal.vue"));
 const ShortcutsHelpModal = defineAsyncComponent(() => import("./components/ShortcutsHelpModal.vue"));
+const HelpGuideDrawer = defineAsyncComponent(() => import("./components/HelpGuideDrawer.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./components/SettingsModal.vue"));
 const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
 const AutoTagModal = defineAsyncComponent(() => import("./components/AutoTagModal.vue"));
@@ -127,6 +128,19 @@ const promptStatsModalOpen = ref(false);
 const modelManagerModalOpen = ref(false);
 const dbManagerModalOpen = ref(false);
 const shortcutsHelpModalOpen = ref(false);
+const helpGuideDrawerOpen = ref(false);
+
+const helpGuideContext = computed(() => {
+  if (expandedStacks.value.size > 0) return "stack";
+  if (selectedFile.value?.container === "mp4" || selectedFile.value?.container === "webm") return "video";
+  if (settingsModalOpen.value) return "settings";
+  if (modelManagerModalOpen.value || loraModalOpen.value) return "models";
+  if (clipModalOpen.value || autoTagModalOpen.value) return "clip";
+  if (exportModalOpen.value) return "export";
+  if (dbManagerModalOpen.value) return "database";
+  if (searchQuery.value) return "search";
+  return "home";
+});
 const fileOpModalOpen = ref(false);
 const fileOpMode = ref<"move" | "copy" | "trash">("move");
 const fileOpTargetFiles = ref<ImageFile[]>([]);
@@ -355,6 +369,13 @@ function handleWindowKeyDown(e: KeyboardEvent) {
     return;
   }
 
+  // Feature Guide & Documentation: F1 or Ctrl+Shift+H
+  if (e.key === "F1" || (e.shiftKey && (e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H"))) {
+    e.preventDefault();
+    helpGuideDrawerOpen.value = !helpGuideDrawerOpen.value;
+    return;
+  }
+
   // Help Modal: ?
   if (e.key === "?" || (e.shiftKey && e.key === "/")) {
     e.preventDefault();
@@ -426,6 +447,10 @@ function handleWindowKeyDown(e: KeyboardEvent) {
 
   // Escape: Close modals, lightbox, or clear selection
   if (e.key === "Escape") {
+    if (helpGuideDrawerOpen.value) {
+      helpGuideDrawerOpen.value = false;
+      return;
+    }
     if (lightboxFile.value) {
       lightboxFile.value = null;
       return;
@@ -1992,6 +2017,7 @@ function onResetZoom() {
           @open-shortcuts-help="shortcutsHelpModalOpen = true"
           @open-updater="updateModalOpen = true"
           @open-about="settingsModalOpen = true"
+          @open-help-guide="helpGuideDrawerOpen = true"
         />
       </template>
 
@@ -2482,6 +2508,14 @@ function onResetZoom() {
       :files="exportFilesList"
       @close="exportModalOpen = false"
       @exported="onExportCompleted"
+    />
+
+    <!-- Help & Feature Guide Drawer -->
+    <HelpGuideDrawer
+      v-if="helpGuideDrawerOpen"
+      :show="helpGuideDrawerOpen"
+      :context="helpGuideContext"
+      @close="helpGuideDrawerOpen = false"
     />
   </div>
 </template>

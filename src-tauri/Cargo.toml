@@ -31,6 +31,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
 trash = "5"
 ureq = { version = "2.10", default-features = false, features = ["tls"] }
 uuid = { version = "1", features = ["v4"] }

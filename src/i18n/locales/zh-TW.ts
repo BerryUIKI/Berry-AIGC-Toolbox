@@ -370,6 +370,7 @@ export const zhTW: typeof en = {
     organizeFailed: "圖庫整理失敗，請重試。",
     help: "說明",
     language: "語言",
+    helpGuide: "功能指南與離線文檔",
     shortcuts: "快速鍵手冊",
     checkUpdates: "檢查更新...",
     about: "關於 Omera",

@@ -370,6 +370,7 @@ export const de: typeof en = {
     organizeFailed: "Die Organisation der Bibliothek ist fehlgeschlagen. Bitte erneut versuchen.",
     help: "Hilfe",
     language: "Sprache",
+    helpGuide: "Funktionshandbuch & Dokumentation",
     shortcuts: "Tastaturkürzel",
     checkUpdates: "Nach Updates suchen...",
     about: "Über Omera",

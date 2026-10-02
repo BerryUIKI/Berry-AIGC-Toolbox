@@ -1595,7 +1595,7 @@ async function saveSettings() {
               </div>
               <div class="about-details">
                 <h5 class="about-name">Omera</h5>
-                <p class="about-ver">v{{ info?.app_version || '0.1.3' }}</p>
+                <p class="about-ver">v{{ info?.app_version || '0.4.0' }}</p>
                 <p class="about-desc">{{ t.settings.aboutDesc }}</p>
               </div>
             </div>

@@ -2459,7 +2459,7 @@ function onResetZoom() {
     <UpdateModal
       v-if="updateModalOpen"
       :show="updateModalOpen"
-      :current-version="info?.app_version || '0.1.1'"
+      :current-version="info?.app_version || '0.4.0'"
       @close="updateModalOpen = false"
     />
 

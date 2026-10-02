@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🍇 Berry AI Studio
+# 🍇 Omera
 
 **The open-source asset manager & prompt studio for AI-generated images.**
 
@@ -298,11 +298,11 @@ Berry AI Studio is built on the shoulders of these excellent open-source project
 
 If you find Berry AI Studio useful, please consider giving it a ⭐ — it helps others discover the project!
 
-<a href="https://star-history.com/#BerryUIKI/Berry-AI-Studio&Date">
+<a href="https://star-history.com/#BerryUIKI/Omera&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=BerryUIKI/Berry-AI-Studio&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=BerryUIKI/Berry-AI-Studio&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=BerryUIKI/Berry-AI-Studio&type=Date" width="600" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=BerryUIKI/Omera&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=BerryUIKI/Omera&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=BerryUIKI/Omera&type=Date" width="600" />
   </picture>
 </a>
 

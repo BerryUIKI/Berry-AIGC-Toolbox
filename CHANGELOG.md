@@ -1,9 +1,50 @@
 # Changelog
 
-All notable changes to the Berry AI Studio project are documented in this file.
+All notable changes to the Omera project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.4.0] - 2026-10-03
+
+### Omera Identity Transition, Single-Instance Lifecycle, Hardened Security & Verified Transformations
+
+Version 0.4.0 is a milestone pre-release completing the official project identity transition to **Omera** (`com.berryuiki.omera`), enforcing single-instance desktop lifecycle, restricting WebView CSP and local protocol boundaries, introducing verified image export and managed vault transformation engines, auto-detecting adult content with user override preservation, and embedding a comprehensive offline feature documentation drawer:
+
+#### 🌟 Omera Canonical Identity & Migration Bridge
+- **Canonical App Identity**: Fully transitioned binary naming, application metadata, OS bundles, and packaging to **Omera** (`com.berryuiki.omera`, repository `BerryUIKI/Omera`, primary SQLite database `omera.db`, local preferences prefix `omera_`).
+- **Zero-Data-Loss Migration Bridge**: Integrated automatic discovery for legacy Berry AI Studio installations (`berry.db`, `berry_*` local storage keys, and legacy snapshots), migrating them seamlessly into Omera with verifiable receipts (`berry-to-omera-v1`).
+- **Core Crate Restructuring**: Reorganized core architectural components under `crates/omera-*` (`omera-domain`, `omera-metadata`, `omera-scan`, `omera-storage`, `omera-tagger`, `omera-clip`).
+
+#### 🪟 Desktop Lifecycle & Security Hardening
+- **Single-Instance Enforcement (#124)**: Integrated `tauri-plugin-single-instance = "2"`, preventing duplicate database locks and taskbar clutter by unminimizing and focusing the active application window upon secondary launch.
+- **Defense-in-Depth WebView CSP (#107)**: Enforced strict Content Security Policy denying untrusted remote scripts, inline object embeds, and arbitrary frame nesting, while permitting necessary local asset rendering and verified API endpoints.
+- **Scoped Local Asset Protocol (#107)**: Removed wildcard scopes (`scope: []`) and dynamically authorized local asset protocol access strictly to user-registered library folders and the managed WebP thumbnail cache.
+
+#### 📤 Verified Export & Transcoding Precision (#158)
+- **Format & Extension Agreement**: Synchronized container encoding for `ExportFormat::Original` with resize or privacy options across JPEG, WebP, and PNG, preventing mislabeled file signatures.
+- **Strict Privacy Sidecars**: Ensured `.txt` prompt and `.json` metadata sidecars strictly follow effective sanitization policies (`StripAll` completely omits sidecars; `StripAllAiMetadata` scrubs all AI workflow chunks).
+- **Collision Suffixing**: Safe collision detection appending numeric increments (`_1`, `_2`) for both directory and ZIP package exports, preventing accidental file overwrites.
+- **Accurate Outcome Reporting**: Counted exported items only after verified completion of image and sidecar disk writes, reporting granular per-file errors.
+
+#### 🔄 Staged Image Transformation & Managed Vaults (#159, #160)
+- **Managed Import Transformation (T2, #159)**: Optional image compression and conversion during import into managed vaults, with staged decode verification before database indexing; external source images remain unmodified by default.
+- **Library Batch Compression & Safe Disposition (T3, #160)**: Gallery batch action to convert and compress existing managed media assets. Supports explicit user-directed original disposition (`Keep`, `Archive` to `.omera_archive/`, or move to OS `Trash` without permanent deletion fallback). External linked folders are strictly read-only.
+
+#### 🔞 Rule-Based NSFW Auto-Detection (#128)
+- **Rule-Based Keyword Analysis**: Integrated automated prompt and WD14 tag analysis in `omera-metadata` to flag sensitive content on initial ingest.
+- **User Override Absolute Priority**: SQLite upsert policies ensure explicit user curation (`is_nsfw` manual toggle) is permanently preserved across library rescans and folder walks.
+
+#### 📖 Global In-App Help Drawer & Feature Documentation (#137)
+- **Offline Help & Feature Guide**: Lightweight, zero-network documentation reader (`HelpGuideDrawer.vue`) featuring 11 feature chapters, quick keyword search, and keyboard shortcut matrix.
+- **Smart Context Deep-Linking**: Auto-detects active workspace context (burst stacks, video media, settings, models, CLIP, search) to highlight relevant documentation.
+- **Global Keybinding**: Summonable from any screen via `F1` or `Ctrl+Shift+H` / `Cmd+Shift+H`, and accessible via the top MenuBar across all 7 supported UI locales.
+
+#### ⚡ Asynchronous Command Concurrency & Schema Evolution (#102, #135)
+- **Asynchronous Command Scheduling**: Offloaded blocking filesystem operations, network requests, and ONNX inference to `tauri::async_runtime::spawn_blocking`, keeping database lock durations minimal.
+- **Large-Library Storage Benchmarks**: Verified keyset cursor indexing (`idx_files_cursor_mtime`, `idx_files_cursor_size`, `idx_files_cursor_rating`) and documented query plan metrics across 1k, 10k, and 50k item libraries in `docs/benchmarks/LARGE_LIBRARY_BENCHMARK.md`.
+
+---
 
 ## [0.3.0] - 2026-09-21
 

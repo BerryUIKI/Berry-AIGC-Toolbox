@@ -2,7 +2,8 @@
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n";
-import type { Album, Folder, LibraryCounts, NavTarget, ScanProgress, ScanStats, Tag } from "../types";
+import type { Album, Folder, LibraryCounts, NavTarget, ScanProgress, ScanStats, SubdirectoryEntry, Tag } from "../types";
+import FolderTreeNode from "./FolderTreeNode.vue";
 
 const props = defineProps<{
   folders: Folder[];
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   openAddFolderModal: [];
   moveFilesToFolder: [payload: { filePaths: string[]; folderId: number }];
   addFilesToAlbum: [payload: { fileIds: number[]; albumId: number }];
+  importExternalFilesToAlbum: [payload: { filePaths: string[]; albumId: number }];
   tagFiles: [payload: { fileIds: number[]; tagId: number }];
   toggleCollapse: [];
 }>();
@@ -36,6 +38,10 @@ const emit = defineEmits<{
 const addingFolder = ref(false);
 const running = ref<{ id: number; action: "scan" | "rebuild" | "harvest" } | null>(null);
 const error = ref("");
+
+const subdirectories = ref<Record<string, SubdirectoryEntry[]>>({});
+const expandedPaths = ref<Set<string>>(new Set());
+const loadingPaths = ref<Set<string>>(new Set());
 
 function displayPath(path: string): string {
   return path.replace(/^\\\\\?\\/, "");
@@ -77,6 +83,9 @@ async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
       action === "rebuild" ? "rebuild_metadata" : "scan_folder",
       { folderId: folder.id },
     );
+    if (expandedPaths.value.has(folder.path)) {
+      void loadSubdirectories(folder, folder.path);
+    }
     emit("scanned", folder.id);
   } catch (e) {
     error.value = String(e);
@@ -90,16 +99,76 @@ async function removeFolder(folder: Folder, e: MouseEvent) {
   error.value = "";
   try {
     await invoke("remove_folder", { folderId: folder.id });
+    expandedPaths.value.delete(folder.path);
+    delete subdirectories.value[folder.path];
     emit("removed", folder.id);
   } catch (e) {
     error.value = String(e);
   }
 }
 
+async function loadSubdirectories(folder: Folder, path: string) {
+  loadingPaths.value.add(path);
+  loadingPaths.value = new Set(loadingPaths.value);
+  try {
+    const entries = await invoke<SubdirectoryEntry[]>("list_subdirectories", {
+      folderId: folder.id,
+      dirPath: path,
+    });
+    subdirectories.value[path] = entries;
+  } catch (err) {
+    console.error("Failed to load subdirectories for", path, err);
+  } finally {
+    loadingPaths.value.delete(path);
+    loadingPaths.value = new Set(loadingPaths.value);
+  }
+}
+
+async function toggleFolderExpand(folder: Folder) {
+  const rootPath = folder.path;
+  if (expandedPaths.value.has(rootPath)) {
+    expandedPaths.value.delete(rootPath);
+    expandedPaths.value = new Set(expandedPaths.value);
+    return;
+  }
+  expandedPaths.value.add(rootPath);
+  expandedPaths.value = new Set(expandedPaths.value);
+
+  if (!subdirectories.value[rootPath]) {
+    await loadSubdirectories(folder, rootPath);
+  }
+}
+
+async function toggleSubfolderExpand(folder: Folder, path: string) {
+  if (expandedPaths.value.has(path)) {
+    expandedPaths.value.delete(path);
+    expandedPaths.value = new Set(expandedPaths.value);
+    return;
+  }
+  expandedPaths.value.add(path);
+  expandedPaths.value = new Set(expandedPaths.value);
+
+  if (!subdirectories.value[path]) {
+    await loadSubdirectories(folder, path);
+  }
+}
+
+function selectSubfolder(folder: Folder, subfolderPath: string) {
+  emit("selectNav", {
+    type: "folder",
+    folder,
+    subfolderPath,
+    recursive: false,
+  });
+}
+
 function isTargetActive(target: NavTarget): boolean {
   if (props.activeTarget.type !== target.type) return false;
   if (target.type === "folder" && props.activeTarget.type === "folder") {
-    return props.activeTarget.folder.id === target.folder.id;
+    if (props.activeTarget.folder.id !== target.folder.id) return false;
+    const activeSub = props.activeTarget.subfolderPath || "";
+    const targetSub = target.subfolderPath || "";
+    return activeSub === targetSub;
   }
   if (target.type === "album" && props.activeTarget.type === "album") {
     return props.activeTarget.album.id === target.album.id;
@@ -130,17 +199,65 @@ function onDropOnFolder(e: DragEvent, folder: Folder) {
 function onDropOnAlbum(e: DragEvent, album: Album) {
   e.preventDefault();
   const data = e.dataTransfer?.getData("application/json");
-  if (!data) return;
-  try {
-    const payload = JSON.parse(data);
-    if (payload.file_ids && payload.file_ids.length > 0) {
-      emit("addFilesToAlbum", {
-        fileIds: payload.file_ids,
+  if (data) {
+    try {
+      const payload = JSON.parse(data);
+      if (payload.file_ids && payload.file_ids.length > 0) {
+        emit("addFilesToAlbum", {
+          fileIds: payload.file_ids,
+          albumId: album.id,
+        });
+        return;
+      }
+    } catch (err) {
+      console.error("Drop on album parse error:", err);
+    }
+  }
+
+  // Handle external OS file drops
+  const droppedFiles = e.dataTransfer?.files;
+  if (droppedFiles && droppedFiles.length > 0) {
+    const filePaths: string[] = [];
+    for (let i = 0; i < droppedFiles.length; i++) {
+      const f = droppedFiles[i] as any;
+      if (f.path) {
+        filePaths.push(f.path);
+      }
+    }
+    if (filePaths.length > 0) {
+      emit("importExternalFilesToAlbum", {
+        filePaths,
+        albumId: album.id,
+      });
+      return;
+    }
+  }
+
+  // Handle URI / plain text drop fallback
+  const text = e.dataTransfer?.getData("text/plain") || e.dataTransfer?.getData("text/uri-list");
+  if (text) {
+    const lines = text.split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean);
+    const filePaths: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("file://")) {
+        try {
+          const url = new URL(line);
+          let pathname = decodeURIComponent(url.pathname);
+          if (/^\/[a-zA-Z]:/.test(pathname)) {
+            pathname = pathname.substring(1);
+          }
+          filePaths.push(pathname);
+        } catch {}
+      } else if (/^[a-zA-Z]:[\\/]/.test(line) || line.startsWith("/")) {
+        filePaths.push(line);
+      }
+    }
+    if (filePaths.length > 0) {
+      emit("importExternalFilesToAlbum", {
+        filePaths,
         albumId: album.id,
       });
     }
-  } catch (err) {
-    console.error("Drop on album parse error:", err);
   }
 }
 
@@ -220,52 +337,83 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           </button>
         </div>
         <ul class="nav-list">
-          <li
-            v-for="folder in folders"
-            :key="folder.id"
-            class="nav-item folder-item"
-            :class="{ active: isTargetActive({ type: 'folder', folder }) }"
-            :title="displayPath(folder.path)"
-            @click="emit('selectNav', { type: 'folder', folder })"
-            @dragover.prevent
-            @drop="onDropOnFolder($event, folder)"
-          >
-            <span class="item-icon">
-              {{ folder.folder_type === 'pipeline' ? '⚡' : folder.folder_type === 'managed' ? '📦' : '📁' }}
-            </span>
-            <span class="item-label truncate">{{ getFolderName(folder.path) }}</span>
-            <span v-if="counts?.folders" class="item-badge">{{ counts.folders[folder.id] ?? 0 }}</span>
+          <template v-for="folder in folders" :key="folder.id">
+            <li
+              class="nav-item folder-item"
+              :class="{ active: isTargetActive({ type: 'folder', folder }) }"
+              :title="displayPath(folder.path)"
+              @click="emit('selectNav', { type: 'folder', folder, subfolderPath: undefined, recursive: true })"
+              @dragover.prevent
+              @drop="onDropOnFolder($event, folder)"
+            >
+              <button
+                type="button"
+                class="tree-arrow-btn"
+                :class="{ expanded: expandedPaths.has(folder.path) }"
+                :title="expandedPaths.has(folder.path) ? 'Collapse' : 'Expand'"
+                @click.stop="toggleFolderExpand(folder)"
+              >
+                <span v-if="loadingPaths.has(folder.path)" class="tree-loading-dot">…</span>
+                <span v-else>{{ expandedPaths.has(folder.path) ? '▼' : '▶' }}</span>
+              </button>
 
-            <div class="folder-actions" @click.stop>
-              <button
-                v-if="folder.folder_type === 'pipeline'"
-                type="button"
-                class="icon-btn harvest-btn"
-                :disabled="isBusy(folder.id)"
-                :title="t.nav.harvest || 'Harvest New Images'"
-                @click="harvest(folder, $event)"
-              >
-                {{ isBusy(folder.id) ? '⏳' : '⚡' }}
-              </button>
-              <button
-                type="button"
-                class="icon-btn"
-                :disabled="isBusy(folder.id)"
-                :title="t.nav.scan"
-                @click="scan(folder, 'scan')"
-              >
-                {{ isBusy(folder.id) ? '⏳' : '🔄' }}
-              </button>
-              <button
-                type="button"
-                class="icon-btn remove-btn"
-                :title="t.nav.remove"
-                @click="removeFolder(folder, $event)"
-              >
-                ✕
-              </button>
-            </div>
-          </li>
+              <span class="item-icon">
+                {{ folder.folder_type === 'pipeline' ? '⚡' : folder.folder_type === 'managed' ? '📦' : (expandedPaths.has(folder.path) ? '📂' : '📁') }}
+              </span>
+              <span class="item-label truncate">{{ getFolderName(folder.path) }}</span>
+              <span v-if="counts?.folders" class="item-badge">{{ counts.folders[folder.id] ?? 0 }}</span>
+
+              <div class="folder-actions" @click.stop>
+                <button
+                  v-if="folder.folder_type === 'pipeline'"
+                  type="button"
+                  class="icon-btn harvest-btn"
+                  :disabled="isBusy(folder.id)"
+                  :title="t.nav.harvest || 'Harvest New Images'"
+                  @click="harvest(folder, $event)"
+                >
+                  {{ isBusy(folder.id) ? '⏳' : '⚡' }}
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  :disabled="isBusy(folder.id)"
+                  :title="t.nav.scan"
+                  @click="scan(folder, 'scan')"
+                >
+                  {{ isBusy(folder.id) ? '⏳' : '🔄' }}
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn remove-btn"
+                  :title="t.nav.remove"
+                  @click="removeFolder(folder, $event)"
+                >
+                  ✕
+                </button>
+              </div>
+            </li>
+
+            <!-- Recursive Subdirectory Tree -->
+            <ul
+              v-if="expandedPaths.has(folder.path) && subdirectories[folder.path]?.length"
+              class="subfolder-tree-list root-subfolder-list"
+            >
+              <FolderTreeNode
+                v-for="child in subdirectories[folder.path]"
+                :key="child.path"
+                :folder="folder"
+                :entry="child"
+                :depth="1"
+                :active-target="activeTarget"
+                :expanded-paths="expandedPaths"
+                :subdirectories="subdirectories"
+                :loading-paths="loadingPaths"
+                @toggle-expand="toggleSubfolderExpand"
+                @select-subfolder="selectSubfolder"
+              />
+            </ul>
+          </template>
           <li v-if="folders.length === 0" class="empty-hint">
             {{ t.nav.noFolders }}
           </li>
@@ -485,13 +633,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .nav-item.active {
-  background: #27272a;
-  color: #f8fafc;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 
@@ -550,6 +698,47 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   display: none;
 }
 
+.tree-arrow-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.65rem;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.tree-arrow-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tree-loading-dot {
+  font-size: 0.65rem;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+.subfolder-tree-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .icon-btn {
   background: transparent;
   border: none;
@@ -564,8 +753,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 }
 
 .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .icon-btn.remove-btn:hover {
@@ -585,16 +774,16 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   gap: 5px;
   padding: 2px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-bg-hover);
   font-size: 0.74rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.12s;
 }
 
 .tag-chip-eagle:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .tag-chip-eagle.active {

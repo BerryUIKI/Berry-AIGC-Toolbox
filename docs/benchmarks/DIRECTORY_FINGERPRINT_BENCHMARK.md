@@ -2,14 +2,14 @@
 
 **Date:** 2026-09-21  
 **Test Platform:** Windows 11, NVMe SSD  
-**Target Crates:** `berry-scan`, `berry-storage`  
-**Benchmark Command:** `cargo bench --bench directory_fingerprint -p berry-scan`
+**Target Crates:** `omera-scan`, `omera-storage`  
+**Benchmark Command:** `cargo bench --bench directory_fingerprint -p omera-scan`
 
 ---
 
 ## 1. Executive Summary
 
-This benchmark evaluates filesystem reconciliation strategies for Berry AI Studio across local fast storage (NVMe SSD) and network-attached storage (SMB, NFS, WebDAV, cloud mounts).
+This benchmark evaluates filesystem reconciliation strategies for Omera across local fast storage (NVMe SSD) and network-attached storage (SMB, NFS, WebDAV, cloud mounts).
 
 As libraries grow into tens of thousands of media files across complex folder hierarchies, scanning performance depends critically on minimizing operating system calls (system calls on local disks, and remote round-trip RPCs over network filesystems).
 

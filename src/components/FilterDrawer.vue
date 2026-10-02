@@ -132,7 +132,7 @@ function reset() {
 </script>
 
 <template>
-  <div v-if="open" class="drawer-backdrop" @click="handleBackdrop">
+  <div v-if="open" class="drawer-backdrop" @click="handleBackdrop" v-dialog="close">
     <div class="drawer-panel" role="dialog" aria-modal="true">
       <header class="drawer-header">
         <div class="header-title">
@@ -570,6 +570,11 @@ function reset() {
 .form-input:focus {
   border-color: #2f6fed;
   background: rgba(128, 128, 128, 0.12);
+}
+
+.form-select option {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .range-inputs {

@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use berry_domain::{FilesystemChange, Folder};
-use berry_scan::{ScanStats, Scanner};
-use berry_storage::Database;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use omera_domain::{FilesystemChange, Folder};
+use omera_scan::{ScanStats, Scanner};
+use omera_storage::Database;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
@@ -66,7 +66,7 @@ impl LibraryWatcher {
 
         let worker_db_path = db_path.clone();
         std::thread::Builder::new()
-            .name("berry-filesystem-watcher".to_string())
+            .name("omera-filesystem-watcher".to_string())
             .spawn(move || run_worker(app, worker_db_path, worker_roots, worker_health, receiver))
             .map_err(|error| error.to_string())?;
 
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn benchmark_event_storm_coalescing() {
         let temp_dir =
-            std::env::temp_dir().join(format!("berry_storm_test_{}", std::process::id()));
+            std::env::temp_dir().join(format!("omera_storm_test_{}", std::process::id()));
         let _ = std::fs::create_dir_all(&temp_dir);
         let db_path = temp_dir.join("storm.db");
         let db = Database::connect(&db_path).expect("open db");

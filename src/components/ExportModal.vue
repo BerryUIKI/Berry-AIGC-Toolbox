@@ -45,7 +45,7 @@ const progress = ref<ExportProgressEvent | null>(null);
 const summary = ref<ExportSummary | null>(null);
 const error = ref<string | null>(null);
 
-let unlistenProgress: UnlistenFn | null = null;
+let unlistenProgress: UnlistenFn[] = [];
 
 watch(
   () => props.show,
@@ -57,29 +57,32 @@ watch(
       exporting.value = false;
       destinationPath.value = "";
 
-      if (!unlistenProgress) {
-        unlistenProgress = await listen<ExportProgressEvent>(
+      if (unlistenProgress.length === 0) {
+        const u1 = await listen<ExportProgressEvent>(
+          "omera://export-progress",
+          (event) => {
+            progress.value = event.payload;
+          }
+        );
+        const u2 = await listen<ExportProgressEvent>(
           "berry://export-progress",
           (event) => {
             progress.value = event.payload;
           }
         );
+        unlistenProgress = [u1, u2];
       }
     } else {
-      if (unlistenProgress) {
-        unlistenProgress();
-        unlistenProgress = null;
-      }
+      unlistenProgress.forEach((fn) => fn());
+      unlistenProgress = [];
     }
   },
   { immediate: true }
 );
 
 onUnmounted(() => {
-  if (unlistenProgress) {
-    unlistenProgress();
-    unlistenProgress = null;
-  }
+  unlistenProgress.forEach((fn) => fn());
+  unlistenProgress = [];
 });
 
 const previewFilename = computed(() => {
@@ -112,7 +115,7 @@ const previewFilename = computed(() => {
 async function handleBrowseDestination() {
   try {
     if (asZip.value) {
-      const defaultName = `berry_export_${new Date().toISOString().slice(0, 10)}.zip`;
+      const defaultName = `omera_export_${new Date().toISOString().slice(0, 10)}.zip`;
       const selected = await save({
         defaultPath: defaultName,
         filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
@@ -187,7 +190,7 @@ async function handleOpenOutputFolder() {
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay" @click.self="emit('close')">
+  <div v-if="show" class="modal-overlay" @click.self="emit('close')" v-dialog="() => emit('close')">
     <div class="modal-dialog">
       <!-- Modal Header -->
       <div class="modal-header">
@@ -236,7 +239,7 @@ async function handleOpenOutputFolder() {
               </select>
             </div>
 
-            <div v-if="format === 'webp' || format === 'jpeg'" class="form-group">
+            <div v-if="format === 'jpeg'" class="form-group">
               <div class="label-with-value">
                 <label class="form-label">{{ t.exportModal.quality }}</label>
                 <span class="value-badge">{{ quality }}%</span>

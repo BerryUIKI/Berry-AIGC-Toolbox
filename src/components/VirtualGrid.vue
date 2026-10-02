@@ -17,12 +17,16 @@ import {
   getThumbnailTier,
   getThumbnailUrl,
   getThumbnailUrlSync,
+  invalidateThumbnail,
   requestBatchThumbnails,
   THUMBNAIL_PRIORITY,
 } from "../utils/thumbnail";
 import { t } from "../i18n";
 import { resolveStackHeroPaths } from "../utils/stack";
-import { calculateGalleryColumns } from "../utils/gallery-layout";
+import { calculateGalleryColumns, calculateGalleryTrackOffset } from "../utils/gallery-layout";
+import { hasActiveDialog, isEditableTarget } from "../utils/dialog";
+import { useGalleryNavigation } from "../utils/gallery-navigation";
+import { WaterfallGeometry, visibleWaterfallItems } from "../utils/gallery-state";
 
 const props = withDefaults(
   defineProps<{
@@ -41,6 +45,9 @@ const props = withDefaults(
     expandedStacks?: Set<string>;
     layout?: "grid" | "masonry";
     contextKey?: string;
+    fileRevision?: number;
+    emptyMessage?: string;
+    emptyActionText?: string;
   }>(),
   {
     selectedFile: null,
@@ -65,6 +72,7 @@ const emit = defineEmits<{
   (e: "compareStack", stackId: string): void;
   (e: "cullStack", stackId: string): void;
   (e: "loadMore"): void;
+  (e: "recover"): void;
 }>();
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -81,30 +89,13 @@ function onImageError(path: string) {
 }
 
 function retryImage(file: ImageFile) {
+  const item = visibleItems.value.find((item) => item.file.id === file.id);
+  const edge = Math.max(item?.width || itemWidth.value, item?.imageHeight || itemWidth.value);
+  invalidateThumbnail(file, getThumbnailTier(edge));
   failedImages.value.delete(file.path);
-  getThumbnailUrl(file, Math.max(itemWidth.value, rowHeight.value)).catch(() => {});
+  void loadThumbnailFor(file, edge, beginThumbnailRequestCycle());
 }
 
-// Persist and restore gallery scroll position per folder/search context
-const contextScrollPositions = new Map<string, number>();
-
-watch(
-  () => props.contextKey,
-  (newKey, oldKey) => {
-    if (oldKey !== undefined && containerRef.value) {
-      contextScrollPositions.set(oldKey, containerRef.value.scrollTop);
-    }
-    if (newKey !== undefined && containerRef.value) {
-      const saved = contextScrollPositions.get(newKey) ?? 0;
-      requestAnimationFrame(() => {
-        if (containerRef.value) {
-          containerRef.value.scrollTop = saved;
-          scrollTop.value = saved;
-        }
-      });
-    }
-  },
-);
 
 function toggleNsfwReveal(path: string) {
   if (revealedNsfw.value.has(path)) {
@@ -181,6 +172,7 @@ function onScroll(e: Event) {
   scrollFrame = requestAnimationFrame(() => {
     scrollTop.value = target.scrollTop;
     scrollFrame = null;
+    navigation.save();
     maybeRequestMore();
   });
 }
@@ -188,6 +180,11 @@ function onScroll(e: Event) {
 // Columns count based on container width
 const cols = computed(() => {
   return calculateGalleryColumns(containerWidth.value, props.itemMinWidth, props.gap);
+});
+
+// Calculate symmetrical horizontal offset to center columns and eliminate right-hand whitespace gaps
+const horizontalOffset = computed(() => {
+  return calculateGalleryTrackOffset(containerWidth.value, cols.value, itemWidth.value, props.gap);
 });
 
 // Keep the user's chosen card width stable. Resizing the window changes the
@@ -202,55 +199,38 @@ const CARD_INFO_HEIGHT = 56;
 const cardHeight = computed(() => itemWidth.value + CARD_INFO_HEIGHT);
 const rowHeight = computed(() => cardHeight.value + props.gap);
 
-interface MasonryItem {
-  file: ImageFile;
-  index: number;
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-  imageHeight: number;
-  column: number;
-}
+const geometry = new WaterfallGeometry();
 
-const masonryItems = computed<MasonryItem[]>(() => {
+const masonryItems = computed(() => {
+  void props.fileRevision;
   if (props.layout !== "masonry") return [];
-  const columnHeights = Array.from({ length: cols.value }, () => 0);
-  return props.files.map((file, index) => {
-    const column = columnHeights.indexOf(Math.min(...columnHeights));
-    const sourceWidth = file.metadata?.width ?? 1;
-    const sourceHeight = file.metadata?.height ?? 1;
-    const ratio = sourceWidth > 0 && sourceHeight > 0 ? sourceHeight / sourceWidth : 1;
-    const imageHeight = Math.max(96, Math.round(itemWidth.value * ratio));
-    const height = imageHeight + CARD_INFO_HEIGHT;
-    const item = {
-      file,
-      index,
-      top: columnHeights[column],
-      left: column * (itemWidth.value + props.gap),
-      width: itemWidth.value,
-      height,
-      imageHeight,
-      column,
-    };
-    columnHeights[column] += height + props.gap;
-    return item;
-  });
+  return geometry.update(
+    props.files,
+    cols.value,
+    itemWidth.value,
+    props.gap,
+    horizontalOffset.value,
+  ).items;
 });
 
 const masonryColumns = computed(() => {
-  const columns = Array.from({ length: cols.value }, () => [] as MasonryItem[]);
-  for (const item of masonryItems.value) columns[item.column].push(item);
-  return columns;
+  void props.fileRevision;
+  void masonryItems.value;
+  return geometry.columns;
 });
 
 const masonryHeight = computed(() => {
-  if (!masonryItems.value.length) return 0;
-  return Math.max(...masonryItems.value.map((item) => item.top + item.height));
+  void props.fileRevision;
+  void masonryItems.value;
+  return geometry.height;
 });
 
 // Total grid rows and phantom scroll height
-const totalRows = computed(() => Math.ceil(props.files.length / cols.value));
+const totalRows = computed(() => {
+  void props.fileRevision;
+  return Math.ceil(props.files.length / cols.value);
+});
+
 const totalHeight = computed(() => {
   if (props.layout === "masonry") return masonryHeight.value;
   if (totalRows.value === 0) return 0;
@@ -289,33 +269,18 @@ const endIndex = computed(() =>
 );
 
 const visibleFiles = computed(() => {
+  void props.fileRevision;
   if (props.files.length === 0) return [];
   return props.files.slice(startIndex.value, endIndex.value + 1);
 });
 
 const visibleMasonryItems = computed(() => {
+  void props.fileRevision;
   if (props.layout !== "masonry") return [];
   const buffer = Math.max(itemWidth.value, props.overscan * 100);
   const top = Math.max(0, scrollTop.value - buffer);
   const bottom = scrollTop.value + containerHeight.value + buffer;
-  const visible: MasonryItem[] = [];
-
-  for (const column of masonryColumns.value) {
-    let low = 0;
-    let high = column.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (column[mid].top + column[mid].height < top) low = mid + 1;
-      else high = mid;
-    }
-    for (let index = low; index < column.length; index += 1) {
-      const item = column[index];
-      if (item.top > bottom) break;
-      visible.push(item);
-    }
-  }
-
-  return visible.sort((a, b) => a.index - b.index);
+  return visibleWaterfallItems(masonryColumns.value, top, bottom);
 });
 
 const visibleItems = computed(() => {
@@ -334,12 +299,49 @@ const visibleItems = computed(() => {
 
 const translateY = computed(() => startRow.value * rowHeight.value);
 
+const navigation = useGalleryNavigation({
+  element: containerRef,
+  key: () => props.contextKey ?? "all",
+  files: () => props.files,
+  revision: () => props.fileRevision ?? 0,
+  loading: () => props.loading,
+  hasMore: () => props.hasMore,
+  loadingMore: () => props.loadingMore,
+  top: (index) => {
+    if (props.layout === "masonry") {
+      return masonryItems.value[index]?.top ?? 0;
+    }
+    return Math.floor(index / cols.value) * rowHeight.value;
+  },
+  itemHeight: (index) => {
+    if (props.layout === "masonry") {
+      return masonryItems.value[index]?.height ?? cardHeight.value;
+    }
+    return cardHeight.value;
+  },
+  firstVisible: () => {
+    if (props.layout === "masonry") {
+      return (
+        visibleMasonryItems.value.find(
+          (item) => item.top + item.height >= scrollTop.value,
+        )?.index ?? 0
+      );
+    }
+    return Math.floor(scrollTop.value / rowHeight.value) * cols.value;
+  },
+  loadMore: () => emit("loadMore"),
+  onRestore: (top) => {
+    scrollTop.value = top;
+  },
+});
+
 // A revision signal keeps rendering reactive without retaining a second,
 // unbounded URL map beside the shared LRU thumbnail cache.
 const thumbnailRevision = ref(0);
 
 function getCardImageSrc(file: ImageFile, displayEdge: number): string | null {
   void thumbnailRevision.value;
+  if (failedImages.value.has(file.path)) return null;
   if (!file.id) return assetUrl(file.path);
   return getThumbnailUrlSync(file, getThumbnailTier(displayEdge));
 }
@@ -350,8 +352,10 @@ async function loadThumbnailFor(file: ImageFile, displayEdge: number, generation
   try {
     await getThumbnailUrl(file, thumbnailTier, generation);
     thumbnailRevision.value += 1;
-  } catch {
-    // The viewport moved before this queued request began decoding.
+  } catch (error) {
+    if (!String(error).includes("thumbnail request canceled") && !isVideoContainer(file.container)) {
+      failedImages.value.add(file.path);
+    }
   }
 }
 
@@ -472,7 +476,7 @@ function isCollapsedStack(file: ImageFile): boolean {
 
 const stackHeroPaths = computed(() => resolveStackHeroPaths(props.files, props.stackMap ?? {}));
 
-function isStackCover(file: ImageFile): boolean {
+function isStackCover(file: ImageFile): file is ImageFile & { stack_id: string } {
   return Boolean(
     file.stack_id &&
     isStacked(file) &&
@@ -537,9 +541,14 @@ watch(
 
 // Keyboard navigation
 function handleKeyDown(e: KeyboardEvent) {
-  // Only handle navigation if active element is not an input or textarea
-  const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-  if (tag === "input" || tag === "textarea") return;
+  if (
+    e.defaultPrevented ||
+    hasActiveDialog() ||
+    isEditableTarget(e.target) ||
+    isEditableTarget(document.activeElement)
+  ) {
+    return;
+  }
 
   if (!props.files.length) return;
 
@@ -595,13 +604,31 @@ function scrollToIndex(index: number) {
 }
 
 function onDragStart(e: DragEvent, file: ImageFile) {
-  const selectedPaths = props.selectedFilePaths && props.selectedFilePaths.has(file.path)
-    ? Array.from(props.selectedFilePaths)
+  const isMulti = Boolean(props.selectedFilePaths && props.selectedFilePaths.has(file.path));
+  const selectedPaths = isMulti
+    ? Array.from(props.selectedFilePaths!)
     : [file.path];
+
+  let selectedIds: number[] = [];
+  if (isMulti) {
+    const pathSet = props.selectedFilePaths!;
+    const seen = new Set<number>();
+    for (const f of props.files) {
+      if (f.id != null && pathSet.has(f.path) && !seen.has(f.id)) {
+        seen.add(f.id);
+        selectedIds.push(f.id);
+      }
+    }
+    if (selectedIds.length === 0 && file.id != null) {
+      selectedIds = [file.id];
+    }
+  } else if (file.id != null) {
+    selectedIds = [file.id];
+  }
 
   const payload = {
     file_paths: selectedPaths,
-    file_ids: file.id ? [file.id] : [],
+    file_ids: selectedIds,
   };
 
   e.dataTransfer?.setData("application/json", JSON.stringify(payload));
@@ -616,8 +643,15 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 <template>
   <div class="virtual-grid-wrapper">
     <div v-if="loading" class="grid-placeholder">{{ t.view.loading }}</div>
-    <div v-else-if="!files.length" class="grid-placeholder">
-      {{ t.view.selectFolderPrompt }}
+    <div v-else-if="!files.length" class="grid-placeholder empty-state">
+      <div class="empty-state-message">{{ emptyMessage || t.review.noMatches }}</div>
+      <button
+        type="button"
+        class="empty-state-btn"
+        @click="emit('recover')"
+      >
+        {{ emptyActionText || t.review.retry }}
+      </button>
     </div>
 
     <div
@@ -626,7 +660,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
       class="virtual-grid-container"
       :class="{ 'is-masonry': layout === 'masonry' }"
       role="grid"
-      aria-label="Image gallery grid"
+      :aria-label="t.review.gallery"
       tabindex="0"
       @scroll.passive="onScroll"
     >
@@ -638,6 +672,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
             transform: layout === 'grid' ? `translateY(${translateY}px)` : undefined,
             gridTemplateColumns: layout === 'grid' ? `repeat(${cols}, ${itemWidth}px)` : undefined,
             gap: layout === 'grid' ? `${gap}px` : undefined,
+            justifyContent: layout === 'grid' ? 'safe center' : undefined,
           }"
         >
           <div
@@ -851,11 +886,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 
                 <!-- Stacking badge -->
                 <button
-                  v-if="
-                    file.stack_id &&
-                    (stackMap?.[file.stack_id]?.count ?? 1) > 1 &&
-                    (!expandedStacks?.has(file.stack_id) || file.stack_order === 0)
-                  "
+                  v-if="isStackCover(file)"
                   type="button"
                   class="card-badge badge-stack"
                   :class="{ expanded: expandedStacks?.has(file.stack_id) }"
@@ -871,7 +902,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 
                 <!-- Stack compare trigger button -->
                 <button
-                  v-if="file.stack_id && (stackMap?.[file.stack_id]?.count ?? 1) > 1"
+                  v-if="isStackCover(file)"
                   type="button"
                   class="card-stack-compare-btn"
                   :title="t.compare.title || 'Compare Stack'"
@@ -882,7 +913,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 
                 <!-- Stack cull drafts trigger button -->
                 <button
-                  v-if="file.stack_id && (stackMap?.[file.stack_id]?.count ?? 1) > 1"
+                  v-if="isStackCover(file)"
                   type="button"
                   class="card-stack-cull-btn"
                   :title="t.stack.cullDrafts || 'Cull Lower-Rated Drafts'"
@@ -968,8 +999,35 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #888;
+  color: var(--color-text-secondary);
   font-size: 0.9em;
+}
+
+.grid-placeholder.empty-state {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.empty-state-message {
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
+}
+
+.empty-state-btn {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.empty-state-btn:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary);
 }
 
 .virtual-phantom {
@@ -983,6 +1041,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   position: absolute;
   top: 0;
   left: 0;
+  justify-content: safe center;
 }
 
 .virtual-content.masonry-content {
@@ -1345,16 +1404,23 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: rgba(15, 23, 42, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: #e0f2fe;
-  font-weight: 700;
+  font-weight: 600;
   font-size: 0.72em;
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
   cursor: pointer;
   z-index: 2;
+  opacity: 0.85;
   transition: all 0.15s ease;
+}
+
+.grid-card:hover .badge-stack,
+.grid-card:focus-within .badge-stack,
+.badge-stack:focus-visible {
+  opacity: 1;
 }
 
 .stack-badge-icon {
@@ -1387,15 +1453,24 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   opacity: 0.7;
 }
 
-.badge-stack:hover {
+.badge-stack:hover,
+.badge-stack:focus-visible {
   background: #0284c7;
   color: #fff;
   border-color: #38bdf8;
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
 }
 
 .badge-stack.expanded {
+  background: rgba(37, 99, 235, 0.75);
+  color: #f0f9ff;
+  border-color: rgba(96, 165, 250, 0.55);
+}
+
+.badge-stack.expanded:hover,
+.badge-stack.expanded:focus-visible {
   background: #2563eb;
-  color: #fff;
   border-color: #60a5fa;
 }
 
@@ -1419,8 +1494,15 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   transition: all 0.15s ease;
 }
 
-.grid-card:hover .card-stack-compare-btn {
+.grid-card:hover .card-stack-compare-btn,
+.grid-card:focus-within .card-stack-compare-btn,
+.card-stack-compare-btn:focus-visible {
   opacity: 1;
+}
+
+.card-stack-compare-btn:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 1px;
 }
 
 .card-stack-compare-btn:hover {
@@ -1448,8 +1530,15 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   transition: all 0.15s ease;
 }
 
-.grid-card:hover .card-stack-cull-btn {
+.grid-card:hover .card-stack-cull-btn,
+.grid-card:focus-within .card-stack-cull-btn,
+.card-stack-cull-btn:focus-visible {
   opacity: 1;
+}
+
+.card-stack-cull-btn:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 1px;
 }
 
 .card-stack-cull-btn:hover {

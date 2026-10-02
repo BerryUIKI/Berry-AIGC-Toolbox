@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from "vue";
+import { GalleryPages } from "./utils/gallery-state";
+import { FileDetailsManager } from "./utils/file-details";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -45,6 +47,8 @@ import BatchActionBar from "./components/BatchActionBar.vue";
 import { t } from "./i18n";
 import { countActiveFilters, criteriaToQuery } from "./utils/search";
 import {
+  getStorageItem,
+  setStorageItem,
   isWarningSuppressed,
   loadAppConfig,
   saveAppConfig,
@@ -54,6 +58,7 @@ import {
 import { checkForUpdates } from "./utils/updater";
 import { applyTheme, normalizeTheme, type AppTheme } from "./utils/theme";
 import { collaborationSync } from "./utils/collaborationSync";
+import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
 
 const LightboxModal = defineAsyncComponent(() => import("./components/LightboxModal.vue"));
 const FilterDrawer = defineAsyncComponent(() => import("./components/FilterDrawer.vue"));
@@ -64,6 +69,7 @@ const ModelManagerModal = defineAsyncComponent(() => import("./components/ModelM
 const FileOperationModal = defineAsyncComponent(() => import("./components/FileOperationModal.vue"));
 const DatabaseManagerModal = defineAsyncComponent(() => import("./components/DatabaseManagerModal.vue"));
 const ShortcutsHelpModal = defineAsyncComponent(() => import("./components/ShortcutsHelpModal.vue"));
+const HelpGuideDrawer = defineAsyncComponent(() => import("./components/HelpGuideDrawer.vue"));
 const SettingsModal = defineAsyncComponent(() => import("./components/SettingsModal.vue"));
 const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
 const AutoTagModal = defineAsyncComponent(() => import("./components/AutoTagModal.vue"));
@@ -106,7 +112,7 @@ const rawSimilarityFiles = shallowRef<ImageFile[]>([]);
 const semanticSearchFiles = shallowRef<ImageFile[]>([]);
 const similarityThreshold = ref<number>(0);
 const similarityLimit = ref<number>(
-  Number(localStorage.getItem("berry_similarity_limit")) || 50
+  Number(getStorageItem("similarity_limit")) || 50
 );
 
 // UI Pane Toggles (Eagle Studio layout)
@@ -122,6 +128,19 @@ const promptStatsModalOpen = ref(false);
 const modelManagerModalOpen = ref(false);
 const dbManagerModalOpen = ref(false);
 const shortcutsHelpModalOpen = ref(false);
+const helpGuideDrawerOpen = ref(false);
+
+const helpGuideContext = computed(() => {
+  if (expandedStacks.value.size > 0) return "stack";
+  if (selectedFile.value?.container === "mp4" || selectedFile.value?.container === "webm") return "video";
+  if (settingsModalOpen.value) return "settings";
+  if (modelManagerModalOpen.value || loraModalOpen.value) return "models";
+  if (clipModalOpen.value || autoTagModalOpen.value) return "clip";
+  if (exportModalOpen.value) return "export";
+  if (dbManagerModalOpen.value) return "database";
+  if (searchQuery.value) return "search";
+  return "home";
+});
 const fileOpModalOpen = ref(false);
 const fileOpMode = ref<"move" | "copy" | "trash">("move");
 const fileOpTargetFiles = ref<ImageFile[]>([]);
@@ -174,66 +193,54 @@ const activeFilterCount = computed(() => countActiveFilters(activeCriteria.value
 const selectedFile = ref<ImageFile | null>(null);
 const selectedFilePaths = ref<Set<string>>(new Set());
 const selectionAnchorPath = ref<string | null>(null);
-const fileDetailsCache = new Map<string, ImageFile>();
-const fileDetailsInFlight = new Map<string, Promise<ImageFile>>();
-const MAX_FILE_DETAILS_CACHE = 64;
+const fileDetailsManager = new FileDetailsManager(64);
 
-function fileDetailsKey(file: ImageFile): string | null {
-  return file.id == null ? null : `${file.id}:${file.modified_at}`;
-}
+async function hydrateFileDetails(file: ImageFile, force = false) {
+  if (file.id == null) return;
+  const targetId = file.id;
+  const targetRevision = FileDetailsManager.revisionKey(file);
 
-function cacheFileDetails(key: string, file: ImageFile) {
-  fileDetailsCache.delete(key);
-  fileDetailsCache.set(key, file);
-  while (fileDetailsCache.size > MAX_FILE_DETAILS_CACHE) {
-    const oldestKey = fileDetailsCache.keys().next().value;
-    if (oldestKey === undefined) break;
-    fileDetailsCache.delete(oldestKey);
-  }
-}
+  try {
+    const res = await fileDetailsManager.hydrate(
+      file,
+      (fileId) => invoke<ImageFile>("get_file_details", { fileId }),
+      force,
+    );
+    if (!res) return;
 
-async function hydrateFileDetails(file: ImageFile) {
-  const key = fileDetailsKey(file);
-  if (!key || file.id == null) return;
-  let details = fileDetailsCache.get(key);
-  if (!details) {
-    let request = fileDetailsInFlight.get(key);
-    if (!request) {
-      request = invoke<ImageFile>("get_file_details", { fileId: file.id });
-      fileDetailsInFlight.set(key, request);
+    if (
+      selectedFile.value &&
+      selectedFile.value.id === targetId &&
+      FileDetailsManager.revisionKey(selectedFile.value) === targetRevision
+    ) {
+      selectedFile.value = fileDetailsManager.merge(selectedFile.value, res.details);
     }
-    try {
-      details = await request;
-      cacheFileDetails(key, details);
-    } catch (detailError) {
-      console.warn("Failed to load full file details:", detailError);
-      return;
-    } finally {
-      if (fileDetailsInFlight.get(key) === request) fileDetailsInFlight.delete(key);
-    }
-  }
 
-  if (selectedFile.value && fileDetailsKey(selectedFile.value) === key) {
-    selectedFile.value = details;
-  }
-  if (lightboxFile.value && fileDetailsKey(lightboxFile.value) === key) {
-    lightboxFile.value = details;
+    if (
+      lightboxFile.value &&
+      lightboxFile.value.id === targetId &&
+      FileDetailsManager.revisionKey(lightboxFile.value) === targetRevision
+    ) {
+      lightboxFile.value = fileDetailsManager.merge(lightboxFile.value, res.details);
+    }
+  } catch (detailError) {
+    console.warn("Failed to load full file details:", detailError);
   }
 }
 
-watch(
-  () => selectedFile.value?.id,
-  () => {
-    if (selectedFile.value) void hydrateFileDetails(selectedFile.value);
-  },
+const selectedRevisionKey = computed(() =>
+  selectedFile.value ? FileDetailsManager.revisionKey(selectedFile.value) : null,
 );
+watch(selectedRevisionKey, () => {
+  if (selectedFile.value) void hydrateFileDetails(selectedFile.value);
+});
 
-watch(
-  () => lightboxFile.value?.id,
-  () => {
-    if (lightboxFile.value) void hydrateFileDetails(lightboxFile.value);
-  },
+const lightboxRevisionKey = computed(() =>
+  lightboxFile.value ? FileDetailsManager.revisionKey(lightboxFile.value) : null,
 );
+watch(lightboxRevisionKey, () => {
+  if (lightboxFile.value) void hydrateFileDetails(lightboxFile.value);
+});
 
 // Fast lookup map computed once per files change (O(1) lookups on selection)
 const filePathMap = computed(() => {
@@ -256,20 +263,20 @@ const selectedFilesList = computed(() => {
 });
 
 type GalleryViewMode = "grid" | "masonry" | "table";
-const savedViewMode = localStorage.getItem("berry_default_view");
+const savedViewMode = getStorageItem("default_view");
 const viewMode = ref<GalleryViewMode>(
   savedViewMode === "grid" || savedViewMode === "masonry" || savedViewMode === "table"
     ? savedViewMode
     : "grid",
 );
-const blurNsfw = ref(localStorage.getItem("berry_blur_nsfw") !== "false");
-const showCardBadges = ref(localStorage.getItem("berry_card_badges") !== "false");
-const appTheme = ref<AppTheme>(normalizeTheme(localStorage.getItem("berry_theme")));
+const blurNsfw = ref(getStorageItem("blur_nsfw") !== "false");
+const showCardBadges = ref(getStorageItem("card_badges") !== "false");
+const appTheme = ref<AppTheme>(normalizeTheme(getStorageItem("theme")));
 applyTheme(appTheme.value);
 
 function setViewMode(mode: GalleryViewMode) {
   viewMode.value = mode;
-  localStorage.setItem("berry_default_view", mode);
+  setStorageItem("default_view", mode);
 }
 
 function onSettingsSaved(settings: {
@@ -311,23 +318,47 @@ let organizeLibraryNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 let unlisten: UnlistenFn | null = null;
 let unlistenLibraryChanges: UnlistenFn | null = null;
 let libraryRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingChangedFolders = new Set<number>();
 
-function scheduleLibraryRefresh(_event?: LibraryFilesChanged) {
+function scheduleLibraryRefresh(event?: LibraryFilesChanged) {
+  if (event?.folder_id != null) {
+    pendingChangedFolders.add(event.folder_id);
+  }
   if (libraryRefreshTimer) clearTimeout(libraryRefreshTimer);
   libraryRefreshTimer = setTimeout(() => {
     libraryRefreshTimer = null;
-    void Promise.all([refreshCounts(), reloadFiltersMeta(), loadAlbumsAndTags()]).then(() =>
-      loadFiles(),
-    );
+    const changed = new Set(pendingChangedFolders);
+    pendingChangedFolders.clear();
+
+    // Update folder & library count badges in background
+    void refreshCounts();
+
+    // Only reload the gallery if the currently displayed view is affected:
+    // If viewing "all", "favorites", "nsfw", or the specific folder that changed (or general event),
+    // reload files. If viewing a different folder, or viewing an album/tag, do NOT disrupt
+    // the user's active view or scroll position!
+    const affectsActiveView =
+      changed.size === 0 ||
+      activeTarget.value.type === "all" ||
+      activeTarget.value.type === "favorites" ||
+      activeTarget.value.type === "nsfw" ||
+      (activeTarget.value.type === "folder" && changed.has(activeTarget.value.folder.id));
+
+    if (affectsActiveView) {
+      void loadFiles();
+    }
   }, 500);
 }
 
 function handleWindowKeyDown(e: KeyboardEvent) {
-  const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-  if (tag === "input" || tag === "textarea") {
+  if (isEditableTarget(e.target) || isEditableTarget(document.activeElement)) {
     if (e.key === "Escape") {
       (document.activeElement as HTMLElement)?.blur();
     }
+    return;
+  }
+
+  if (hasActiveDialog()) {
     return;
   }
 
@@ -335,6 +366,13 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === ",") {
     e.preventDefault();
     settingsModalOpen.value = !settingsModalOpen.value;
+    return;
+  }
+
+  // Feature Guide & Documentation: F1 or Ctrl+Shift+H
+  if (e.key === "F1" || (e.shiftKey && (e.ctrlKey || e.metaKey) && (e.key === "h" || e.key === "H"))) {
+    e.preventDefault();
+    helpGuideDrawerOpen.value = !helpGuideDrawerOpen.value;
     return;
   }
 
@@ -409,6 +447,10 @@ function handleWindowKeyDown(e: KeyboardEvent) {
 
   // Escape: Close modals, lightbox, or clear selection
   if (e.key === "Escape") {
+    if (helpGuideDrawerOpen.value) {
+      helpGuideDrawerOpen.value = false;
+      return;
+    }
     if (lightboxFile.value) {
       lightboxFile.value = null;
       return;
@@ -557,10 +599,13 @@ onMounted(async () => {
     allowMultipleStacksOpen.value = cfg.allow_multiple_open_stacks ?? false;
 
     await reloadFolders();
-    await refreshCounts();
-    await reloadFiltersMeta();
-    await loadAlbumsAndTags();
-    await loadFiles();
+    const initialFilesPromise = loadFiles();
+    void Promise.all([
+      refreshCounts(),
+      reloadFiltersMeta(),
+      loadAlbumsAndTags(),
+    ]);
+    await initialFilesPromise;
 
     if (!cfg.has_completed_onboarding && !onboardingDismissedThisSession) {
       onboardingModalOpen.value = true;
@@ -633,14 +678,17 @@ async function reloadFolders() {
   folders.value = await invoke<Folder[]>("list_folders");
 }
 
-const STARTUP_SCAN_STAMP_PREFIX = "berry_last_startup_scan_";
+const STARTUP_SCAN_STAMP_PREFIX = "omera_last_startup_scan_";
+const LEGACY_STARTUP_SCAN_STAMP_PREFIX = "berry_last_startup_scan_";
 
 async function runBackgroundStartupScan(intervalMinutes: number) {
   const minimumAgeMs = Math.max(0, intervalMinutes) * 60_000;
   const now = Date.now();
   for (const f of folders.value) {
     const stampKey = `${STARTUP_SCAN_STAMP_PREFIX}${f.id}`;
-    const lastScan = Number(localStorage.getItem(stampKey)) || 0;
+    const legacyStampKey = `${LEGACY_STARTUP_SCAN_STAMP_PREFIX}${f.id}`;
+    const lastScan =
+      Number(localStorage.getItem(stampKey) || localStorage.getItem(legacyStampKey)) || 0;
     if (minimumAgeMs > 0 && now - lastScan < minimumAgeMs) continue;
     try {
       await invoke("scan_folder", { folderId: f.id });
@@ -672,15 +720,14 @@ async function reloadFiltersMeta() {
 
 async function loadAlbumsAndTags() {
   try {
-    albums.value = await invoke<Album[]>("list_albums");
-    const counts: Record<number, number> = {};
-    for (const album of albums.value) {
-      counts[album.id] = await invoke<number>("count_album_files", {
-        albumId: album.id,
-      });
-    }
+    const [fetchedAlbums, counts, fetchedTags] = await Promise.all([
+      invoke<Album[]>("list_albums"),
+      invoke<Record<number, number>>("get_album_counts"),
+      invoke<Tag[]>("list_tags"),
+    ]);
+    albums.value = fetchedAlbums;
     albumCounts.value = counts;
-    tags.value = await invoke<Tag[]>("list_tags");
+    tags.value = fetchedTags;
   } catch (e) {
     console.error("Failed to load albums/tags:", e);
   }
@@ -728,8 +775,14 @@ const targetTitle = computed(() => {
       return t.value.nav.favorites;
     case "nsfw":
       return t.value.nav.sensitive;
-    case "folder":
-      return activeTarget.value.folder.path.split(/[\\/]/).pop() || activeTarget.value.folder.path;
+    case "folder": {
+      const rootName = activeTarget.value.folder.path.split(/[\\/]/).pop() || activeTarget.value.folder.path;
+      if (activeTarget.value.subfolderPath) {
+        const subName = activeTarget.value.subfolderPath.split(/[\\/]/).pop() || activeTarget.value.subfolderPath;
+        return `📁 ${rootName} / ${subName}`;
+      }
+      return rootName;
+    }
     case "album":
       return `📚 ${activeTarget.value.album.name}`;
     case "tag":
@@ -737,35 +790,78 @@ const targetTitle = computed(() => {
   }
 });
 
-const galleryContextKey = computed(() => {
-  if (similaritySourceFile.value) {
-    return `similarity-${similaritySourceFile.value.id ?? similaritySourceFile.value.path}`;
-  }
-  if (searchQuery.value.trim()) {
-    return `search-${searchQuery.value.trim()}`;
-  }
-  switch (activeTarget.value.type) {
-    case "folder":
-      return `folder-${activeTarget.value.folder.id}`;
-    case "album":
-      return `album-${activeTarget.value.album.id}`;
-    case "tag":
-      return `tag-${activeTarget.value.tag.id}`;
-    case "favorites":
-      return "favorites";
-    case "nsfw":
-      return "nsfw";
-    case "all":
-    default:
-      return "all";
-  }
+const galleryPages = new GalleryPages();
+const galleryRevision = ref(0);
+watch(files, () => {
+  galleryRevision.value++;
 });
 
-async function onFolderScanned(_folderId: number) {
-  await refreshCounts();
-  await reloadFiltersMeta();
-  await loadAlbumsAndTags();
-  await loadFiles();
+const galleryContextKey = computed(() =>
+  JSON.stringify({
+    target:
+      activeTarget.value.type === "folder"
+        ? ["folder", activeTarget.value.folder.id, activeTarget.value.subfolderPath, activeTarget.value.recursive]
+        : activeTarget.value.type === "album"
+          ? ["album", activeTarget.value.album.id]
+          : activeTarget.value.type === "tag"
+            ? ["tag", activeTarget.value.tag.id]
+            : activeTarget.value.type,
+    query: searchQuery.value.trim(),
+    semantic: isSemanticSearch.value,
+    similarity: similaritySourceFile.value?.id,
+    sort: sortField.value,
+    direction: sortDirection.value,
+    filters: activeCriteria.value,
+  }),
+);
+
+const emptyGalleryMessage = computed(() => {
+  if (error.value) return error.value;
+  if (folders.value.length === 0) return t.value.review.emptyLibrary;
+  if (
+    searchQuery.value.trim() ||
+    activeTarget.value.type !== "folder" ||
+    activeFilterCount.value > 0
+  ) {
+    return t.value.review.noMatches;
+  }
+  return t.value.review.emptyFolder;
+});
+
+const emptyGalleryAction = computed(() => {
+  if (error.value) return t.value.review.retry;
+  if (folders.value.length === 0) return t.value.review.retry;
+  if (searchQuery.value.trim() || activeFilterCount.value > 0) {
+    return t.value.review.clearFilters;
+  }
+  return t.value.review.retry;
+});
+
+function recoverGallery() {
+  selectedFile.value = null;
+  selectedFilePaths.value = new Set();
+  if (error.value) {
+    error.value = "";
+    void loadFiles();
+  } else if (folders.value.length === 0) {
+    addFolderModalOpen.value = true;
+  } else if (searchQuery.value.trim() || activeFilterCount.value > 0) {
+    searchQuery.value = "";
+    activeCriteria.value = {};
+    void loadFiles();
+  } else {
+    void loadFiles();
+  }
+}
+
+async function onFolderScanned(folderId: number) {
+  void refreshCounts();
+  const affectsActiveView =
+    activeTarget.value.type === "all" ||
+    (activeTarget.value.type === "folder" && activeTarget.value.folder.id === folderId);
+  if (affectsActiveView) {
+    await loadFiles();
+  }
 }
 
 function onFileSelected(file: ImageFile, event?: MouseEvent) {
@@ -792,7 +888,7 @@ function onFileSelected(file: ImageFile, event?: MouseEvent) {
   if (event?.metaKey || event?.ctrlKey) {
     toggleSelectFile(file, false);
   } else {
-    selectedFilePaths.value = new Set();
+    selectedFilePaths.value = new Set([file.path]);
   }
 }
 
@@ -815,7 +911,8 @@ function onSelectAll() {
 
 function onClearSelection() {
   selectedFilePaths.value = new Set();
-  selectionAnchorPath.value = selectedFile.value?.path ?? null;
+  selectedFile.value = null;
+  selectionAnchorPath.value = null;
 }
 
 function onToggleAll() {
@@ -834,6 +931,9 @@ async function onBatchRate(rating: number | null) {
 
   try {
     await invoke("set_files_rating", { fileIds: ids, rating });
+    for (const id of ids) {
+      fileDetailsManager.update(id, { rating: rating ?? undefined });
+    }
     const idSet = new Set(ids);
     files.value = files.value.map((f) => {
       if (f.id != null && idSet.has(f.id)) {
@@ -860,6 +960,7 @@ function onLightboxNavigate(file: ImageFile) {
 }
 
 function onFileRated(fileId: number, rating: number | null) {
+  fileDetailsManager.update(fileId, { rating: rating ?? undefined });
   const idx = files.value.findIndex((f) => f.id === fileId);
   if (idx !== -1) {
     const updated = [...files.value];
@@ -1292,6 +1393,9 @@ async function onBatchToggleFavorite(isFavorite: boolean) {
   if (ids.length === 0) return;
   try {
     await invoke("set_files_favorite", { fileIds: ids, isFavorite });
+    for (const id of ids) {
+      fileDetailsManager.update(id, { is_favorite: isFavorite });
+    }
     const updated = files.value.map((f) => {
       if (selectedFilePaths.value.has(f.path)) {
         return { ...f, is_favorite: isFavorite };
@@ -1314,6 +1418,9 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
   if (ids.length === 0) return;
   try {
     await invoke("set_files_nsfw", { fileIds: ids, isNsfw });
+    for (const id of ids) {
+      fileDetailsManager.update(id, { is_nsfw: isNsfw });
+    }
     const updated = files.value.map((f) => {
       if (selectedFilePaths.value.has(f.path)) {
         return { ...f, is_nsfw: isNsfw };
@@ -1354,6 +1461,9 @@ async function onFileOpCompleted() {
 }
 
 function onUpdateFile(file: ImageFile) {
+  if (file.id != null) {
+    fileDetailsManager.update(file.id, file);
+  }
   const idx = files.value.findIndex((f) => f.id === file.id);
   if (idx !== -1) {
     const updated = [...files.value];
@@ -1370,6 +1480,7 @@ function onUpdateFile(file: ImageFile) {
 
 async function loadFiles() {
   const requestVersion = ++libraryRequestVersion;
+  fileDetailsManager.reset();
   similaritySourceFile.value = null;
   rawSimilarityFiles.value = [];
   semanticSearchFiles.value = [];
@@ -1401,6 +1512,7 @@ async function loadFiles() {
           files.value = semanticSearchFiles.value;
           galleryTotal.value = files.value.length;
         } catch (clipErr) {
+          if (requestVersion !== libraryRequestVersion) return;
           // If no model loaded, open CLIP modal so user can load one
           console.warn("Semantic search failed or model not loaded:", clipErr);
           clipModalOpen.value = true;
@@ -1472,7 +1584,15 @@ function currentPagedCriteria(offset: number, cursor?: PageCursor | null): Searc
     offset,
     cursor: cursor ?? null,
   };
-  if (activeTarget.value.type === "folder") criteria.folder_id = activeTarget.value.folder.id;
+  if (activeTarget.value.type === "folder") {
+    criteria.folder_id = activeTarget.value.folder.id;
+    if (activeTarget.value.subfolderPath) {
+      criteria.folder_path = activeTarget.value.subfolderPath;
+    }
+    if (activeTarget.value.recursive !== undefined) {
+      criteria.recursive = activeTarget.value.recursive;
+    }
+  }
   else if (activeTarget.value.type === "favorites") criteria.is_favorite = true;
   else if (activeTarget.value.type === "nsfw") criteria.is_nsfw = true;
   else if (activeTarget.value.type === "album") criteria.album_id = activeTarget.value.album.id;
@@ -1480,11 +1600,14 @@ function currentPagedCriteria(offset: number, cursor?: PageCursor | null): Searc
   return criteria;
 }
 
-function collapseInactiveStacks(items: ImageFile[]): ImageFile[] {
-  const collapsedMap = Object.fromEntries(
-    Object.entries(stackMap.value).filter(([stackId]) => !expandedStacks.value.has(stackId)),
-  );
-  return collapseStackMembers(items, collapsedMap);
+function toggleRecursiveView() {
+  if (activeTarget.value.type !== "folder") return;
+  const isRecursive = activeTarget.value.recursive ?? (activeTarget.value.subfolderPath ? false : true);
+  activeTarget.value = {
+    ...activeTarget.value,
+    recursive: !isRecursive,
+  };
+  void loadFiles();
 }
 
 async function loadMoreFiles() {
@@ -1517,9 +1640,15 @@ async function loadMoreFiles() {
 
     if (requestVersion !== libraryRequestVersion || offset !== nextGalleryOffset.value) return;
 
-    const seen = new Set(files.value.map((file) => file.id ?? file.path));
-    const appended = page.items.filter((file) => !seen.has(file.id ?? file.path));
-    files.value = collapseInactiveStacks([...files.value, ...appended]);
+    const replaced = galleryPages.append(
+      files.value,
+      page.items,
+      stackMap.value,
+      expandedStacks.value,
+    );
+    if (replaced) files.value = [...files.value];
+    else triggerRef(files);
+    galleryRevision.value++;
     if ("next_cursor" in page) {
       nextGalleryCursor.value = page.next_cursor ?? null;
     }
@@ -1565,24 +1694,29 @@ function onSimilarityThresholdChange() {
 }
 
 function onSimilarityLimitChange() {
-  localStorage.setItem("berry_similarity_limit", String(similarityLimit.value));
+  setStorageItem("similarity_limit", String(similarityLimit.value));
   if (similaritySourceFile.value) {
     void handleFindSimilar(similaritySourceFile.value);
   }
 }
 
+let similarityRequestVersion = 0;
+
 async function handleFindSimilar(file: ImageFile) {
   if (!file.id) return;
+  const requestVersion = ++similarityRequestVersion;
   filesLoading.value = true;
   try {
     const items = await invoke<SimilarFileItem[]>("find_similar_to_file", {
       fileId: file.id,
       limit: similarityLimit.value,
     });
+    if (requestVersion !== similarityRequestVersion) return;
     if (items.length === 0) {
       const models = await invoke<string[]>("get_file_embedding_models", {
         fileId: file.id,
       });
+      if (requestVersion !== similarityRequestVersion) return;
       if (models.length === 0) {
         alert(t.value.preview.noEmbeddingFound);
         return;
@@ -1600,14 +1734,18 @@ async function handleFindSimilar(file: ImageFile) {
       lightboxFile.value = null;
     }
   } catch (err) {
+    if (requestVersion !== similarityRequestVersion) return;
     console.error("Find similar error:", err);
     error.value = String(err);
   } finally {
-    filesLoading.value = false;
+    if (requestVersion === similarityRequestVersion) {
+      filesLoading.value = false;
+    }
   }
 }
 
 function exitSimilaritySearch() {
+  similarityRequestVersion++;
   similaritySourceFile.value = null;
   rawSimilarityFiles.value = [];
   similarityThreshold.value = 0;
@@ -1675,6 +1813,27 @@ async function onDropAddFilesToAlbum(payload: { fileIds: number[]; albumId: numb
       fileIds: payload.fileIds,
     });
     await loadAlbumsAndTags();
+  } catch (err) {
+    error.value = String(err);
+  }
+}
+
+async function onDropImportExternalFilesToAlbum(payload: { filePaths: string[]; albumId: number }) {
+  try {
+    const currentManagedId = (activeTarget.value.type === "folder" && activeTarget.value.folder.folder_type === "managed" ? activeTarget.value.folder.id : null)
+      || folders.value.find((f) => f.folder_type === "managed")?.id
+      || null;
+
+    const importedIds = await invoke<number[]>("import_files_to_managed_vault", {
+      filePaths: payload.filePaths,
+      targetFolderId: currentManagedId,
+      targetAlbumId: payload.albumId,
+    });
+    if (importedIds && importedIds.length > 0) {
+      await loadAlbumsAndTags();
+      await refreshCounts();
+      await loadFiles();
+    }
   } catch (err) {
     error.value = String(err);
   }
@@ -1858,6 +2017,7 @@ function onResetZoom() {
           @open-shortcuts-help="shortcutsHelpModalOpen = true"
           @open-updater="updateModalOpen = true"
           @open-about="settingsModalOpen = true"
+          @open-help-guide="helpGuideDrawerOpen = true"
         />
       </template>
 
@@ -1909,6 +2069,7 @@ function onResetZoom() {
         @open-add-folder-modal="addFolderModalOpen = true"
         @move-files-to-folder="onDropMoveFiles"
         @add-files-to-album="onDropAddFilesToAlbum"
+        @import-external-files-to-album="onDropImportExternalFilesToAlbum"
         @tag-files="onDropTagFiles"
       />
 
@@ -1922,6 +2083,17 @@ function onResetZoom() {
               {{ targetTitle }}
               <span class="items-count-badge">({{ galleryTotal }})</span>
             </h2>
+            <button
+              v-if="activeTarget.type === 'folder'"
+              type="button"
+              class="recursive-view-toggle-btn"
+              :class="{ active: activeTarget.recursive ?? (activeTarget.subfolderPath ? false : true) }"
+              :title="(activeTarget.recursive ?? (activeTarget.subfolderPath ? false : true)) ? t.nav.recursiveMode : t.nav.singleLevelMode"
+              @click="toggleRecursiveView"
+            >
+              <span class="mode-icon">{{ (activeTarget.recursive ?? (activeTarget.subfolderPath ? false : true)) ? '🌳' : '📄' }}</span>
+              <span class="mode-label">{{ (activeTarget.recursive ?? (activeTarget.subfolderPath ? false : true)) ? t.nav.recursiveMode : t.nav.singleLevelMode }}</span>
+            </button>
           </div>
 
           <!-- Search Bar & Filter Chips -->
@@ -2065,6 +2237,10 @@ function onResetZoom() {
           <VirtualGrid
             v-if="viewMode !== 'table'"
             :files="files"
+            :file-revision="galleryRevision"
+            :empty-message="emptyGalleryMessage"
+            :empty-action-text="emptyGalleryAction"
+            @recover="recoverGallery"
             :selected-file="selectedFile"
             :selected-file-paths="selectedFilePaths"
             :loading="filesLoading"
@@ -2089,7 +2265,12 @@ function onResetZoom() {
 
           <FileList
             v-else
+            :context-key="galleryContextKey"
             :files="files"
+            :file-revision="galleryRevision"
+            :empty-message="emptyGalleryMessage"
+            :empty-action-text="emptyGalleryAction"
+            @recover="recoverGallery"
             :selected-file="selectedFile"
             :selected-file-paths="selectedFilePaths"
             :loading="filesLoading"
@@ -2278,7 +2459,7 @@ function onResetZoom() {
     <UpdateModal
       v-if="updateModalOpen"
       :show="updateModalOpen"
-      :current-version="info?.app_version || '0.1.1'"
+      :current-version="info?.app_version || '0.4.0'"
       @close="updateModalOpen = false"
     />
 
@@ -2328,6 +2509,14 @@ function onResetZoom() {
       @close="exportModalOpen = false"
       @exported="onExportCompleted"
     />
+
+    <!-- Help & Feature Guide Drawer -->
+    <HelpGuideDrawer
+      v-if="helpGuideDrawerOpen"
+      :show="helpGuideDrawerOpen"
+      :context="helpGuideContext"
+      @close="helpGuideDrawerOpen = false"
+    />
   </div>
 </template>
 
@@ -2337,15 +2526,15 @@ function onResetZoom() {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #18181c;
-  color: #f1f5f9;
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
   overflow: hidden;
 }
 
 .titlebar-quick-btn {
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-text-muted);
   width: 32px;
   height: 28px;
   border-radius: 4px;
@@ -2357,8 +2546,8 @@ function onResetZoom() {
 }
 
 .titlebar-quick-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .titlebar-quick-btn.active {
@@ -2400,17 +2589,45 @@ function onResetZoom() {
 .topbar-left {
   display: flex;
   align-items: center;
-  max-width: 160px;
+  gap: 8px;
+  max-width: 260px;
   min-width: 0;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.recursive-view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--color-bg-secondary, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  color: var(--color-text-secondary, #94a3b8);
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+  flex-shrink: 0;
+}
+
+.recursive-view-toggle-btn:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--color-text-primary, #f8fafc);
+}
+
+.recursive-view-toggle-btn.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #c4b5fd;
 }
 
 .target-title {
   margin: 0;
   font-size: 0.86rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -2422,7 +2639,7 @@ function onResetZoom() {
 .items-count-badge {
   font-size: 0.72rem;
   font-weight: 500;
-  color: #71717a;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -2436,9 +2653,9 @@ function onResetZoom() {
 }
 
 .filter-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #a1a1aa;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 0.74rem;
@@ -2453,8 +2670,8 @@ function onResetZoom() {
 }
 
 .filter-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .filter-btn.active {
@@ -2483,16 +2700,16 @@ function onResetZoom() {
   display: flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-secondary);
   padding: 3px 6px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
   height: 28px;
   flex-shrink: 0;
 }
 
 .zoom-icon {
-  color: #71717a;
+  color: var(--color-text-muted);
   font-size: 0.65rem;
 }
 
@@ -2509,8 +2726,8 @@ function onResetZoom() {
 
 .view-mode-toggle {
   display: flex;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   overflow: hidden;
   height: 28px;
@@ -2520,7 +2737,7 @@ function onResetZoom() {
 .toggle-btn {
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-text-muted);
   padding: 0 7px;
   font-size: 0.78rem;
   cursor: pointer;
@@ -2531,8 +2748,8 @@ function onResetZoom() {
 }
 
 .toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .toggle-btn.active {
@@ -2616,8 +2833,11 @@ function onResetZoom() {
   .filter-label {
     display: none;
   }
+  .recursive-view-toggle-btn .mode-label {
+    display: none;
+  }
   .topbar-left {
-    max-width: 100px;
+    max-width: 140px;
   }
 }
 

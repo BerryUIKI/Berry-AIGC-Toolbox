@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { t } from "../i18n";
 import type { ImageFile } from "../types";
 
@@ -42,8 +42,48 @@ const allNsfw = computed(
 );
 
 const ratingMenuOpen = ref(false);
+const moreMenuOpen = ref(false);
+const isCompact = ref(false);
+const barContainerRef = ref<HTMLElement | null>(null);
 const copiedPaths = ref(false);
 const copiedPrompts = ref(false);
+
+let resizeObserver: ResizeObserver | null = null;
+
+function onWindowKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape") {
+    ratingMenuOpen.value = false;
+    moreMenuOpen.value = false;
+  }
+}
+
+function onWindowClick(e: MouseEvent) {
+  if (!barContainerRef.value?.contains(e.target as Node)) {
+    ratingMenuOpen.value = false;
+    moreMenuOpen.value = false;
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", onWindowKeyDown);
+  window.addEventListener("click", onWindowClick);
+  if (typeof ResizeObserver !== "undefined" && barContainerRef.value?.parentElement) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        isCompact.value = width < 920;
+      }
+    });
+    resizeObserver.observe(barContainerRef.value.parentElement);
+  }
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", onWindowKeyDown);
+  window.removeEventListener("click", onWindowClick);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+});
 
 async function copyPaths() {
   const text = props.selectedFiles.map((f) => f.path).join("\n");
@@ -71,10 +111,40 @@ function onSetRating(rating: number | null) {
   emit("setRating", rating);
   ratingMenuOpen.value = false;
 }
+
+function onTag() {
+  emit("tagSelected");
+  emit("addTag");
+}
+
+function onMove() {
+  emit("moveSelected");
+  emit("move");
+}
+
+function onCopy() {
+  emit("copySelected");
+  emit("copy");
+}
+
+function onCull() {
+  emit("cullSelectedDrafts");
+  emit("cullDrafts");
+}
+
+function onTrash() {
+  emit("trashSelected");
+  emit("trash");
+}
 </script>
 
 <template>
-  <div v-if="selectedFiles.length > 0" class="batch-bar-container">
+  <div
+    v-if="selectedFiles.length > 0"
+    ref="barContainerRef"
+    class="batch-bar-container"
+    :class="{ compact: isCompact }"
+  >
     <div class="batch-bar" role="toolbar" aria-label="Batch Actions">
       <div class="batch-info">
         <span class="batch-badge">
@@ -104,7 +174,7 @@ function onSetRating(rating: number | null) {
             type="button"
             class="action-btn"
             :class="{ active: ratingMenuOpen }"
-            @click="ratingMenuOpen = !ratingMenuOpen"
+            @click.stop="ratingMenuOpen = !ratingMenuOpen; moreMenuOpen = false"
           >
             ★ {{ t.batch.setRating }}
           </button>
@@ -129,36 +199,6 @@ function onSetRating(rating: number | null) {
           </div>
         </div>
 
-        <!-- Add to Album -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Add selected images to album"
-          @click="emit('addToAlbum')"
-        >
-          📁 {{ t.batch.album }}
-        </button>
-
-        <!-- Tag -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Add tags to selected images"
-          @click="emit('tagSelected')"
-        >
-          🏷 {{ t.batch.tag }}
-        </button>
-
-        <!-- Auto-Tag (WD14) -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Auto-tag selected images with WD14"
-          @click="emit('autoTagSelected')"
-        >
-          🤖 {{ t.batch.batchAutoTag }}
-        </button>
-
         <!-- Favorite -->
         <button
           type="button"
@@ -170,84 +210,161 @@ function onSetRating(rating: number | null) {
           {{ allFavorites ? t.batch.favorited : t.batch.favorite }}
         </button>
 
-        <!-- NSFW -->
+        <!-- Tag -->
         <button
           type="button"
           class="action-btn"
-          :class="{ 'nsfw-active': allNsfw }"
-          :title="allNsfw ? 'Mark selected as SFW' : 'Mark selected as NSFW'"
-          @click="emit('toggleNsfw', !allNsfw)"
+          title="Add tags to selected images"
+          @click="onTag"
         >
-          {{ allNsfw ? t.batch.nsfw : t.batch.sfw }}
+          🏷 {{ t.batch.tag }}
         </button>
 
-        <!-- Copy Paths -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Copy file paths to clipboard"
-          @click="copyPaths"
-        >
-          {{ copiedPaths ? t.batch.pathsCopied : t.batch.copyPaths }}
-        </button>
+        <!-- Inline Secondary Actions (visible when space permits) -->
+        <div class="secondary-actions-inline">
+          <!-- Add to Album -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Add selected images to album"
+            @click="emit('addToAlbum')"
+          >
+            📁 {{ t.batch.album }}
+          </button>
 
-        <!-- Copy Prompts -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Copy prompts to clipboard"
-          @click="copyPrompts"
-        >
-          {{ copiedPrompts ? t.batch.promptsCopied : t.batch.copyPrompts }}
-        </button>
+          <!-- Auto-Tag (WD14) -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Auto-tag selected images with WD14"
+            @click="emit('autoTagSelected')"
+          >
+            🤖 {{ t.batch.batchAutoTag }}
+          </button>
 
-        <!-- Move to Folder -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Move selected files to another folder"
-          @click="emit('moveSelected')"
-        >
-          {{ t.batch.move }}
-        </button>
+          <!-- NSFW -->
+          <button
+            type="button"
+            class="action-btn"
+            :class="{ 'nsfw-active': allNsfw }"
+            :title="allNsfw ? 'Mark selected as SFW' : 'Mark selected as NSFW'"
+            @click="emit('toggleNsfw', !allNsfw)"
+          >
+            {{ allNsfw ? t.batch.nsfw : t.batch.sfw }}
+          </button>
 
-        <!-- Copy to Folder -->
-        <button
-          type="button"
-          class="action-btn"
-          title="Copy selected files to another folder"
-          @click="emit('copySelected')"
-        >
-          {{ t.batch.copy }}
-        </button>
+          <!-- Copy Paths -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Copy file paths to clipboard"
+            @click="copyPaths"
+          >
+            {{ copiedPaths ? t.batch.pathsCopied : t.batch.copyPaths }}
+          </button>
 
-        <!-- Export Selected -->
-        <button
-          type="button"
-          class="action-btn export-btn"
-          title="Export, transcode and package selected files"
-          @click="emit('exportSelected')"
-        >
-          {{ t.batch.export }}
-        </button>
+          <!-- Copy Prompts -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Copy prompts to clipboard"
+            @click="copyPrompts"
+          >
+            {{ copiedPrompts ? t.batch.promptsCopied : t.batch.copyPrompts }}
+          </button>
 
-        <!-- Cull Lower-Rated Drafts in Stacks -->
-        <button
-          v-if="hasStacks"
-          type="button"
-          class="action-btn cull-btn"
-          :title="t.stack.cullDrafts"
-          @click="emit('cullSelectedDrafts')"
-        >
-          🧹 {{ t.stack.cullDrafts }}
-        </button>
+          <!-- Move to Folder -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Move selected files to another folder"
+            @click="onMove"
+          >
+            {{ t.batch.move }}
+          </button>
 
-        <!-- Trash Selected -->
+          <!-- Copy to Folder -->
+          <button
+            type="button"
+            class="action-btn"
+            title="Copy selected files to another folder"
+            @click="onCopy"
+          >
+            {{ t.batch.copy }}
+          </button>
+
+          <!-- Export Selected -->
+          <button
+            type="button"
+            class="action-btn export-btn"
+            title="Export, transcode and package selected files"
+            @click="emit('exportSelected')"
+          >
+            {{ t.batch.export }}
+          </button>
+
+          <!-- Cull Lower-Rated Drafts in Stacks -->
+          <button
+            v-if="hasStacks"
+            type="button"
+            class="action-btn cull-btn"
+            :title="t.stack.cullDrafts"
+            @click="onCull"
+          >
+            🧹 {{ t.stack.cullDrafts }}
+          </button>
+        </div>
+
+        <!-- Overflow More Menu (visible when compact) -->
+        <div class="more-actions-wrapper">
+          <button
+            type="button"
+            class="action-btn more-btn"
+            :class="{ active: moreMenuOpen }"
+            title="More actions"
+            @click.stop="moreMenuOpen = !moreMenuOpen; ratingMenuOpen = false"
+          >
+            ··· {{ t.batch.more }}
+          </button>
+          <div v-if="moreMenuOpen" class="more-menu">
+            <button type="button" class="more-opt" @click="emit('addToAlbum'); moreMenuOpen = false">
+              📁 {{ t.batch.album }}
+            </button>
+            <button type="button" class="more-opt" @click="emit('autoTagSelected'); moreMenuOpen = false">
+              🤖 {{ t.batch.batchAutoTag }}
+            </button>
+            <button type="button" class="more-opt" @click="emit('toggleNsfw', !allNsfw); moreMenuOpen = false">
+              {{ allNsfw ? t.batch.nsfw : t.batch.sfw }}
+            </button>
+            <div class="menu-divider" />
+            <button type="button" class="more-opt" @click="copyPaths(); moreMenuOpen = false">
+              {{ copiedPaths ? t.batch.pathsCopied : t.batch.copyPaths }}
+            </button>
+            <button type="button" class="more-opt" @click="copyPrompts(); moreMenuOpen = false">
+              {{ copiedPrompts ? t.batch.promptsCopied : t.batch.copyPrompts }}
+            </button>
+            <div class="menu-divider" />
+            <button type="button" class="more-opt" @click="onMove(); moreMenuOpen = false">
+              {{ t.batch.move }}
+            </button>
+            <button type="button" class="more-opt" @click="onCopy(); moreMenuOpen = false">
+              {{ t.batch.copy }}
+            </button>
+            <button type="button" class="more-opt" @click="emit('exportSelected'); moreMenuOpen = false">
+              {{ t.batch.export }}
+            </button>
+            <button v-if="hasStacks" type="button" class="more-opt" @click="onCull(); moreMenuOpen = false">
+              🧹 {{ t.stack.cullDrafts }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Trash Selected (always visible) -->
         <button
           type="button"
           class="action-btn trash-btn"
           title="Move selected files to Trash"
-          @click="emit('trashSelected')"
+          @click="onTrash"
         >
           {{ t.batch.trash }}
         </button>
@@ -258,11 +375,13 @@ function onSetRating(rating: number | null) {
 
 <style scoped>
 .batch-bar-container {
-  position: fixed;
-  bottom: 1.5rem;
+  position: absolute;
+  bottom: 1.25rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 100;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
   animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -278,24 +397,104 @@ function onSetRating(rating: number | null) {
 }
 
 .batch-bar {
+  pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.6rem 1.2rem;
-  background: #1e1e1e;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  gap: 1.25rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-bg-secondary, #1e1e1e);
+  color: var(--color-text-primary, #ffffff);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
   border-radius: 999px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-width: 100%;
+}
+
+:root[data-theme="light"] .batch-bar {
+  background: var(--color-bg-secondary, #ffffff);
+  color: var(--color-text-primary, #1a1a1a);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 @media (prefers-color-scheme: light) {
   .batch-bar {
-    background: #ffffff;
-    color: #1a1a1a;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: var(--color-bg-secondary, #ffffff);
+    color: var(--color-text-primary, #1a1a1a);
+    border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   }
+}
+
+.secondary-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.more-actions-wrapper {
+  position: relative;
+  display: none;
+}
+
+/* Compact layout */
+.batch-bar-container.compact .secondary-actions-inline {
+  display: none;
+}
+
+.batch-bar-container.compact .more-actions-wrapper {
+  display: block;
+}
+
+@media (max-width: 900px) {
+  .secondary-actions-inline {
+    display: none !important;
+  }
+  .more-actions-wrapper {
+    display: block !important;
+  }
+}
+
+.more-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: var(--color-bg-secondary, #252525);
+  color: var(--color-text-primary, #f1f5f9);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  z-index: 110;
+}
+
+:root[data-theme="light"] .more-menu {
+  background: var(--color-bg-secondary, #ffffff);
+  color: var(--color-text-primary, #1a1a1a);
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.15));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.more-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.more-opt:hover {
+  background: var(--color-bg-hover, rgba(255, 255, 255, 0.08));
 }
 
 .batch-info {
@@ -325,6 +524,10 @@ function onSetRating(rating: number | null) {
   border-radius: 4px;
   transition: all 0.15s ease;
   white-space: nowrap;
+}
+
+:root[data-theme="light"] .btn-text {
+  color: #666;
 }
 
 @media (prefers-color-scheme: light) {
@@ -391,6 +594,13 @@ function onSetRating(rating: number | null) {
   gap: 0.25rem;
   width: 220px;
   z-index: 101;
+}
+
+:root[data-theme="light"] .rating-menu {
+  background: #ffffff;
+  color: #222;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
 @media (prefers-color-scheme: light) {

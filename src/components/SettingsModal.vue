@@ -32,6 +32,7 @@ import {
   type LocaleSetting,
 } from "../i18n";
 import {
+  getStorageItem,
   loadAppConfig,
   saveAppConfig,
   getStoragePaths,
@@ -77,7 +78,7 @@ const activeTab = ref<"general" | "display" | "stacking" | "interop" | "collabor
 const selectedLocale = ref<LocaleSetting>(currentLocaleSetting.value);
 const autoScanOnStartup = ref(false);
 const startupScanIntervalMinutes = ref(360);
-const selectedTheme = ref<AppTheme>(normalizeTheme(localStorage.getItem("berry_theme")));
+const selectedTheme = ref<AppTheme>(normalizeTheme(getStorageItem("theme")));
 const autoCheckUpdate = ref(true);
 const blurNsfwDefault = ref(true);
 const showCardBadges = ref(true);
@@ -405,7 +406,7 @@ async function loadSettingsAndPaths() {
     void checkComfyConnection();
     void checkWebuiConnection();
 
-    storageBackend.value = config.storage_backend || "sqlite";
+    storageBackend.value = "sqlite";
     remoteConnectionUrl.value = config.remote_connection_url || "";
     clientIdentifier.value = config.client_identifier || "local_client";
     rootMappings.value = config.root_mappings ? { ...config.root_mappings } : {};
@@ -528,16 +529,16 @@ async function saveSettings() {
       default_view: defaultView.value,
       thumbnail_max_edge: thumbnailMaxEdge.value,
       thumbnail_cache_budget_mb: thumbnailCacheBudgetMb.value,
-      similarity_limit: Number(localStorage.getItem("berry_similarity_limit")) || 50,
+      similarity_limit: Number(getStorageItem("similarity_limit")) || 50,
       auto_check_update: autoCheckUpdate.value,
-      silent_install: localStorage.getItem("berry_silent_install") === "true",
+      silent_install: getStorageItem("silent_install") === "true",
       auto_stack: autoStack.value,
       stack_similarity_threshold: stackSimilarityThreshold.value,
       stack_time_window_minutes: stackTimeWindowMinutes.value,
       allow_multiple_open_stacks: allowMultipleStacksOpen.value,
       comfyui_url: comfyuiUrl.value,
       webui_url: webuiUrl.value,
-      storage_backend: storageBackend.value,
+      storage_backend: "sqlite",
       remote_connection_url: remoteConnectionUrl.value,
       client_identifier: clientIdentifier.value,
       root_mappings: rootMappings.value,
@@ -566,7 +567,7 @@ async function saveSettings() {
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay" @click.self="emit('close')">
+  <div v-if="show" class="modal-overlay" @click.self="emit('close')" v-dialog="() => emit('close')">
     <div class="settings-dialog" role="dialog" aria-modal="true" :aria-label="t.settings.title">
       <!-- Header -->
       <div class="dialog-header">
@@ -981,12 +982,12 @@ async function saveSettings() {
             <div class="setting-row">
               <div class="row-info">
                 <span class="row-label">{{ t.settings.storageBackend }}</span>
-                <span class="row-desc">{{ t.settings.storageBackendDesc }}</span>
+                <span class="row-desc">{{ t.review.remoteUnavailable }}</span>
               </div>
               <select v-model="storageBackend" class="select-input">
                 <option value="sqlite">{{ t.settings.backendSqlite }}</option>
-                <option value="mysql">{{ t.settings.backendMysql }}</option>
-                <option value="postgres">{{ t.settings.backendPostgres }}</option>
+                <option value="mysql" disabled>{{ t.settings.backendMysql }}</option>
+                <option value="postgres" disabled>{{ t.settings.backendPostgres }}</option>
               </select>
             </div>
 
@@ -1015,7 +1016,7 @@ async function saveSettings() {
                   v-model="remoteConnectionUrl"
                   type="text"
                   class="url-input"
-                  :placeholder="storageBackend === 'mysql' ? 'mysql://user:pass@192.168.1.100:3306/berry' : 'postgres://user:pass@192.168.1.100:5432/berry'"
+                  :placeholder="storageBackend === 'mysql' ? 'mysql://user:pass@192.168.1.100:3306/omera' : 'postgres://user:pass@192.168.1.100:5432/omera'"
                 />
                 <button
                   type="button"
@@ -1139,7 +1140,7 @@ async function saveSettings() {
                   type="text"
                   class="url-input"
                   style="flex: 1;"
-                  placeholder="D:\Backups or \\nas\berry_backups"
+                  placeholder="D:\Backups or \\nas\omera_backups"
                 />
                 <button type="button" class="btn-browse-mapping" @click="handleBrowseLocalBackupPath">
                   {{ t.settings.cloudBackup.browse }}
@@ -1205,7 +1206,7 @@ async function saveSettings() {
                   v-model="cloudS3Bucket"
                   type="text"
                   class="url-input"
-                  placeholder="my-berry-backups"
+                  placeholder="my-omera-backups"
                 />
               </div>
               <div class="setting-row">
@@ -1590,11 +1591,11 @@ async function saveSettings() {
 
             <div class="about-card">
               <div class="about-logo">
-                <img src="../assets/logo.png" alt="Berry Logo" width="48" height="48" class="about-logo-img" />
+                <img src="../assets/logo.png" alt="Omera Logo" width="48" height="48" class="about-logo-img" />
               </div>
               <div class="about-details">
-                <h5 class="about-name">Berry AI Studio</h5>
-                <p class="about-ver">v{{ info?.app_version || '0.1.3' }}</p>
+                <h5 class="about-name">Omera</h5>
+                <p class="about-ver">v{{ info?.app_version || '0.4.0' }}</p>
                 <p class="about-desc">{{ t.settings.aboutDesc }}</p>
               </div>
             </div>
@@ -1892,13 +1893,18 @@ async function saveSettings() {
 
 .select-input {
   background: var(--color-bg-primary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
   border-radius: 5px;
   min-width: 178px;
   padding: 7px 30px 7px 10px;
   font-size: 0.75rem;
   outline: none;
+}
+
+.select-input option {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .toggle-checkbox {
@@ -2184,8 +2190,8 @@ async function saveSettings() {
 
 .url-input {
   background: var(--color-bg-primary);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
   border-radius: 5px;
   padding: 6px 10px;
   font-size: 0.78rem;
@@ -2194,25 +2200,26 @@ async function saveSettings() {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-.url-input:focus {
-  border-color: rgba(139, 92, 246, 0.5);
+.url-input:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .btn-test-conn {
   padding: 6px 12px;
   font-size: 0.75rem;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.05);
-  color: #f1f5f9;
+  border: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .btn-test-conn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--color-bg-tertiary);
+  border-color: var(--border-color-strong);
 }
 
 .btn-test-conn:disabled {

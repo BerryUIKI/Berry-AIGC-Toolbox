@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { assetUrl } from "./image";
 import type { ImageFile } from "../types";
 import { selectThumbnailTier } from "./thumbnail-tier";
+import { LruThumbnailCache } from "./lru-cache";
 
 export interface ThumbnailCacheStats {
   total_bytes: number;
@@ -25,50 +26,13 @@ interface ThumbnailBatchOptions {
   priority?: number;
 }
 
-const THUMBNAIL_SETTING_KEY = "berry_thumbnail_max_edge";
-const THUMBNAIL_BUDGET_SETTING_KEY = "berry_thumbnail_cache_budget_mb";
+const THUMBNAIL_SETTING_KEY = "omera_thumbnail_max_edge";
+const LEGACY_THUMBNAIL_SETTING_KEY = "berry_thumbnail_max_edge";
+const THUMBNAIL_BUDGET_SETTING_KEY = "omera_thumbnail_cache_budget_mb";
+const LEGACY_THUMBNAIL_BUDGET_SETTING_KEY = "berry_thumbnail_cache_budget_mb";
 const DEFAULT_MAX_EDGE = 384; // 64 * 6, perfect balanced resolution for 130px~360px grid zoom
 const DEFAULT_CACHE_BUDGET_MB = 2048;
-const MAX_MEMORY_CACHE_ENTRIES = 3000;
 let configuredThumbnailMaxEdge: number | null = null;
-
-class LruThumbnailCache {
-  private cache = new Map<string, string>();
-  private maxSize: number;
-
-  constructor(maxSize = MAX_MEMORY_CACHE_ENTRIES) {
-    this.maxSize = maxSize;
-  }
-
-  get(key: string): string | undefined {
-    const val = this.cache.get(key);
-    if (val !== undefined) {
-      this.cache.delete(key);
-      this.cache.set(key, val);
-    }
-    return val;
-  }
-
-  set(key: string, value: string): void {
-    if (this.cache.has(key)) {
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.maxSize) {
-      const oldestKey = this.cache.keys().next().value;
-      if (oldestKey !== undefined) {
-        this.cache.delete(oldestKey);
-      }
-    }
-    this.cache.set(key, value);
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-
-  get size(): number {
-    return this.cache.size;
-  }
-}
 
 // In-memory runtime LRU map of file revision + size tier -> asset URL.
 const memoryCache = new LruThumbnailCache(3000);
@@ -126,6 +90,7 @@ const queuedBatchItems = new Map<string, QueuedThumbnail>();
 const batchReadyKeys = new Set<string>();
 let batchDrainPromise: Promise<number> | null = null;
 let activeThumbnailGeneration = 0;
+let cacheEpoch = 0;
 let thumbnailQueueSequence = 0;
 let pendingCancellationGeneration = 0;
 let sentCancellationGeneration = 0;
@@ -177,7 +142,13 @@ export function cancelThumbnailRequests(): void {
 export function getThumbnailMaxEdge(): number {
   if (configuredThumbnailMaxEdge !== null) return configuredThumbnailMaxEdge;
   try {
-    const val = localStorage.getItem(THUMBNAIL_SETTING_KEY);
+    let val = localStorage.getItem(THUMBNAIL_SETTING_KEY);
+    if (!val) {
+      val = localStorage.getItem(LEGACY_THUMBNAIL_SETTING_KEY);
+      if (val) {
+        localStorage.setItem(THUMBNAIL_SETTING_KEY, val);
+      }
+    }
     if (val) {
       const parsed = parseInt(val, 10);
       if (parsed >= 128 && parsed <= 1024) {
@@ -217,7 +188,13 @@ export function setThumbnailMaxEdge(maxEdge: number): void {
 /** Read the configured persistent thumbnail disk budget. */
 export function getThumbnailCacheBudgetMb(): number {
   try {
-    const value = localStorage.getItem(THUMBNAIL_BUDGET_SETTING_KEY);
+    let value = localStorage.getItem(THUMBNAIL_BUDGET_SETTING_KEY);
+    if (!value) {
+      value = localStorage.getItem(LEGACY_THUMBNAIL_BUDGET_SETTING_KEY);
+      if (value) {
+        localStorage.setItem(THUMBNAIL_BUDGET_SETTING_KEY, value);
+      }
+    }
     if (value) {
       const parsed = parseInt(value, 10);
       if (parsed >= 256 && parsed <= 65_536) return parsed;
@@ -289,6 +266,7 @@ export async function getThumbnailUrl(
   }
 
   frontendQueueCounters.requestsDispatched++;
+  const epoch = cacheEpoch;
   let promise!: Promise<string>;
 
   promise = (async () => {
@@ -304,16 +282,13 @@ export async function getThumbnailUrl(
         },
       });
       const url = assetUrl(diskPath);
-      memoryCache.set(cacheKey, url);
+      if (epoch === cacheEpoch) memoryCache.set(cacheKey, url);
       return url;
     } catch (error) {
       if (generation !== undefined && String(error).includes(CANCELED_REQUEST_MESSAGE)) {
         throw error;
       }
-      // Fallback to original image if downsampling fails (e.g. video)
-      const fallbackUrl = assetUrl(file.path);
-      memoryCache.set(cacheKey, fallbackUrl);
-      return fallbackUrl;
+      throw error;
     } finally {
       if (inFlightRequests.get(cacheKey)?.promise === promise) {
         inFlightRequests.delete(cacheKey);
@@ -432,6 +407,7 @@ export async function getThumbnailCacheStats(): Promise<ThumbnailCacheStats> {
  * Clear all thumbnail cache files from disk and memory.
  */
 export async function clearThumbnailCache(): Promise<number> {
+  cacheEpoch++;
   const generation = beginThumbnailRequestCycle();
   await scheduleThumbnailCancellation(generation);
   memoryCache.clear();
@@ -439,6 +415,12 @@ export async function clearThumbnailCache(): Promise<number> {
   queuedBatchItems.clear();
   batchReadyKeys.clear();
   return await invoke<number>("clear_thumbnail_cache");
+}
+
+export function invalidateThumbnail(file: ImageFile, tier: number): void {
+  const cacheKey = getThumbnailCacheKey(file, tier);
+  memoryCache.delete(cacheKey);
+  batchReadyKeys.delete(cacheKey);
 }
 
 /**
@@ -478,10 +460,12 @@ export async function resetThumbnailDiagnostics(): Promise<void> {
 
 // In development mode, attach diagnostics to window for manual inspections without console noise.
 if (typeof window !== "undefined" && import.meta.env?.DEV) {
-  (window as unknown as { __BERRY_THUMBNAIL_DIAGNOSTICS__?: unknown }).__BERRY_THUMBNAIL_DIAGNOSTICS__ = {
+  const diag = {
     get: getThumbnailDiagnostics,
     reset: resetThumbnailDiagnostics,
   };
+  (window as unknown as { __OMERA_THUMBNAIL_DIAGNOSTICS__?: unknown }).__OMERA_THUMBNAIL_DIAGNOSTICS__ = diag;
+  (window as unknown as { __BERRY_THUMBNAIL_DIAGNOSTICS__?: unknown }).__BERRY_THUMBNAIL_DIAGNOSTICS__ = diag;
 }
 
 /**

@@ -1,12 +1,16 @@
 pub mod cloud_backup;
 pub mod cloud_sync;
 mod commands;
+mod config_store;
+pub mod legacy_migration;
+mod update_verification;
 mod watcher;
 
-use std::sync::atomic::AtomicU64;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::sync::{Arc, Mutex};
 
-use berry_storage::Database;
+use omera_storage::Database;
 use tauri::Manager;
 
 /// Application-wide state managed by Tauri.
@@ -14,9 +18,9 @@ pub struct AppState {
     /// The migrated SQLite database, opened in the app data directory.
     pub db: Mutex<Database>,
     /// Optional active WD14 ONNX Tagger instance.
-    pub tagger: Mutex<Option<berry_tagger::Wd14Tagger>>,
+    pub tagger: Mutex<Option<omera_tagger::Wd14Tagger>>,
     /// Optional active CLIP / SigLIP text & image embedding engine.
-    pub clip: Mutex<Option<berry_clip::ClipEngine>>,
+    pub clip: Mutex<Option<omera_clip::ClipEngine>>,
     /// Optional cross-platform watcher. Failure to initialize it must not
     /// prevent the SQLite-backed library from opening.
     pub watcher: Mutex<Option<watcher::LibraryWatcher>>,
@@ -24,11 +28,24 @@ pub struct AppState {
     pub thumbnail_generation: Arc<AtomicU64>,
     /// Incremental remote asset mirroring and delta sync state.
     pub cloud_sync: Arc<Mutex<cloud_sync::CloudSyncState>>,
+    /// Recorded indexing failures per CLIP model ID to avoid repeated starvation.
+    pub clip_failures: Arc<Mutex<HashMap<String, HashSet<i64>>>>,
+    /// Cooperative cancellation flag for CLIP batch indexing.
+    pub clip_cancel: Arc<AtomicBool>,
+    /// Coordinator for legacy Berry data discovery, migration and cleanup.
+    pub migration_coordinator: Arc<Mutex<legacy_migration::MigrationCoordinator>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -38,10 +55,28 @@ pub fn run() {
             let _ = std::fs::create_dir_all(data_dir.join("updates"));
             let _ = std::fs::create_dir_all(data_dir.join("thumbnails"));
             let _ = std::fs::create_dir_all(data_dir.join("models"));
-            let database_path = data_dir.join("berry.db");
+            let database_path = commands::active_database_path(&data_dir);
+            let migration_coordinator =
+                Arc::new(Mutex::new(legacy_migration::MigrationCoordinator::new()));
+
+            if !database_path.exists() {
+                if let Ok(mut coord) = migration_coordinator.lock() {
+                    let _ = coord.auto_migrate_if_unambiguous(app.handle());
+                }
+            }
+
+            omera_storage::recovery::apply_pending_restore(&database_path)
+                .map_err(std::io::Error::other)?;
             let db = Database::connect(&database_path)?;
             let folders = db.list_folders()?;
-            let mut filesystem_watcher =
+            for folder in &folders {
+                app.asset_protocol_scope()
+                    .allow_directory(&folder.path, true)?;
+            }
+            let _ = app
+                .asset_protocol_scope()
+                .allow_directory(data_dir.join("thumbnails"), true);
+            let filesystem_watcher =
                 match watcher::LibraryWatcher::new(app.handle().clone(), database_path.clone()) {
                     Ok(watcher) => Some(watcher),
                     Err(error) => {
@@ -49,13 +84,6 @@ pub fn run() {
                         None
                     }
                 };
-            if let Some(watcher) = filesystem_watcher.as_mut() {
-                for folder in &folders {
-                    if let Err(error) = watcher.watch_folder(folder) {
-                        eprintln!("could not watch folder {}: {error}", folder.path);
-                    }
-                }
-            }
             app.manage(AppState {
                 db: Mutex::new(db),
                 tagger: Mutex::new(None),
@@ -63,6 +91,23 @@ pub fn run() {
                 watcher: Mutex::new(filesystem_watcher),
                 thumbnail_generation: Arc::new(AtomicU64::new(0)),
                 cloud_sync: Arc::new(Mutex::new(cloud_sync::CloudSyncState::default())),
+                clip_failures: Arc::new(Mutex::new(HashMap::new())),
+                clip_cancel: Arc::new(AtomicBool::new(false)),
+                migration_coordinator: migration_coordinator.clone(),
+            });
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    for folder in folders {
+                        if let Ok(mut watcher) = state.watcher.lock() {
+                            if let Some(watcher) = watcher.as_mut() {
+                                if let Err(error) = watcher.watch_folder(&folder) {
+                                    eprintln!("could not watch folder {}: {error}", folder.path);
+                                }
+                            }
+                        }
+                    }
+                }
             });
             let thumbnail_data_dir = data_dir.clone();
             let thumbnail_database_path = database_path.clone();
@@ -71,9 +116,9 @@ pub fn run() {
                 .and_then(|content| serde_json::from_str::<commands::AppConfig>(&content).ok())
                 .map(|config| config.thumbnail_cache_budget_mb);
             if let Err(error) = std::thread::Builder::new()
-                .name("berry-thumbnail-manifest".to_string())
+                .name("omera-thumbnail-manifest".to_string())
                 .spawn(move || {
-                    if let Err(error) = berry_scan::synchronize_thumbnail_manifest(
+                    if let Err(error) = omera_scan::synchronize_thumbnail_manifest(
                         &thumbnail_data_dir,
                         &thumbnail_database_path,
                         commands::thumbnail_budget_bytes(thumbnail_budget_mb),
@@ -90,6 +135,7 @@ pub fn run() {
             commands::get_app_info,
             commands::add_folder,
             commands::list_folders,
+            commands::list_subdirectories,
             commands::remove_folder,
             commands::list_files,
             commands::query_files,
@@ -119,7 +165,9 @@ pub fn run() {
             commands::remove_file_from_album,
             commands::remove_files_from_album,
             commands::count_album_files,
+            commands::get_album_counts,
             commands::list_album_files,
+            commands::import_files_to_managed_vault,
             commands::create_tag,
             commands::list_tags,
             commands::delete_tag,
@@ -185,6 +233,7 @@ pub fn run() {
             commands::get_loaded_clip_model,
             commands::get_clip_index_status,
             commands::index_clip_images_batch,
+            commands::cancel_clip_indexing,
             commands::search_by_text_prompt,
             commands::list_loras,
             commands::get_lora,
@@ -223,6 +272,13 @@ pub fn run() {
             commands::cloud_sync_cancel,
             commands::cloud_sync_get_progress,
             commands::cloud_sync_get_summary,
+            commands::get_legacy_migration_status,
+            commands::preview_legacy_migration,
+            commands::start_legacy_migration,
+            commands::get_legacy_migration_job,
+            commands::preview_legacy_cleanup,
+            commands::confirm_legacy_cleanup,
+            commands::defer_legacy_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

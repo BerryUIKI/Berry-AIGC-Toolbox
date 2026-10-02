@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Berry AI Studio",
-  "version": "0.3.0",
-  "identifier": "com.berryuiki.berryaistudio",
+  "productName": "Omera",
+  "version": "0.4.0",
+  "identifier": "com.berryuiki.omera",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Berry AI Studio",
+        "title": "Omera",
         "width": 1280,
         "height": 850,
         "minWidth": 960,
@@ -23,10 +23,10 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; img-src 'self' asset: https://asset.localhost http://asset.localhost blob: data:; media-src 'self' asset: https://asset.localhost http://asset.localhost blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost http://localhost:* http://127.0.0.1:* https://api.civitai.com https://github.com; font-src 'self' data:; object-src 'none'; frame-src 'none';",
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": []
       }
     }
   },
@@ -35,7 +35,7 @@
     "targets": "all",
     "category": "Graphics and Design",
     "shortDescription": "Local asset manager and prompt studio for AI-generated images",
-    "longDescription": "Berry AI Studio is an open-source local asset manager and studio for AI-generated images and workflows supporting AUTOMATIC1111, ComfyUI, NovelAI, InvokeAI, Fooocus, EasyDiffusion, and Stable Swarm.",
+    "longDescription": "Omera is an open-source local asset manager and studio for AI-generated images and workflows supporting AUTOMATIC1111, ComfyUI, NovelAI, InvokeAI, Fooocus, EasyDiffusion, and Stable Swarm.",
     "copyright": "Copyright © 2026 BerryUIKI",
     "macOS": {
       "minimumSystemVersion": "12.0",

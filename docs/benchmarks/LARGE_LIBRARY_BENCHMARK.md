@@ -2,13 +2,13 @@
 
 **Date:** 2026-09-20  
 **Test Machine:** Windows 11, AMD Ryzen 9 / SSD  
-**Target Applications:** `berry-scan`, `berry-storage`, `VirtualGrid.vue`, `FileList.vue`
+**Target Applications:** `omera-scan`, `omera-storage`, `VirtualGrid.vue`, `FileList.vue`
 
 ---
 
 ## 1. Executive Summary
 
-This report documents reproducible benchmark measurements for Berry AI Studio across small (1,000 items), medium (10,000 items), and large (50,000 items) media libraries.
+This report documents reproducible benchmark measurements for Omera across small (1,000 items), medium (10,000 items), and large (50,000 items) media libraries.
 
 The tests evaluate:
 1. **Time to first usable gallery** from a warm SQLite database.
@@ -19,7 +19,7 @@ The tests evaluate:
 All measurement harnesses are fully automated and reproducible via:
 ```bash
 # Rust storage & scanner benchmarks
-cargo bench --bench large_library -p berry-scan
+cargo bench --bench large_library -p omera-scan
 
 # Frontend virtualized scroll and memory benchmarks
 node --experimental-strip-types --test tests/frontend-scroll-bench.mjs

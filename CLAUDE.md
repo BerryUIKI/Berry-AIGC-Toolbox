@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Berry AI Studio** is an open-source **local asset manager and prompt studio for
+**Omera** is an open-source **local asset manager and prompt studio for
 AI-generated images**: it scans folders of images/videos, extracts prompt/model/
 parameter metadata (PNGInfo, EXIF, `.txt` sidecars), and indexes it into SQLite
 for search, organization (albums, tags, favorites, ratings, NSFW), and model
@@ -31,7 +31,7 @@ cargo fmt --all -- --check        # must be clean
 ```
 
 - Rust package manager: `cargo add <crate>` inside a crate dir.
-- Run a single test: `cargo test -p berry-storage db::tests::migrations_are_idempotent`.
+- Run a single test: `cargo test -p omera-storage db::tests::migrations_are_idempotent`.
 - **`dist/` must exist before any cargo command that compiles `src-tauri`**
   (`tauri::generate_context!` embeds `frontendDist` at compile time). CI runs
   `pnpm build` before the cargo steps; locally, `pnpm tauri dev`/`build` handles
@@ -43,26 +43,26 @@ cargo fmt --all -- --check        # must be clean
 Frontend (src/, Vue 3 + TS) ── invoke() ──► src-tauri/ (app shell, #[tauri::command])
                                               │
                                               ▼
-                              crates/berry-domain   (pure domain types)
-                              crates/berry-metadata (format detection & parsing)
-                              crates/berry-storage  (SQLite + migrations)
+                              crates/omera-domain   (pure domain types)
+                              crates/omera-metadata (format detection & parsing)
+                              crates/omera-storage  (SQLite + migrations)
 ```
 
 A single Cargo workspace (`Cargo.toml`) — run cargo commands from the root.
 
 | Crate | Responsibility | Notes |
 |---|---|---|
-| `berry-ai-studio` (`src-tauri/`) | Tauri shell: window setup, IPC commands, `AppState` | Thin adapters only — **no business logic** |
-| `berry-domain` | `ImageFile`, `Container`, `MetadataFormat` | Depends on nothing in-repo |
-| `berry-metadata` | `detect_container` (magic bytes), `extract_metadata` dispatch: PNGInfo (`parameters` chunk), EXIF (`Software` tag + dimensions), `.txt` sidecar fallback | Depends on domain + kamadak-exif |
-| `berry-scan` | `Scanner`: walk → detect container → extract → batch upsert → orphan cleanup; incremental (size, mtime) skip + forced rebuild | Depends on domain + metadata + storage |
-| `berry-storage` | `Database`, ordered `MIGRATIONS` | Depends on domain + rusqlite(bundled) |
+| `omera` (`src-tauri/`) | Tauri shell: window setup, IPC commands, `AppState` | Thin adapters only — **no business logic** |
+| `omera-domain` | `ImageFile`, `Container`, `MetadataFormat` | Depends on nothing in-repo |
+| `omera-metadata` | `detect_container` (magic bytes), `extract_metadata` dispatch: PNGInfo (`parameters` chunk), EXIF (`Software` tag + dimensions), `.txt` sidecar fallback | Depends on domain + kamadak-exif |
+| `omera-scan` | `Scanner`: walk → detect container → extract → batch upsert → orphan cleanup; incremental (size, mtime) skip + forced rebuild | Depends on domain + metadata + storage |
+| `omera-storage` | `Database`, ordered `MIGRATIONS` | Depends on domain + rusqlite(bundled) |
 
 **Data flow:** the frontend calls `invoke("get_app_info", …)`; the command locks
 `AppState` (a `Mutex<Database>` opened in `.setup()` from the OS app-data dir),
 calls into a core crate, returns a serde value or `Result<_, String>`.
 
-**Schema versioning:** `crates/berry-storage/src/migrations.rs` holds an ordered
+**Schema versioning:** `crates/omera-storage/src/migrations.rs` holds an ordered
 `MIGRATIONS: &[&str]`; `Database::migrate()` applies each pending migration in a
 transaction and bumps `PRAGMA user_version`. **Never edit/reorder/delete an
 applied migration — append a new one.** No ad-hoc DDL.

@@ -1,5 +1,15 @@
 # Agent Guide
 
+## Omera Identity Migration
+
+- Use `docs/ENGINEERING_HANDOFF.md` for ownership boundaries and task acceptance, and `docs/DELIVERY_ROADMAP.md` for dependency order. High-impact persistence, identity, cleanup, security and release changes are lead-owned; general-engineer assignments are explicitly listed there.
+- Read `docs/API_CONTRACTS.md` and `docs/IPC_REFERENCE.md` before changing IPC. Use `docs/HANDOFF_PROMPTS.md` for human engineering assignments. Proposed migration APIs are not implemented commands. Regenerate the IPC inventory after command changes and validate DTO compatibility separately.
+
+- The target identity is Omera, `com.berryuiki.omera`, repository `BerryUIKI/Omera`, database `omera.db`, and local settings prefix `omera_`.
+- Follow `docs/OMERA_MIGRATION.md` and `docs/STORAGE_EVOLUTION.md`. Core crates are organized as `crates/omera-*`; legacy discovery readers and fallback paths are preserved for pre-1.0 compatibility.
+- All pre-1.0 releases must retain legacy discovery and supported import. Preserve source data during migration. Cleanup requires validated destination data and a separate explicit user decision in the application.
+- Never include user media, external vaults, or shared directories in automatic legacy application-data cleanup.
+
 This file defines repository-local instructions for coding agents and automated contributors.
 
 ## Working Branch
@@ -12,10 +22,10 @@ This file defines repository-local instructions for coding agents and automated 
 
 - `src/`: Vue 3 and TypeScript UI. Keep expensive filesystem and image work out of the WebView thread.
 - `src-tauri/`: thin Tauri command adapters. Commands validate input, release shared locks quickly, and delegate business logic.
-- `crates/berry-domain/`: shared models with no I/O dependencies.
-- `crates/berry-storage/`: SQLite queries and append-only schema migrations.
-- `crates/berry-metadata/`: metadata parsing.
-- `crates/berry-scan/`: filesystem indexing and thumbnail generation.
+- `crates/omera-domain/`: shared models with no I/O dependencies.
+- `crates/omera-storage/`: SQLite queries and append-only schema migrations.
+- `crates/omera-metadata/`: metadata parsing.
+- `crates/omera-scan/`: filesystem indexing and thumbnail generation.
 - `tests/`: frontend-side Node tests. Rust unit tests live beside their modules.
 
 Do not place business rules in Tauri commands or Vue templates when they belong in a reusable Rust crate or TypeScript utility.
@@ -34,7 +44,7 @@ See `docs/PERFORMANCE.md` for the current performance model, implemented safegua
 
 ## Database and Configuration Changes
 
-- SQLite migrations are append-only in `crates/berry-storage/src/migrations.rs`. Never edit an applied migration.
+- SQLite migrations are append-only in `crates/omera-storage/src/migrations.rs`. Never edit an applied migration.
 - New configuration fields require compatible defaults in both `src/utils/config.ts` and `src-tauri/src/commands.rs`.
 - Keep legacy configuration readable with Serde defaults and localStorage migration where relevant.
 
@@ -57,4 +67,3 @@ For gallery changes, also manually verify Grid, Waterfall, and Table modes at na
 - Repository engineering documentation is written in English.
 - User-facing UI strings belong in `src/i18n/locales/`; do not introduce untranslated template text unless it is a temporary fallback.
 - Update architecture or performance documentation when a change alters lifecycle, caching, virtualization, or persistence behavior.
-

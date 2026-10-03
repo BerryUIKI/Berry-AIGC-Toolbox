@@ -46,6 +46,11 @@
   --bg-surface: var(--color-bg-primary);
   --bg-card: var(--color-bg-secondary);
   --color-border: var(--border-color);
+
+  /* Cyan & Accent Badges */
+  --badge-cyan-bg: rgba(18, 181, 203, 0.15);
+  --badge-cyan-text: #67e8f9;
+  --badge-cyan-border: rgba(18, 181, 203, 0.3);
 }
 
 :root[data-theme="graphite"] {
@@ -81,6 +86,9 @@
   --border-color-strong: rgba(15, 23, 42, 0.22);
   --scrollbar-thumb: rgba(15, 23, 42, 0.2);
   --scrollbar-thumb-hover: rgba(15, 23, 42, 0.35);
+  --badge-cyan-bg: rgba(8, 145, 178, 0.12);
+  --badge-cyan-text: #155e75;
+  --badge-cyan-border: rgba(8, 145, 178, 0.28);
 }
 
 @media (prefers-color-scheme: light) {
@@ -99,6 +107,9 @@
     --border-color-strong: rgba(15, 23, 42, 0.22);
     --scrollbar-thumb: rgba(15, 23, 42, 0.2);
     --scrollbar-thumb-hover: rgba(15, 23, 42, 0.35);
+    --badge-cyan-bg: rgba(8, 145, 178, 0.12);
+    --badge-cyan-text: #155e75;
+    --badge-cyan-border: rgba(8, 145, 178, 0.28);
   }
 }
 
@@ -150,6 +161,16 @@
   color: var(--color-text-secondary) !important;
 }
 
+:root[data-theme="light"] .brand-subtitle,
+:root[data-theme="light"] .about-ver,
+:root[data-theme="light"] .scan-label,
+:root[data-theme="light"] .asset-name,
+:root[data-theme="light"] .progress-speed,
+:root[data-theme="light"] .storage-item-path,
+:root[data-theme="light"] .action-link {
+  color: var(--badge-cyan-text) !important;
+}
+
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] .grid-card,
   :root[data-theme="system"] .settings-dialog,
@@ -197,6 +218,16 @@
   :root[data-theme="system"] .tab-btn,
   :root[data-theme="system"] .modal-desc {
     color: var(--color-text-secondary) !important;
+  }
+
+  :root[data-theme="system"] .brand-subtitle,
+  :root[data-theme="system"] .about-ver,
+  :root[data-theme="system"] .scan-label,
+  :root[data-theme="system"] .asset-name,
+  :root[data-theme="system"] .progress-speed,
+  :root[data-theme="system"] .storage-item-path,
+  :root[data-theme="system"] .action-link {
+    color: var(--badge-cyan-text) !important;
   }
 }
 

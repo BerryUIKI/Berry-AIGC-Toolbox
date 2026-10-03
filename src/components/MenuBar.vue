@@ -538,7 +538,7 @@ onUnmounted(() => {
 .check-icon {
   width: 14px;
   font-size: 0.72rem;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -546,7 +546,7 @@ onUnmounted(() => {
 }
 
 .dropdown-item.selected {
-  color: #67e8f9;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 600;
 }
 </style>

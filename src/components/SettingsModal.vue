@@ -818,7 +818,7 @@ async function saveSettings() {
                 <span class="row-label">{{ t.settings.cacheManagement }}</span>
                 <span class="row-desc">
                   {{ t.settings.currentUsage }}
-                  <strong style="color:#12b5cb;">
+                  <strong style="color: var(--badge-cyan-text, #155e75);">
                     {{ cacheStats ? `${formatBytes(cacheStats.total_bytes)} / ${formatBytes(cacheStats.budget_bytes)} (${cacheStats.file_count} ${t.settings.thumbnailsCount})` : t.settings.calculating }}
                   </strong>
                   <span v-if="cacheMessage" style="margin-left: 8px; color: #4ade80;">{{ cacheMessage }}</span>
@@ -1780,13 +1780,13 @@ async function saveSettings() {
 }
 
 .tab-btn.active {
-  background: rgba(18, 181, 203, 0.18);
-  color: #67e8f9;
+  background: var(--badge-cyan-bg, rgba(18, 181, 203, 0.18));
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 600;
 }
 
 .tab-btn.active > span:first-child {
-  color: #67e8f9;
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .tab-btn:focus-visible,
@@ -2016,8 +2016,8 @@ async function saveSettings() {
 .about-ver {
   margin: 0;
   font-size: 0.72rem;
-  color: #12b5cb;
-  font-weight: 500;
+  color: var(--badge-cyan-text, #155e75);
+  font-weight: 600;
 }
 
 .about-desc {
@@ -2128,7 +2128,7 @@ async function saveSettings() {
 .storage-item-path {
   font-size: 0.68rem;
   font-family: monospace;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

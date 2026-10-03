@@ -480,9 +480,9 @@ function handleOpenUpdatesFolder() {
 }
 
 .status-icon.dev {
-  background: rgba(18, 181, 203, 0.15);
-  color: #12b5cb;
-  border: 1px solid rgba(18, 181, 203, 0.3);
+  background: var(--badge-cyan-bg, rgba(18, 181, 203, 0.15));
+  color: var(--badge-cyan-text, #155e75);
+  border: 1px solid var(--badge-cyan-border, rgba(18, 181, 203, 0.3));
 }
 
 .status-icon.error {
@@ -560,7 +560,7 @@ function handleOpenUpdatesFolder() {
 }
 
 .ver-value.current {
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .ver-value.public {
@@ -651,7 +651,7 @@ function handleOpenUpdatesFolder() {
 
 .asset-name {
   font-size: 0.7rem;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 500;
 }
 
@@ -785,7 +785,7 @@ function handleOpenUpdatesFolder() {
 .progress-speed {
   font-size: 0.74rem;
   font-family: monospace;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .progress-bar-track {

@@ -59,7 +59,7 @@ const thumbPercent = computed(() => {
     <div class="status-right">
       <!-- Thumbnail generation progress -->
       <div v-if="thumbProgress?.active && thumbProgress.total > 0 && thumbProgress.current < thumbProgress.total" class="scan-status">
-        <span class="scan-label" style="color: #67e8f9;">
+        <span class="scan-label" style="color: var(--badge-cyan-text, #155e75);">
           {{ t.statusbar.generatingThumb }} {{ thumbProgress.current }} / {{ thumbProgress.total }} ({{ thumbPercent }}%)
         </span>
         <div class="mini-progress-track">
@@ -185,7 +185,7 @@ const thumbPercent = computed(() => {
 }
 
 .scan-label {
-  color: #38bdf8;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 500;
 }
 
@@ -245,9 +245,9 @@ const thumbPercent = computed(() => {
 
 .activity-toggle-btn:hover,
 .activity-toggle-btn.active {
-  background: rgba(56, 189, 248, 0.15);
-  border-color: rgba(56, 189, 248, 0.4);
-  color: #38bdf8;
+  background: var(--badge-cyan-bg, rgba(56, 189, 248, 0.15));
+  border-color: var(--badge-cyan-border, rgba(56, 189, 248, 0.4));
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .activity-dot {

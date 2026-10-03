@@ -465,8 +465,9 @@ function reset() {
   width: 360px;
   max-width: 90vw;
   height: 100%;
-  background: #ffffff;
-  color: #222222;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border-left: 1px solid var(--border-color);
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
@@ -479,14 +480,6 @@ function reset() {
   }
   to {
     transform: translateX(0);
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .drawer-panel {
-    background: #1e1e1e;
-    color: #e5e5e5;
-    border-left: 1px solid #333;
   }
 }
 

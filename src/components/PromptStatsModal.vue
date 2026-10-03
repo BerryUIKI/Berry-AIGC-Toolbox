@@ -340,24 +340,24 @@ function onSelectKeyword(item: PromptKeywordStat) {
   width: 900px;
   max-width: 95vw;
   height: 85vh;
-  background: #1e1e1e;
-  color: #eee;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
 .stats-header {
   height: 56px;
   padding: 0 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #181818;
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
@@ -375,6 +375,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .header-actions {
@@ -384,9 +385,9 @@ function onSelectKeyword(item: PromptKeywordStat) {
 }
 
 .refresh-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #ccc;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   font: inherit;
   font-size: 0.82em;
   padding: 0.35rem 0.75rem;
@@ -396,14 +397,14 @@ function onSelectKeyword(item: PromptKeywordStat) {
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .close-btn {
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 1.1em;
   cursor: pointer;
   padding: 0.2rem 0.5rem;
@@ -411,8 +412,8 @@ function onSelectKeyword(item: PromptKeywordStat) {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .kpi-grid {
@@ -420,14 +421,14 @@ function onSelectKeyword(item: PromptKeywordStat) {
   grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--color-bg-tertiary);
   flex-shrink: 0;
 }
 
 .kpi-card {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   display: flex;
@@ -438,7 +439,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
   font-size: 0.75em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 .kpi-value {
@@ -471,8 +472,8 @@ function onSelectKeyword(item: PromptKeywordStat) {
   display: flex;
   gap: 0.5rem;
   padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #181818;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
@@ -481,8 +482,8 @@ function onSelectKeyword(item: PromptKeywordStat) {
   align-items: center;
   gap: 0.4rem;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #aaa;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   font: inherit;
   font-size: 0.82em;
   font-weight: 500;
@@ -493,8 +494,8 @@ function onSelectKeyword(item: PromptKeywordStat) {
 }
 
 .tab-btn:hover {
-  color: #eee;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .tab-btn.active {
@@ -505,7 +506,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
 }
 
 .tab-badge {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-bg-tertiary);
   font-size: 0.8em;
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
@@ -528,15 +529,15 @@ function onSelectKeyword(item: PromptKeywordStat) {
   align-items: center;
   gap: 0.75rem;
   padding: 0.45rem 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .stat-row:hover {
-  background: rgba(47, 111, 237, 0.12);
+  background: var(--color-bg-hover);
   border-color: rgba(47, 111, 237, 0.4);
   transform: translateX(2px);
 }
@@ -545,7 +546,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
   width: 24px;
   font-size: 0.8em;
   font-weight: 600;
-  color: #666;
+  color: var(--color-text-muted);
   text-align: right;
   flex-shrink: 0;
 }
@@ -563,7 +564,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
 .stat-bar-container {
   flex: 1;
   height: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-tertiary);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -604,8 +605,8 @@ function onSelectKeyword(item: PromptKeywordStat) {
 .stat-count-badge {
   font-size: 0.8em;
   font-weight: 600;
-  color: #ccc;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary);
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
   white-space: nowrap;
@@ -617,7 +618,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
 .stat-search-hint {
   background: transparent;
   border: none;
-  color: #666;
+  color: var(--color-text-muted);
   font-size: 0.85em;
   cursor: pointer;
   padding: 0.15rem 0.3rem;
@@ -638,14 +639,14 @@ function onSelectKeyword(item: PromptKeywordStat) {
   align-items: center;
   justify-content: center;
   padding: 4rem 1rem;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.9em;
 }
 
 .spinner {
   width: 28px;
   height: 28px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(128, 128, 128, 0.2);
   border-top-color: #2f6fed;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -661,17 +662,17 @@ function onSelectKeyword(item: PromptKeywordStat) {
 .stats-footer {
   height: 52px;
   padding: 0 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #181818;
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
 .footer-tip {
   font-size: 0.78em;
-  color: #777;
+  color: var(--color-text-muted);
 }
 
 .btn-done {

@@ -818,7 +818,7 @@ async function saveSettings() {
                 <span class="row-label">{{ t.settings.cacheManagement }}</span>
                 <span class="row-desc">
                   {{ t.settings.currentUsage }}
-                  <strong style="color:#12b5cb;">
+                  <strong style="color: var(--badge-cyan-text, #155e75);">
                     {{ cacheStats ? `${formatBytes(cacheStats.total_bytes)} / ${formatBytes(cacheStats.budget_bytes)} (${cacheStats.file_count} ${t.settings.thumbnailsCount})` : t.settings.calculating }}
                   </strong>
                   <span v-if="cacheMessage" style="margin-left: 8px; color: #4ade80;">{{ cacheMessage }}</span>
@@ -1285,8 +1285,8 @@ async function saveSettings() {
             </div>
 
             <!-- Snapshot Creation Card -->
-            <div class="settings-subsection" style="margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-              <h5 class="subsection-title" style="margin-bottom: 8px; font-size: 0.95rem; color: #f1f5f9;">
+            <div class="settings-subsection" style="margin-top: 20px; padding: 16px; background: var(--color-bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+              <h5 class="subsection-title" style="margin-bottom: 8px; font-size: 0.95rem; color: var(--color-text-primary);">
                 📦 {{ t.settings.cloudBackup.createSnapshot }}
               </h5>
               <div style="display: flex; gap: 8px; margin-top: 8px;">
@@ -1318,7 +1318,7 @@ async function saveSettings() {
             <!-- Remote Snapshots List -->
             <div class="settings-subsection" style="margin-top: 20px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h5 class="subsection-title" style="margin: 0; font-size: 0.95rem; color: #f1f5f9;">
+                <h5 class="subsection-title" style="margin: 0; font-size: 0.95rem; color: var(--color-text-primary);">
                   ☁️ {{ t.settings.cloudBackup.snapshotsTitle }}
                 </h5>
                 <button
@@ -1331,10 +1331,10 @@ async function saveSettings() {
                 </button>
               </div>
 
-              <div v-if="cloudSnapshotsLoading" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 0.85rem;">
+              <div v-if="cloudSnapshotsLoading" style="padding: 20px; text-align: center; color: var(--color-text-muted); font-size: 0.85rem;">
                 Loading snapshots...
               </div>
-              <div v-else-if="cloudSnapshots.length === 0" style="padding: 20px; text-align: center; color: #94a3b8; font-size: 0.85rem;">
+              <div v-else-if="cloudSnapshots.length === 0" style="padding: 20px; text-align: center; color: var(--color-text-muted); font-size: 0.85rem;">
                 {{ t.settings.cloudBackup.noSnapshots }}
               </div>
               <div v-else class="mapping-table-wrapper" style="max-height: 220px; overflow-y: auto;">
@@ -1352,7 +1352,7 @@ async function saveSettings() {
                     <tr v-for="item in cloudSnapshots" :key="item.filename">
                       <td style="font-family: monospace; font-size: 0.8rem;" :title="item.description || item.filename">
                         {{ item.filename }}
-                        <span v-if="item.description" style="display: block; color: #94a3b8; font-size: 0.72rem;">{{ item.description }}</span>
+                        <span v-if="item.description" style="display: block; color: var(--color-text-muted); font-size: 0.72rem;">{{ item.description }}</span>
                       </td>
                       <td style="font-size: 0.78rem; white-space: nowrap;">
                         {{ new Date(item.created_at * 1000).toLocaleString() }}
@@ -1381,12 +1381,12 @@ async function saveSettings() {
             </div>
 
             <!-- Subsection: Incremental Media Mirroring & Delta Sync -->
-            <div class="settings-subsection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <div class="settings-subsection" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-color);">
               <div class="panel-heading" style="margin-bottom: 12px;">
-                <h5 class="subsection-title" style="font-size: 1rem; color: #f1f5f9; margin-bottom: 4px;">
+                <h5 class="subsection-title" style="font-size: 1rem; color: var(--color-text-primary); margin-bottom: 4px;">
                   🔄 {{ t.settings.cloudBackup.mediaSyncTitle }}
                 </h5>
-                <p class="panel-subtitle" style="font-size: 0.8rem; color: #94a3b8; margin: 0;">
+                <p class="panel-subtitle" style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0;">
                   {{ t.settings.cloudBackup.mediaSyncSubtitle }}
                 </p>
               </div>
@@ -1415,7 +1415,7 @@ async function saveSettings() {
                     step="1"
                     style="width: 140px;"
                   />
-                  <span style="font-size: 0.85rem; color: #cbd5e1; min-width: 32px;">{{ syncConcurrency }}</span>
+                  <span style="font-size: 0.85rem; color: var(--color-text-secondary); min-width: 32px;">{{ syncConcurrency }}</span>
                 </div>
               </div>
 
@@ -1461,7 +1461,7 @@ async function saveSettings() {
               </div>
 
               <!-- Sync Action & Live Progress -->
-              <div style="margin-top: 14px; padding: 14px; background: rgba(0,0,0,0.25); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+              <div style="margin-top: 14px; padding: 14px; background: var(--color-bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <button
                     v-if="!syncProgress || syncProgress.phase === 'idle' || syncProgress.phase === 'completed' || syncProgress.phase === 'cancelled' || syncProgress.phase === 'failed'"
@@ -1504,7 +1504,7 @@ async function saveSettings() {
 
                 <!-- Progress Bar & Details -->
                 <div v-if="syncProgress && syncProgress.phase !== 'idle'" style="margin-top: 12px;">
-                  <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden;">
+                  <div style="width: 100%; height: 8px; background: var(--color-bg-tertiary); border-radius: 4px; overflow: hidden;">
                     <div
                       :style="{
                         width: `${syncProgress.total_files > 0 ? Math.min(100, Math.round(((syncProgress.completed_files + syncProgress.skipped_files + syncProgress.failed_files) / syncProgress.total_files) * 100)) : 0}%`,
@@ -1515,7 +1515,7 @@ async function saveSettings() {
                     ></div>
                   </div>
 
-                  <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: #94a3b8; margin-top: 8px;">
+                  <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--color-text-muted); margin-top: 8px;">
                     <span>
                       {{
                         t.settings.cloudBackup.progressFiles
@@ -1534,12 +1534,12 @@ async function saveSettings() {
                     </span>
                   </div>
 
-                  <div v-if="syncProgress.current_file" style="font-size: 0.75rem; color: #64748b; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  <div v-if="syncProgress.current_file" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     {{ t.settings.cloudBackup.progressCurrent.replace('{file}', syncProgress.current_file) }}
                   </div>
 
                   <!-- Summary Box -->
-                  <div v-if="syncSummary" style="margin-top: 10px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.8rem; color: #e2e8f0;">
+                  <div v-if="syncSummary" style="margin-top: 10px; padding: 8px 12px; background: var(--color-bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.8rem; color: var(--color-text-primary);">
                     ✓ {{ syncSummary.dry_run ? '[Dry Run] ' : '' }}{{ t.settings.cloudBackup.syncCompleted }}:
                     {{ syncSummary.synced_files }} synced, {{ syncSummary.skipped_files }} skipped, {{ syncSummary.failed_files }} failed ({{ (syncSummary.transferred_bytes / (1024 * 1024)).toFixed(2) }} MB in {{ (syncSummary.duration_ms / 1000).toFixed(1) }}s).
                   </div>
@@ -1780,13 +1780,13 @@ async function saveSettings() {
 }
 
 .tab-btn.active {
-  background: rgba(18, 181, 203, 0.18);
-  color: #67e8f9;
+  background: var(--badge-cyan-bg, rgba(18, 181, 203, 0.18));
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 600;
 }
 
 .tab-btn.active > span:first-child {
-  color: #67e8f9;
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .tab-btn:focus-visible,
@@ -2016,8 +2016,8 @@ async function saveSettings() {
 .about-ver {
   margin: 0;
   font-size: 0.72rem;
-  color: #12b5cb;
-  font-weight: 500;
+  color: var(--badge-cyan-text, #155e75);
+  font-weight: 600;
 }
 
 .about-desc {
@@ -2128,7 +2128,7 @@ async function saveSettings() {
 .storage-item-path {
   font-size: 0.68rem;
   font-family: monospace;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

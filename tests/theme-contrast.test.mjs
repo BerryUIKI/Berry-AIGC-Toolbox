@@ -18,6 +18,10 @@ test("style.css declares light theme variables and readable select option styles
   // Check system light theme media query
   assert.match(css, /@media\s*\(prefers-color-scheme:\s*light\)\s*\{[^}]*:root\[data-theme="system"\]/);
 
+  // Check cyan badge variables for contrast in dark and light themes
+  assert.match(css, /--badge-cyan-text:\s*#67e8f9;/);
+  assert.match(css, /:root\[data-theme="light"\]\s*\{[^}]*--badge-cyan-text:\s*#155e75;/);
+
   // Check global select and option styling
   assert.match(css, /select\s*option\s*\{[^}]*color:\s*var\(--color-text-primary\);/);
   assert.match(css, /select\s*option\s*\{[^}]*background-color:\s*var\(--color-bg-primary\);/);
@@ -40,6 +44,12 @@ test("SettingsModal.vue uses theme variables for select-input and url-input", ()
   assert.ok(urlMatch, ".url-input rule should exist");
   assert.match(urlMatch[1], /color:\s*var\(--color-text-primary\)/);
   assert.doesNotMatch(urlMatch[1], /color:\s*#e2e8f0/);
+
+  // .tab-btn.active should use semantic cyan text variable instead of hardcoded #67e8f9
+  const tabBtnActiveMatch = vue.match(/\.tab-btn\.active\s*\{([^}]+)\}/);
+  assert.ok(tabBtnActiveMatch, ".tab-btn.active rule should exist");
+  assert.match(tabBtnActiveMatch[1], /color:\s*var\(--badge-cyan-text/);
+  assert.doesNotMatch(tabBtnActiveMatch[1], /color:\s*#67e8f9/);
 });
 
 test("SortBar.vue uses theme variables instead of hardcoded dark colors", () => {
@@ -52,7 +62,7 @@ test("SortBar.vue uses theme variables instead of hardcoded dark colors", () => 
   assert.doesNotMatch(sortSelectMatch[1], /background:\s*#202024/);
 });
 
-test("TitleBar.vue uses theme variables for brand title and window controls", () => {
+test("TitleBar.vue uses theme variables for brand title, version subtitle, and window controls", () => {
   const vue = fs.readFileSync(path.join(rootDir, "src", "components", "TitleBar.vue"), "utf-8");
 
   const brandMatch = vue.match(/\.brand-title\s*\{([^}]+)\}/);
@@ -60,7 +70,51 @@ test("TitleBar.vue uses theme variables for brand title and window controls", ()
   assert.match(brandMatch[1], /color:\s*var\(--color-text-primary\)/);
   assert.doesNotMatch(brandMatch[1], /color:\s*#f1f5f9/);
 
+  const subtitleMatch = vue.match(/\.brand-subtitle\s*\{([^}]+)\}/);
+  assert.ok(subtitleMatch, ".brand-subtitle rule should exist");
+  assert.match(subtitleMatch[1], /color:\s*var\(--badge-cyan-text/);
+  assert.doesNotMatch(subtitleMatch[1], /color:\s*#67e8f9/);
+
   const controlMatch = vue.match(/\.control-btn:hover\s*\{([^}]+)\}/);
   assert.ok(controlMatch, ".control-btn:hover rule should exist");
   assert.match(controlMatch[1], /background:\s*var\(--color-bg-hover\)/);
+});
+
+test("Core components and modals use semantic theme variables instead of hardcoded dark colors", () => {
+  // MenuBar
+  const menuBar = fs.readFileSync(path.join(rootDir, "src", "components", "MenuBar.vue"), "utf-8");
+  assert.doesNotMatch(menuBar, /background:\s*#1c1c20/);
+  assert.doesNotMatch(menuBar, /color:\s*#67e8f9/);
+  assert.match(menuBar, /background:\s*var\(--color-bg-primary\)/);
+
+  // StatusBar
+  const statusBar = fs.readFileSync(path.join(rootDir, "src", "components", "StatusBar.vue"), "utf-8");
+  assert.doesNotMatch(statusBar, /background:\s*#111114/);
+  assert.doesNotMatch(statusBar, /color:\s*#67e8f9/);
+  assert.match(statusBar, /background:\s*var\(--color-bg-primary\)/);
+
+  // VirtualGrid
+  const virtualGrid = fs.readFileSync(path.join(rootDir, "src", "components", "VirtualGrid.vue"), "utf-8");
+  assert.doesNotMatch(virtualGrid, /background:\s*#252525/);
+  assert.match(virtualGrid, /background:\s*var\(--color-bg-primary\)/);
+
+  // UpdateModal
+  const updateModal = fs.readFileSync(path.join(rootDir, "src", "components", "UpdateModal.vue"), "utf-8");
+  assert.doesNotMatch(updateModal, /background:\s*#18181c/);
+  assert.match(updateModal, /background:\s*var\(--color-bg-primary\)/);
+
+  // PromptStatsModal
+  const promptStats = fs.readFileSync(path.join(rootDir, "src", "components", "PromptStatsModal.vue"), "utf-8");
+  assert.doesNotMatch(promptStats, /background:\s*#1e1e1e/);
+  assert.match(promptStats, /background:\s*var\(--color-bg-primary\)/);
+
+  // ThumbnailDiagnosticsModal
+  const diagModal = fs.readFileSync(path.join(rootDir, "src", "components", "ThumbnailDiagnosticsModal.vue"), "utf-8");
+  assert.doesNotMatch(diagModal, /background:\s*#1e1e24/);
+  assert.match(diagModal, /background:\s*var\(--color-bg-primary\)/);
+
+  // PreviewPane
+  const previewPane = fs.readFileSync(path.join(rootDir, "src", "components", "PreviewPane.vue"), "utf-8");
+  assert.doesNotMatch(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*#1e1e1e/);
+  assert.match(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*var\(--color-bg-primary\)/);
 });

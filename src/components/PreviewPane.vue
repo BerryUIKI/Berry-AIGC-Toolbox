@@ -570,24 +570,24 @@ watch(
 .preview-dialog {
   width: 96vw;
   height: 94vh;
-  background: #1e1e1e;
-  color: #eee;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
 }
 
 .dialog-header {
   height: 52px;
   padding: 0 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #181818;
+  background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
@@ -609,7 +609,7 @@ watch(
 
 .file-counter {
   font-size: 0.8em;
-  color: #888;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -628,7 +628,7 @@ watch(
   background: transparent;
   border: none;
   font-size: 1.15rem;
-  color: #555;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 0 1px;
   line-height: 1;
@@ -658,9 +658,9 @@ watch(
 }
 
 .header-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #ccc;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 0.35rem 0.75rem;
   border-radius: 6px;
   font-size: 0.85em;
@@ -669,8 +669,8 @@ watch(
 }
 
 .header-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .header-btn.active {
@@ -788,8 +788,8 @@ watch(
 /* Inspector Sidebar */
 .inspector-sidebar {
   width: 360px;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  background: #181818;
+  border-left: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -798,7 +798,7 @@ watch(
 
 .inspector-header {
   padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -808,6 +808,7 @@ watch(
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .format-pill {
@@ -833,10 +834,10 @@ watch(
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-primary);
   padding: 0.75rem;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
 }
 
 .spec-item {
@@ -847,7 +848,7 @@ watch(
 
 .spec-label {
   font-size: 0.72em;
-  color: #888;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -855,7 +856,7 @@ watch(
 .spec-value {
   font-size: 0.85em;
   font-weight: 500;
-  color: #ddd;
+  color: var(--color-text-primary);
 }
 
 .meta-section {
@@ -874,15 +875,15 @@ watch(
   margin: 0;
   font-size: 0.8em;
   font-weight: 600;
-  color: #aaa;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .copy-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #aaa;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   font-size: 0.72em;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
@@ -897,13 +898,13 @@ watch(
 }
 
 .text-block {
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.65rem 0.75rem;
   font-size: 0.82em;
   line-height: 1.45;
-  color: #ddd;
+  color: var(--color-text-primary);
   max-height: 160px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -914,10 +915,10 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-bg-primary);
   padding: 0.75rem;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
 }
 
 .param-row {
@@ -929,12 +930,12 @@ watch(
 }
 
 .param-key {
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 .param-val {
   font-weight: 500;
-  color: #ddd;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -942,7 +943,7 @@ watch(
 }
 
 .hash-tag {
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.9em;
 }
 
@@ -954,7 +955,7 @@ watch(
 .raw-toggle-btn {
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.78em;
   cursor: pointer;
   padding: 0;
@@ -963,13 +964,13 @@ watch(
 }
 
 .raw-toggle-btn:hover {
-  color: #bbb;
+  color: var(--color-text-primary);
 }
 
 .raw-pre {
   margin: 0;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.6rem;
   font-size: 0.72em;
@@ -978,11 +979,11 @@ watch(
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;
-  color: #aaa;
+  color: var(--color-text-secondary);
 }
 
 .path-item {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-color);
   padding-top: 0.75rem;
 }
 
@@ -990,7 +991,7 @@ watch(
   font-family: monospace;
   font-size: 0.75em;
   word-break: break-all;
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 .header-btn.fav-active {
@@ -1024,7 +1025,7 @@ watch(
 }
 
 .preview-nsfw-card {
-  background: #202020;
+  background: var(--color-bg-primary);
   border: 1px solid rgba(220, 38, 38, 0.4);
   border-radius: 12px;
   padding: 1.5rem 2rem;
@@ -1086,10 +1087,10 @@ watch(
   gap: 0.35rem;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid transparent;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
   font-size: 0.78em;
-  color: #eee;
+  color: var(--color-text-primary);
 }
 
 .preview-tag-dot {
@@ -1101,7 +1102,7 @@ watch(
 .preview-tag-remove {
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--color-text-muted);
   font-size: 0.75em;
   cursor: pointer;
   padding: 0 0.1rem;
@@ -1114,7 +1115,7 @@ watch(
 
 .no-tags-text {
   font-size: 0.8em;
-  color: #666;
+  color: var(--color-text-muted);
   font-style: italic;
   margin-top: 0.2rem;
 }

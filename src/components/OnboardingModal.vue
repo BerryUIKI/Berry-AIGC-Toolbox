@@ -246,13 +246,13 @@ function skip() {
 }
 
 .modal-dialog {
-  background: #1e1e1e;
-  color: #fff;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   width: 90%;
   max-width: 580px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -266,7 +266,7 @@ function skip() {
   right: 1.2rem;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-muted);
   font-size: 1.2rem;
   cursor: pointer;
   z-index: 10;
@@ -280,27 +280,8 @@ function skip() {
 }
 
 .btn-modal-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-@media (prefers-color-scheme: light) {
-  .btn-modal-close {
-    color: rgba(0, 0, 0, 0.5);
-  }
-  .btn-modal-close:hover {
-    background: rgba(0, 0, 0, 0.08);
-    color: #000;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  .modal-dialog {
-    background: #ffffff;
-    color: #1a1a1a;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  }
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 @keyframes zoomIn {

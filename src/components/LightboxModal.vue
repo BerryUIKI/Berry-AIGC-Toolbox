@@ -1008,8 +1008,8 @@ onUnmounted(() => {
 }
 
 .v-speed-select option {
-  background: #18181b;
-  color: #f8fafc;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .workflow-btn {

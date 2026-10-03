@@ -190,11 +190,12 @@ async function onClose() {
 
 .brand-subtitle {
   font-size: 0.7rem;
+  font-weight: 600;
   padding: 1px 6px;
   border-radius: 999px;
-  background: rgba(18, 181, 203, 0.15);
-  color: #67e8f9;
-  border: 1px solid rgba(18, 181, 203, 0.3);
+  background: var(--badge-cyan-bg, rgba(18, 181, 203, 0.15));
+  color: var(--badge-cyan-text, #155e75);
+  border: 1px solid var(--badge-cyan-border, rgba(18, 181, 203, 0.3));
   flex-shrink: 0;
 }
 

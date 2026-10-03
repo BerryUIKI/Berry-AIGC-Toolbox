@@ -97,9 +97,9 @@ watch(
   overflow: hidden;
   border: 1px solid rgba(245, 158, 11, 0.38);
   border-radius: 12px;
-  background: #18181c;
-  color: #e2e8f0;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
 }
 
 .dialog-header {
@@ -107,7 +107,7 @@ watch(
   align-items: center;
   gap: 10px;
   padding: 16px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .dialog-header h3 {
@@ -145,7 +145,7 @@ watch(
   border-left: 3px solid #f59e0b;
   border-radius: 4px;
   background: rgba(245, 158, 11, 0.08);
-  color: #fde68a;
+  color: #d97706;
 }
 
 .suppress-option {
@@ -153,7 +153,7 @@ watch(
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 
@@ -166,25 +166,27 @@ watch(
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #141417;
+  border-top: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
 }
 
 .btn {
   padding: 7px 13px;
-  border: 0;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-text-primary);
   font: inherit;
   cursor: pointer;
 }
 
 .btn.secondary {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-hover);
 }
 
 .btn.warning {
   background: #d97706;
+  border-color: #d97706;
+  color: #fff;
 }
 
 .btn:focus-visible {

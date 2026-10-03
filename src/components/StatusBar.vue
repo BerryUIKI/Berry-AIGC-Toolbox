@@ -59,7 +59,7 @@ const thumbPercent = computed(() => {
     <div class="status-right">
       <!-- Thumbnail generation progress -->
       <div v-if="thumbProgress?.active && thumbProgress.total > 0 && thumbProgress.current < thumbProgress.total" class="scan-status">
-        <span class="scan-label" style="color: #67e8f9;">
+        <span class="scan-label" style="color: var(--badge-cyan-text, #155e75);">
           {{ t.statusbar.generatingThumb }} {{ thumbProgress.current }} / {{ thumbProgress.total }} ({{ thumbPercent }}%)
         </span>
         <div class="mini-progress-track">
@@ -120,14 +120,14 @@ const thumbPercent = computed(() => {
 .statusbar {
   height: 26px;
   min-height: 26px;
-  background: #111114;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--color-bg-primary);
+  border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
   font-size: 0.72rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   user-select: none;
   z-index: 90;
 }
@@ -144,11 +144,11 @@ const thumbPercent = computed(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .status-item strong {
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .dot {
@@ -171,7 +171,7 @@ const thumbPercent = computed(() => {
 }
 
 .db-indicator {
-  color: #64748b;
+  color: var(--color-text-muted);
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -185,14 +185,14 @@ const thumbPercent = computed(() => {
 }
 
 .scan-label {
-  color: #38bdf8;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 500;
 }
 
 .mini-progress-track {
   width: 80px;
   height: 6px;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-tertiary);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -225,16 +225,16 @@ const thumbPercent = computed(() => {
 }
 
 .ready-badge {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .activity-toggle-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #94a3b8;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 2px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -245,9 +245,9 @@ const thumbPercent = computed(() => {
 
 .activity-toggle-btn:hover,
 .activity-toggle-btn.active {
-  background: rgba(56, 189, 248, 0.15);
-  border-color: rgba(56, 189, 248, 0.4);
-  color: #38bdf8;
+  background: var(--badge-cyan-bg, rgba(56, 189, 248, 0.15));
+  border-color: var(--badge-cyan-border, rgba(56, 189, 248, 0.4));
+  color: var(--badge-cyan-text, #155e75);
 }
 
 .activity-dot {

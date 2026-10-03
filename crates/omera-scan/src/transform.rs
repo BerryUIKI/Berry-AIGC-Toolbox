@@ -322,7 +322,7 @@ where
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
 
-        let container = omera_metadata::detect_container(&final_path).unwrap_or(Container::Png);
+        let container = Container::from_id(&ext).unwrap_or(Container::Png);
 
         // Try extracting metadata from final path or source path
         let extracted = omera_metadata::extract_metadata(container, &final_path)
@@ -579,7 +579,7 @@ where
             .map(|d| d.as_secs() as i64)
             .unwrap_or(file.modified_at);
 
-        let container = omera_metadata::detect_container(&final_path).unwrap_or(file.container);
+        let container = Container::from_id(&ext).unwrap_or(file.container);
 
         let mut updated_file = file.clone();
         updated_file.path = final_str.clone();

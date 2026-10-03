@@ -5,6 +5,26 @@ All notable changes to the Omera project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-10-04
+
+### Theme Contrast & Design Tokens Unification, Aggregated Facet Counts & High-Load Performance Caching
+
+Version 0.4.1 is a maintenance and performance patch release fixing theme contrast issues across dark and light modes, unifying semantic design tokens, aggregating filter/tag statistics into single-pass database queries, and caching distinct metadata models and samplers to eliminate CPU overhead under heavy library load:
+
+#### 🎨 Theme Design Tokens & Contrast Unification (#177, #178)
+- **Eliminate Hardcoded Colors**: Replaced all hardcoded dark and light hex values across `SortBar.vue`, `TitleBar.vue`, `SettingsModal.vue`, `TagModal.vue`, `AlbumModal.vue`, and form controls with semantic CSS custom properties (`--color-text-primary`, `--color-text-secondary`, `--color-bg-surface`, `--color-bg-hover`, `--color-bg-card`, `--color-border-subtle`).
+- **TitleBar Version Visibility**: Resolved muted version subtitle contrast in Light mode, ensuring crisp readability across all operating systems.
+- **Select & Dropdown Contrast**: Fixed native `<option>` background and text contrast across custom select inputs in light mode to prevent unreadable white-on-white text.
+- **Automated Theme Regression Test**: Added comprehensive theme contrast tests in `tests/theme-contrast.test.mjs` verifying design token adherence across all components.
+
+#### ⚡ High-Load Facet Aggregation & In-Memory Caching (#180)
+- **Single-Query Library Summary Counts**: Replaced separate queries with a unified SQLite query calculating total files, favorites, and NSFW flags simultaneously (`SELECT COUNT(*), COALESCE(SUM(is_favorite), 0), COALESCE(SUM(is_nsfw), 0) FROM files`), cutting startup and navigation IPC latency.
+- **Aggregated Tag Counts**: Replaced potential N+1 tag frequency lookups with an indexed `GROUP BY tag_id` aggregation (`get_tag_counts`), directly displaying counts on Sidebar and TagModal chips.
+- **Distinct Models & Samplers Facet Cache**: Added thread-safe `RwLock` in-memory caching for `list_distinct_models` and `list_distinct_samplers`, eliminating repetitive full-table JSON parsing across 50,000+ files on repeated drawer opens. Cache is automatically invalidated upon folder scan completion.
+- **Sidebar & Tag Badges**: Added live count badges for Favorites and Sensitive navigation items, as well as file count indicators on tag chips.
+
+---
+
 ## [0.4.0] - 2026-10-03
 
 ### Omera Identity Transition, Single-Instance Lifecycle, Hardened Security & Verified Transformations

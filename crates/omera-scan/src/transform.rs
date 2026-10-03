@@ -333,7 +333,7 @@ where
             .map(omera_metadata::detect_nsfw_from_metadata)
             .unwrap_or(false);
 
-        let mut image_file = omera_domain::ImageFile {
+        let image_file = omera_domain::ImageFile {
             id: None,
             folder_id: target_folder.id,
             path: final_str.clone(),

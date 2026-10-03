@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>();
 
 const tags = ref<Tag[]>([]);
+const tagCounts = ref<Record<number, number>>({});
 const loading = ref(false);
 const error = ref("");
 
@@ -41,7 +42,12 @@ async function loadTags() {
   loading.value = true;
   error.value = "";
   try {
-    tags.value = await invoke<Tag[]>("list_tags");
+    const [fetchedTags, counts] = await Promise.all([
+      invoke<Tag[]>("list_tags"),
+      invoke<Record<number, number>>("get_tag_counts"),
+    ]);
+    tags.value = fetchedTags;
+    tagCounts.value = counts;
   } catch (e) {
     error.value = String(e);
   } finally {
@@ -193,6 +199,7 @@ async function onApplyTag(tag: Tag) {
               :style="{ backgroundColor: tag.color || '#3b82f6' }"
             />
             <span class="tag-label">{{ tag.name }}</span>
+            <span v-if="tagCounts[tag.id]" class="tag-count-badge">{{ tagCounts[tag.id] }}</span>
             <button
               v-if="!fileIds || fileIds.length === 0"
               type="button"
@@ -454,6 +461,15 @@ async function onApplyTag(tag: Tag) {
 
 .tag-label {
   font-weight: 500;
+}
+
+.tag-count-badge {
+  font-size: 0.75em;
+  opacity: 0.65;
+  background: rgba(128, 128, 128, 0.18);
+  padding: 0.1em 0.4em;
+  border-radius: 999px;
+  line-height: 1.2;
 }
 
 .tag-delete-btn {

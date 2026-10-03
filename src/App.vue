@@ -91,6 +91,7 @@ const folders = ref<Folder[]>([]);
 const libraryCounts = ref<LibraryCounts | null>(null);
 const albums = ref<Album[]>([]);
 const albumCounts = ref<Record<number, number>>({});
+const tagCounts = ref<Record<number, number>>({});
 const tags = ref<Tag[]>([]);
 const activeTarget = ref<NavTarget>({ type: "all" });
 const files = shallowRef<ImageFile[]>([]);
@@ -720,14 +721,16 @@ async function reloadFiltersMeta() {
 
 async function loadAlbumsAndTags() {
   try {
-    const [fetchedAlbums, counts, fetchedTags] = await Promise.all([
+    const [fetchedAlbums, counts, fetchedTags, fetchedTagCounts] = await Promise.all([
       invoke<Album[]>("list_albums"),
       invoke<Record<number, number>>("get_album_counts"),
       invoke<Tag[]>("list_tags"),
+      invoke<Record<number, number>>("get_tag_counts"),
     ]);
     albums.value = fetchedAlbums;
     albumCounts.value = counts;
     tags.value = fetchedTags;
+    tagCounts.value = fetchedTagCounts;
   } catch (e) {
     console.error("Failed to load albums/tags:", e);
   }
@@ -2054,6 +2057,7 @@ function onResetZoom() {
         :albums="albums"
         :album-counts="albumCounts"
         :tags="tags"
+        :tag-counts="tagCounts"
         :active-target="activeTarget"
         :progress="progress"
         @folder-added="onFolderAdded"

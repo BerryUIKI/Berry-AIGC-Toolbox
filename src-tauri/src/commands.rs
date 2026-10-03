@@ -7,7 +7,19 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, MutexGuard};
+use std::sync::{Arc, MutexGuard, RwLock};
+
+static MODEL_CACHE_FACETS: RwLock<Option<Vec<String>>> = RwLock::new(None);
+static SAMPLER_CACHE_FACETS: RwLock<Option<Vec<String>>> = RwLock::new(None);
+
+pub fn invalidate_facet_cache() {
+    if let Ok(mut lock) = MODEL_CACHE_FACETS.write() {
+        *lock = None;
+    }
+    if let Ok(mut lock) = SAMPLER_CACHE_FACETS.write() {
+        *lock = None;
+    }
+}
 
 use omera_clip::{ClipEngine, ClipModelInfo};
 use omera_domain::{
@@ -542,17 +554,35 @@ pub fn get_filtered_stack_members(
 /// List distinct model names present in indexed metadata.
 #[tauri::command]
 pub fn list_distinct_models(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    db(&state)?
+    if let Ok(guard) = MODEL_CACHE_FACETS.read() {
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
+        }
+    }
+    let models = db(&state)?
         .list_distinct_models()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if let Ok(mut guard) = MODEL_CACHE_FACETS.write() {
+        *guard = Some(models.clone());
+    }
+    Ok(models)
 }
 
 /// List distinct sampler names present in indexed metadata.
 #[tauri::command]
 pub fn list_distinct_samplers(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    db(&state)?
+    if let Ok(guard) = SAMPLER_CACHE_FACETS.read() {
+        if let Some(cached) = guard.as_ref() {
+            return Ok(cached.clone());
+        }
+    }
+    let samplers = db(&state)?
         .list_distinct_samplers()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    if let Ok(mut guard) = SAMPLER_CACHE_FACETS.write() {
+        *guard = Some(samplers.clone());
+    }
+    Ok(samplers)
 }
 
 /// Update user rating (1–10, or null to clear) for an image file.
@@ -937,6 +967,12 @@ pub fn untag_files(
         .map_err(|e| e.to_string())
 }
 
+/// Get file counts grouped by tag ID.
+#[tauri::command]
+pub fn get_tag_counts(state: State<'_, AppState>) -> Result<HashMap<i64, i64>, String> {
+    db(&state)?.tag_counts().map_err(|e| e.to_string())
+}
+
 /// Get tags attached to a file.
 #[tauri::command]
 pub fn get_file_tags(file_id: i64, state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
@@ -1025,15 +1061,22 @@ pub fn get_prompt_stats(
 pub struct LibraryCounts {
     pub total: i64,
     pub folders: HashMap<i64, i64>,
+    pub favorites: i64,
+    pub nsfw: i64,
 }
 
 /// Get file counts per folder plus total indexed files across all folders.
 #[tauri::command]
 pub fn get_library_counts(state: State<'_, AppState>) -> Result<LibraryCounts, String> {
     let db = db(&state)?;
-    let total = db.count_all_files().map_err(|e| e.to_string())?;
+    let (total, favorites, nsfw) = db.get_library_summary_counts().map_err(|e| e.to_string())?;
     let folders = db.get_folder_file_counts().map_err(|e| e.to_string())?;
-    Ok(LibraryCounts { total, folders })
+    Ok(LibraryCounts {
+        total,
+        folders,
+        favorites,
+        nsfw,
+    })
 }
 
 /// Scan a folder on a blocking thread, emitting `scan-progress` events as it
@@ -1093,7 +1136,7 @@ async fn run_scan(
     } else {
         Scanner::with_default_extractor(db_path)
     };
-    tauri::async_runtime::spawn_blocking(move || {
+    let stats = tauri::async_runtime::spawn_blocking(move || {
         scanner
             .scan_folder(folder_id, Path::new(&root), |progress| {
                 let _ = app.emit("scan-progress", progress);
@@ -1101,7 +1144,10 @@ async fn run_scan(
             .map_err(|e| e.to_string())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+
+    invalidate_facet_cache();
+    Ok(stats)
 }
 
 // --- Checkpoints and Model Cache ---

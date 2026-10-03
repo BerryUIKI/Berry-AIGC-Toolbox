@@ -108,8 +108,7 @@ Progress-event coalescing and streaming full-folder traversal are complete. Comp
 
 - [Completed] Split infrequent modal bundles with dynamic imports.
 - [Phase 1 complete] Exclude raw workflow payloads from gallery pages and fetch complete metadata on selection.
-- [Empirically Evaluated] A dedicated gallery DTO would only save ~80 KB per 400-item page (less than 2 ms transfer over localhost IPC). Retaining the current projected `ImageFile` is optimal and avoids duplicating schema types.
-- Move expensive filter aggregation to indexed SQL and cache stable facet counts.
+- [Completed] Move expensive filter aggregation to indexed SQL and cache stable facet counts. Aggregated library counts (total, favorites, sensitive) evaluate in a single query; tag occurrences are fetched via single-pass grouped SQL; distinct models/samplers facets use thread-safe in-memory caching invalidated on scan/mutation.
 - [Completed] Audit object URL and decoded-image lifetime after long browsing sessions. Memory cache strictly bounded to 3,000 LRU entries, batch keys capped at 5,000 items, and unmounted event listeners cleaned up.
 
 

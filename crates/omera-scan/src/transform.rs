@@ -314,7 +314,7 @@ where
         // Register published file in database
         let final_str = final_path.to_string_lossy().into_owned();
         let final_meta = fs::metadata(&final_path);
-        let size_bytes = final_meta.as_ref().map(|m| m.len() as i64).unwrap_or(0);
+        let size_bytes = final_meta.as_ref().map(|m| m.len()).unwrap_or(0);
         let modified_at = final_meta
             .and_then(|m| m.modified())
             .ok()
@@ -322,11 +322,11 @@ where
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
 
-        let container = Container::from_path(&final_path).unwrap_or(Container::Png);
+        let container = omera_metadata::detect_container(&final_path).unwrap_or(Container::Png);
 
         // Try extracting metadata from final path or source path
-        let extracted = omera_metadata::extract_metadata(&final_path)
-            .or_else(|| omera_metadata::extract_metadata(src_path));
+        let extracted = omera_metadata::extract_metadata(container, &final_path)
+            .or_else(|| omera_metadata::extract_metadata(container, src_path));
 
         let is_nsfw = extracted
             .as_ref()
@@ -337,18 +337,16 @@ where
             id: None,
             folder_id: target_folder.id,
             path: final_str.clone(),
-            container,
             size_bytes,
             modified_at,
+            container,
             metadata: extracted,
-            indexed_at: chrono::Utc::now().to_rfc3339(),
             rating: None,
             aesthetic_score: None,
             is_favorite: false,
             is_nsfw,
             stack_id: None,
             stack_order: 0,
-            version: 1,
         };
 
         if let Err(e) = db.upsert_file(&image_file) {
@@ -572,7 +570,7 @@ where
         let final_meta = fs::metadata(&final_path);
         let size_bytes = final_meta
             .as_ref()
-            .map(|m| m.len() as i64)
+            .map(|m| m.len())
             .unwrap_or(file.size_bytes);
         let modified_at = final_meta
             .and_then(|m| m.modified())
@@ -581,14 +579,13 @@ where
             .map(|d| d.as_secs() as i64)
             .unwrap_or(file.modified_at);
 
-        let container = Container::from_path(&final_path).unwrap_or(file.container);
+        let container = omera_metadata::detect_container(&final_path).unwrap_or(file.container);
 
         let mut updated_file = file.clone();
         updated_file.path = final_str.clone();
         updated_file.container = container;
         updated_file.size_bytes = size_bytes;
         updated_file.modified_at = modified_at;
-        updated_file.version += 1;
 
         if let Err(e) = db.upsert_file(&updated_file) {
             failed += 1;

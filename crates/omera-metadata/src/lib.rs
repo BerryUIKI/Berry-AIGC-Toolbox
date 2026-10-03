@@ -208,6 +208,8 @@ fn from_parameters(parameters: String) -> ExtractedMetadata {
         fps: None,
         video_codec: None,
     }
+}
+
 /// Inspect metadata prompt, raw text, or parameters to auto-detect adult / NSFW content.
 pub fn detect_nsfw_from_metadata(meta: &ExtractedMetadata) -> bool {
     const EXACT_KEYWORDS: &[&str] = &[

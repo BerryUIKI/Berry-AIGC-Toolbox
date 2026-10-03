@@ -54,6 +54,8 @@ export type SortDirection = "asc" | "desc";
 export interface LibraryCounts {
   total: number;
   folders: Record<number, number>;
+  favorites?: number;
+  nsfw?: number;
 }
 
 export interface ImageFile {

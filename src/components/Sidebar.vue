@@ -11,6 +11,7 @@ const props = defineProps<{
   albums?: Album[];
   albumCounts?: Record<number, number>;
   tags?: Tag[];
+  tagCounts?: Record<number, number>;
   activeTarget: NavTarget;
   progress: ScanProgress | null;
   collapsed?: boolean;
@@ -308,6 +309,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           >
             <span class="item-icon star-icon">★</span>
             <span class="item-label">{{ t.nav.favorites }}</span>
+            <span v-if="counts?.favorites !== undefined" class="item-badge">{{ counts.favorites }}</span>
           </li>
           <li
             class="nav-item"
@@ -316,6 +318,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
           >
             <span class="item-icon nsfw-icon">🔞</span>
             <span class="item-label">{{ t.nav.sensitive }}</span>
+            <span v-if="counts?.nsfw !== undefined" class="item-badge">{{ counts.nsfw }}</span>
           </li>
         </ul>
       </section>
@@ -485,6 +488,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               :style="{ backgroundColor: tag.color || '#8b5cf6' }"
             ></span>
             <span class="tag-name">{{ tag.name }}</span>
+            <span v-if="tagCounts?.[tag.id]" class="tag-count">{{ tagCounts[tag.id] }}</span>
           </div>
           <p v-if="!tags || tags.length === 0" class="empty-hint">
             {{ t.nav.noTags }}
@@ -796,6 +800,12 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+.tag-count {
+  font-size: 0.68rem;
+  opacity: 0.7;
+  margin-left: 2px;
 }
 
 .empty-hint {

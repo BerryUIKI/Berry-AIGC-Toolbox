@@ -141,3 +141,59 @@ test("simulates refresh scheduling scoping logic under single and multi-folder m
   // 6. General event with unknown folders (empty set) -> affected
   assert.equal(computeAffects({ type: "folder", folderId: 2 }, new Set()), true);
 });
+
+test("Tauri backend and frontend use aggregated get_tag_counts and fast get_library_summary_counts", async () => {
+  const libSource = await fs.readFile(new URL("../src-tauri/src/lib.rs", import.meta.url), "utf8");
+  const commandsSource = await fs.readFile(new URL("../src-tauri/src/commands.rs", import.meta.url), "utf8");
+  const appSource = await fs.readFile(new URL("../src/App.vue", import.meta.url), "utf8");
+  const tagModalSource = await fs.readFile(new URL("../src/components/TagModal.vue", import.meta.url), "utf8");
+  const storageDbSource = await fs.readFile(new URL("../crates/omera-storage/src/db.rs", import.meta.url), "utf8");
+
+  // Backend command definition and registration
+  assert.match(
+    commandsSource,
+    /pub fn get_tag_counts/,
+    "get_tag_counts command defined in commands.rs",
+  );
+  assert.match(
+    libSource,
+    /commands::get_tag_counts/,
+    "get_tag_counts registered in invoke_handler in lib.rs",
+  );
+
+  // Storage single-pass summary queries
+  assert.match(
+    storageDbSource,
+    /pub fn get_library_summary_counts/,
+    "get_library_summary_counts defined in storage db.rs",
+  );
+  assert.match(
+    storageDbSource,
+    /pub fn tag_counts/,
+    "tag_counts aggregation defined in storage db.rs",
+  );
+
+  // Caching for model & sampler facets
+  assert.match(
+    commandsSource,
+    /MODEL_CACHE_FACETS/,
+    "commands.rs caches model facets in memory",
+  );
+  assert.match(
+    commandsSource,
+    /SAMPLER_CACHE_FACETS/,
+    "commands.rs caches sampler facets in memory",
+  );
+
+  // Frontend invokes get_tag_counts in batch
+  assert.match(
+    appSource,
+    /invoke<Record<number, number>>\("get_tag_counts"\)/,
+    "App.vue invokes aggregated get_tag_counts",
+  );
+  assert.match(
+    tagModalSource,
+    /invoke<Record<number, number>>\("get_tag_counts"\)/,
+    "TagModal.vue invokes aggregated get_tag_counts",
+  );
+});

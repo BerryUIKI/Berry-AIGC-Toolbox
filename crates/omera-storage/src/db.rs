@@ -1360,6 +1360,20 @@ impl Database {
         Ok(count)
     }
 
+    /// Return summary library counts (total, favorites, nsfw) in a single fast query.
+    pub fn get_library_summary_counts(&self) -> Result<(i64, i64, i64), DatabaseError> {
+        let (total, favorites, nsfw) = self.conn.query_row(
+            "SELECT 
+                COUNT(*), 
+                COALESCE(SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END), 0), 
+                COALESCE(SUM(CASE WHEN is_nsfw = 1 THEN 1 ELSE 0 END), 0) 
+             FROM files",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        Ok((total, favorites, nsfw))
+    }
+
     /// Counts of indexed files per folder.
     pub fn get_folder_file_counts(&self) -> Result<HashMap<i64, i64>, DatabaseError> {
         let mut stmt = self
@@ -1721,6 +1735,17 @@ impl Database {
             ..Default::default()
         };
         self.search_files(&criteria)
+    }
+
+    /// Return file counts grouped by tag ID in a single aggregated query.
+    pub fn tag_counts(&self) -> Result<HashMap<i64, i64>, DatabaseError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT tag_id, count(*) FROM file_tags GROUP BY tag_id")?;
+        let counts = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<HashMap<_, _>, _>>()?;
+        Ok(counts)
     }
 
     // --- Favorites and NSFW ---
@@ -4183,6 +4208,10 @@ mod tests {
         db.tag_file(id1, tag1.id).unwrap();
         db.tag_files(&[id1, id2], tag2.id).unwrap();
 
+        let tag_counts = db.tag_counts().unwrap();
+        assert_eq!(tag_counts.get(&tag1.id).copied(), Some(1));
+        assert_eq!(tag_counts.get(&tag2.id).copied(), Some(2));
+
         let id1_tags = db.get_file_tags(id1).unwrap();
         assert_eq!(id1_tags.len(), 2);
 
@@ -4226,6 +4255,11 @@ mod tests {
 
         // Set NSFW
         db.set_file_nsfw(id3, true).unwrap();
+        let (total, favs_count, nsfw_count) = db.get_library_summary_counts().unwrap();
+        assert_eq!(total, 3);
+        assert_eq!(favs_count, 3);
+        assert_eq!(nsfw_count, 1);
+
         let nsfw_files = db
             .search_files(&SearchCriteria {
                 is_nsfw: Some(true),

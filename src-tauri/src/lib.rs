@@ -175,6 +175,7 @@ pub fn run() {
             commands::tag_files,
             commands::untag_file,
             commands::untag_files,
+            commands::get_tag_counts,
             commands::get_file_tags,
             commands::list_files_by_tag,
             commands::set_file_favorite,

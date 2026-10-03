@@ -222,27 +222,18 @@ async function onApplyTag(tag: Tag) {
 }
 
 .modal-dialog {
-  background: #1e1e1e;
-  color: #fff;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   width: 90%;
   max-width: 440px;
   max-height: 80vh;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   animation: zoomIn 0.15s ease-out;
-}
-
-@media (prefers-color-scheme: light) {
-  .modal-dialog {
-    background: #ffffff;
-    color: #1a1a1a;
-    border: 1px solid rgba(0, 0, 0, 0.15);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
-  }
 }
 
 @keyframes zoomIn {

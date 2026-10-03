@@ -432,20 +432,20 @@ function size(meta: ImageFile["metadata"]): string {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #18181c;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-primary);
+  box-shadow: 0 1px 0 var(--border-color);
 }
 
 .table th,
 .table td {
   text-align: left;
   padding: 0.4rem 0.6rem;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
 }
 
 .table th {
-  color: #888;
+  color: var(--color-text-muted);
   font-weight: 600;
   font-size: 0.8em;
   text-transform: uppercase;

@@ -329,14 +329,14 @@ onUnmounted(() => {
 }
 
 .modal-dialog {
-  background: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 580px;
   max-width: 90vw;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 
@@ -345,7 +345,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title {
@@ -358,7 +358,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .title-icon {
@@ -368,7 +368,7 @@ onUnmounted(() => {
 .close-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 4px;
@@ -376,8 +376,8 @@ onUnmounted(() => {
 }
 
 .close-btn:hover {
-  color: #f1f5f9;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -390,8 +390,8 @@ onUnmounted(() => {
 }
 
 .section-card {
-  background: #202024;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 14px 16px;
   display: flex;
@@ -402,7 +402,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #a1a1aa;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }

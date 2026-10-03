@@ -2888,7 +2888,7 @@ function onResetZoom() {
 
 .similarity-threshold-val {
   font-weight: 700;
-  color: #38bdf8;
+  color: var(--badge-cyan-text, #155e75);
   min-width: 40px;
 }
 

@@ -418,20 +418,20 @@ watch(
   margin: 0;
   font-size: 17px;
   font-weight: 600;
-  color: var(--text-title, #ffffff);
+  color: var(--color-text-primary);
 }
 
 .drawer-subtitle {
   margin: 2px 0 0;
   font-size: 12px;
-  color: var(--text-muted, #8e8e93);
+  color: var(--color-text-muted);
 }
 
 .btn-close {
   background: transparent;
   border: none;
   font-size: 18px;
-  color: var(--text-muted, #8e8e93);
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 6px 10px;
   border-radius: 6px;
@@ -439,34 +439,34 @@ watch(
 }
 
 .btn-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .drawer-search-bar {
   position: relative;
   padding: 10px 20px;
-  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--color-bg-secondary);
 }
 
 .search-icon {
   position: absolute;
   left: 30px;
   font-size: 14px;
-  color: var(--text-muted, #8e8e93);
+  color: var(--color-text-muted);
   pointer-events: none;
 }
 
 .drawer-search-input {
   width: 100%;
   padding: 8px 32px 8px 34px;
-  background: var(--bg-input, #141418);
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: #fff;
+  color: var(--color-text-primary);
   font-size: 13px;
   outline: none;
   transition: border-color 0.12s;
@@ -523,7 +523,7 @@ watch(
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--text-main, #d0d0d0);
+  color: var(--color-text-secondary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
@@ -531,8 +531,8 @@ watch(
 }
 
 .topic-button:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .topic-button.active {
@@ -564,7 +564,7 @@ watch(
 .empty-search {
   padding: 20px 10px;
   text-align: center;
-  color: var(--text-muted, #8e8e93);
+  color: var(--color-text-muted);
   font-size: 12px;
 }
 
@@ -588,29 +588,29 @@ watch(
   margin: 0 0 10px;
   font-size: 22px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .article-summary {
   font-size: 14px;
-  color: var(--text-muted, #a0a0a8);
+  color: var(--color-text-muted);
   line-height: 1.5;
   margin: 0 0 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-bottom: 1px solid var(--border-color);
 }
 
 .article-paragraph {
   font-size: 14px;
   line-height: 1.65;
-  color: var(--text-main, #d8d8de);
+  color: var(--color-text-secondary);
   margin-bottom: 14px;
 }
 
 .shortcuts-section {
   margin-top: 24px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 16px;
 }
@@ -619,7 +619,7 @@ watch(
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .shortcut-matrix {
@@ -639,18 +639,18 @@ watch(
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11px;
   font-weight: 600;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--border-color-strong);
   padding: 2px 7px;
   border-radius: 4px;
-  color: #fff;
+  color: var(--color-text-primary);
   min-width: 48px;
   text-align: center;
 }
 
 .shortcut-desc {
-  color: var(--text-muted, #b0b0b8);
+  color: var(--color-text-secondary);
 }
 
 .pro-tips-card {
@@ -673,7 +673,7 @@ watch(
   padding-left: 18px;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-main, #d8d8de);
+  color: var(--color-text-secondary);
 }
 
 .drawer-footer {
@@ -681,17 +681,18 @@ watch(
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
-  background: var(--bg-footer, rgba(0, 0, 0, 0.2));
+  border-top: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
 }
 
 .footer-hint {
   font-size: 12px;
-  color: var(--text-muted, #7c7c82);
+  color: var(--color-text-muted);
 }
 
 .kbd-hint {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -702,16 +703,16 @@ watch(
   font-size: 13px;
   cursor: pointer;
   font-weight: 500;
-  border: none;
+  border: 1px solid var(--border-color);
   transition: all 0.12s;
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--color-bg-active);
 }
 </style>

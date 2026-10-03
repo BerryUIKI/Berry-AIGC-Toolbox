@@ -276,7 +276,7 @@ const formattedLastReconcile = computed(() => {
 .action-link {
   background: transparent;
   border: none;
-  color: #38bdf8;
+  color: var(--badge-cyan-text, #155e75);
   font-size: 0.72rem;
   cursor: pointer;
   padding: 0;

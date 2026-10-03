@@ -195,13 +195,13 @@ onUnmounted(() => {
 .diag-dialog {
   width: min(720px, 94vw);
   max-height: 85vh;
-  background: #1e1e24;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
-  color: #e2e8f0;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  color: var(--color-text-primary);
   font-family: inherit;
   overflow: hidden;
 }
@@ -211,7 +211,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .diag-title-area {
@@ -224,7 +224,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .diag-badge {
@@ -241,7 +241,7 @@ onUnmounted(() => {
 .close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 4px;
@@ -249,8 +249,8 @@ onUnmounted(() => {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .diag-body {
@@ -271,7 +271,7 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -283,8 +283,8 @@ onUnmounted(() => {
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
   display: flex;
@@ -294,13 +294,13 @@ onUnmounted(() => {
 
 .metric-label {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .metric-val {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .metric-val.running { color: #38bdf8; }
@@ -312,8 +312,8 @@ onUnmounted(() => {
 
 .diag-footer {
   padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.2);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -326,9 +326,9 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -337,7 +337,7 @@ onUnmounted(() => {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-active);
 }
 
 .action-btn:disabled {

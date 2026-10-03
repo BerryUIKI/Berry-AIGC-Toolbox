@@ -608,12 +608,12 @@ function injectPrompt(lora: LoraModel) {
 .search-input {
   width: 100%;
   box-sizing: border-box;
-  background: #141418;
-  border: 1px solid var(--border-color, #333);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 7px 10px 7px 32px;
   font-size: 0.85rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .search-input:focus {
@@ -732,12 +732,12 @@ function injectPrompt(lora: LoraModel) {
 
 .input-field,
 .textarea-field {
-  background: #181820;
-  border: 1px solid #3a3a4a;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 7px 10px;
   font-size: 0.85rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .input-field:focus,
@@ -900,9 +900,9 @@ function injectPrompt(lora: LoraModel) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #181822;
-  border: 1px solid #38384a;
-  color: #e2e8f0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 3px 8px;
   border-radius: 5px;
   font-size: 0.8rem;
@@ -911,7 +911,7 @@ function injectPrompt(lora: LoraModel) {
 }
 
 .trigger-chip:hover {
-  background: #252538;
+  background: var(--color-bg-hover);
   border-color: #ec4899;
   color: #f472b6;
 }
@@ -930,13 +930,13 @@ function injectPrompt(lora: LoraModel) {
   gap: 8px;
   margin-top: 2px;
   padding-top: 8px;
-  border-top: 1px solid #2e2e3c;
+  border-top: 1px solid var(--border-color);
 }
 
 .footer-action-btn {
-  background: #1a1a24;
-  border: 1px solid #333342;
-  color: #bbb;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 4px 10px;
   border-radius: 4px;
   font-size: 0.78rem;
@@ -945,9 +945,9 @@ function injectPrompt(lora: LoraModel) {
 }
 
 .footer-action-btn:hover {
-  background: #282836;
-  color: #fff;
-  border-color: #4a4a5e;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--border-color-strong);
 }
 
 .footer-action-btn.highlight {

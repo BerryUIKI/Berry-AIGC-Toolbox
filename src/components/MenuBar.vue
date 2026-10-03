@@ -407,7 +407,7 @@ onUnmounted(() => {
 .menu-trigger {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   padding: 3px 8px;
   border-radius: 4px;
   cursor: pointer;
@@ -420,18 +420,18 @@ onUnmounted(() => {
 
 .menu-trigger:hover,
 .menu-item.open .menu-trigger {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .dropdown-menu {
   position: absolute;
   top: 100%;
   left: 0;
-  background: #1c1c20;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
   min-width: 190px;
   padding: 4px 0;
   z-index: 1001;
@@ -447,7 +447,7 @@ onUnmounted(() => {
   padding: 6px 12px;
   background: transparent;
   border: none;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   font-size: 0.74rem;
   font-family: inherit;
   cursor: pointer;
@@ -458,15 +458,15 @@ onUnmounted(() => {
 }
 
 .dropdown-item:hover {
-  background: rgba(18, 181, 203, 0.2);
-  color: #ffffff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .dropdown-item:disabled {
   cursor: default;
   opacity: 0.45;
   background: transparent;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .dropdown-item.danger:hover {
@@ -490,14 +490,14 @@ onUnmounted(() => {
 
 .item-key {
   font-size: 0.68rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   margin-left: 12px;
   flex-shrink: 0;
 }
 
 .menu-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--border-color);
   margin: 4px 0;
 }
 
@@ -513,17 +513,17 @@ onUnmounted(() => {
 
 .submenu-arrow {
   font-size: 0.6rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .dropdown-submenu {
   position: absolute;
   top: 0;
   left: 100%;
-  background: #1c1c20;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
   min-width: 175px;
   padding: 4px 0;
   z-index: 1002;
@@ -538,7 +538,7 @@ onUnmounted(() => {
 .check-icon {
   width: 14px;
   font-size: 0.72rem;
-  color: #12b5cb;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -546,7 +546,7 @@ onUnmounted(() => {
 }
 
 .dropdown-item.selected {
-  color: #67e8f9;
+  color: var(--badge-cyan-text, #155e75);
   font-weight: 600;
 }
 </style>

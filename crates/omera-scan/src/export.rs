@@ -289,11 +289,10 @@ pub fn process_single_image(
                     m.raw = None;
                     serde_json::to_string_pretty(&m).ok()
                 }
-                MetadataPrivacyMode::KeepAll => {
-                    file.metadata
-                        .as_ref()
-                        .and_then(|m| serde_json::to_string_pretty(m).ok())
-                }
+                MetadataPrivacyMode::KeepAll => file
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| serde_json::to_string_pretty(m).ok()),
             };
             json_str.map(|s| {
                 let sidecar_filename = format!("{base_stem}.json");
@@ -492,9 +491,12 @@ where
                     if let Some(ref mut zip) = zip_writer {
                         use std::io::Write;
                         if let Err(e) = zip.start_file(&final_image_filename, zip_options) {
-                            errors.push(format!("Failed to add {final_image_filename} to zip: {e}"));
+                            errors
+                                .push(format!("Failed to add {final_image_filename} to zip: {e}"));
                         } else if let Err(e) = zip.write_all(&item.image_bytes) {
-                            errors.push(format!("Failed to write {final_image_filename} to zip: {e}"));
+                            errors.push(format!(
+                                "Failed to write {final_image_filename} to zip: {e}"
+                            ));
                         } else {
                             total_bytes_written += image_len;
                             write_success = true;

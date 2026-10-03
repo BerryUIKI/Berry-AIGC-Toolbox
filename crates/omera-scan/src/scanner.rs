@@ -1088,7 +1088,10 @@ mod tests {
             .scan_folder(folder.id, &env.images, |_| {})
             .unwrap();
         let rescanned = db.get_file_by_id(fid).unwrap().unwrap();
-        assert!(!rescanned.is_nsfw, "Rescan must preserve user manual override!");
+        assert!(
+            !rescanned.is_nsfw,
+            "Rescan must preserve user manual override!"
+        );
 
         drop(db);
         std::fs::remove_dir_all(&env.dir).unwrap();

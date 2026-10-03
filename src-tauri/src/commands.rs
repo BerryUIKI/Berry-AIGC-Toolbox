@@ -2104,9 +2104,9 @@ pub async fn auto_tag_file(
 
         let predictions = {
             let guard = tagger_guard(&state)?;
-            let tagger = guard
-                .as_ref()
-                .ok_or_else(|| "No WD14 tagger model loaded. Please load a model first.".to_string())?;
+            let tagger = guard.as_ref().ok_or_else(|| {
+                "No WD14 tagger model loaded. Please load a model first.".to_string()
+            })?;
             tagger
                 .predict_file(Path::new(&file.path), &config)
                 .map_err(|e| e.to_string())?
@@ -3861,11 +3861,9 @@ pub async fn cloud_backup_create_snapshot(
 pub async fn cloud_backup_list_snapshots(
     config: omera_domain::CloudBackupConfig,
 ) -> Result<Vec<omera_domain::CloudSnapshotMeta>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::cloud_backup::list_cloud_snapshots(&config)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || crate::cloud_backup::list_cloud_snapshots(&config))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Restore a cloud snapshot into the active SQLite database.

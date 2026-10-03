@@ -201,17 +201,31 @@ where
         .map_err(|e| e.to_string())?
         .into_iter()
         .find(|f| f.id == request.managed_destination_id)
-        .ok_or_else(|| format!("Target managed folder {} not found", request.managed_destination_id))?;
+        .ok_or_else(|| {
+            format!(
+                "Target managed folder {} not found",
+                request.managed_destination_id
+            )
+        })?;
 
     let dest_dir = PathBuf::from(&target_folder.path);
     if !dest_dir.is_dir() {
-        return Err(format!("Managed destination directory does not exist: {}", target_folder.path));
+        return Err(format!(
+            "Managed destination directory does not exist: {}",
+            target_folder.path
+        ));
     }
 
     let staging_dir = dest_dir.join(".omera_staging");
     let _ = fs::create_dir_all(&staging_dir);
 
-    let job_id = format!("import_tx_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+    let job_id = format!(
+        "import_tx_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
     let mut items = Vec::new();
     let mut succeeded = 0;
     let mut failed = 0;
@@ -220,13 +234,19 @@ where
 
     for (index, src_str) in request.source_paths.iter().enumerate() {
         let src_path = Path::new(src_str);
-        let src_name = src_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
+        let src_name = src_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
 
         if let Some(ref cb) = progress_callback {
             cb(index + 1, total, src_name);
         }
 
-        let file_stem = src_path.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
+        let file_stem = src_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("image");
         let ext = resolve_extension(src_path, request.spec.format);
 
         // Stage and verify
@@ -247,7 +267,8 @@ where
         };
 
         // Resolve publication path
-        let final_path_res = resolve_publication_path(&dest_dir, file_stem, &ext, request.spec.collision_policy);
+        let final_path_res =
+            resolve_publication_path(&dest_dir, file_stem, &ext, request.spec.collision_policy);
         let final_path = match final_path_res {
             Ok(p) => p,
             Err(TransformError::DestinationExistsSkipped) => {
@@ -377,7 +398,13 @@ where
     F: Fn(usize, usize, &str) + Send + Sync,
 {
     let folders = db.list_folders().map_err(|e| e.to_string())?;
-    let job_id = format!("lib_tx_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());
+    let job_id = format!(
+        "lib_tx_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
     let mut items = Vec::new();
     let mut succeeded = 0;
     let mut failed = 0;
@@ -463,9 +490,13 @@ where
             }
         };
 
-        let file_stem = src_path.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
+        let file_stem = src_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("image");
         let ext = resolve_extension(&src_path, request.spec.format);
-        let final_path_res = resolve_publication_path(parent_dir, file_stem, &ext, request.spec.collision_policy);
+        let final_path_res =
+            resolve_publication_path(parent_dir, file_stem, &ext, request.spec.collision_policy);
         let final_path = match final_path_res {
             Ok(p) => p,
             Err(TransformError::DestinationExistsSkipped) => {
@@ -539,7 +570,10 @@ where
 
         // Update database record with new metadata while keeping user ratings, albums, tags, stacks
         let final_meta = fs::metadata(&final_path);
-        let size_bytes = final_meta.as_ref().map(|m| m.len() as i64).unwrap_or(file.size_bytes);
+        let size_bytes = final_meta
+            .as_ref()
+            .map(|m| m.len() as i64)
+            .unwrap_or(file.size_bytes);
         let modified_at = final_meta
             .and_then(|m| m.modified())
             .ok()
@@ -636,11 +670,21 @@ mod tests {
         File::create(&existing).unwrap();
 
         // Skip returns error
-        let skip_res = resolve_publication_path(dir.path(), "sample", "jpg", TransformCollisionPolicy::Skip);
-        assert!(matches!(skip_res, Err(TransformError::DestinationExistsSkipped)));
+        let skip_res =
+            resolve_publication_path(dir.path(), "sample", "jpg", TransformCollisionPolicy::Skip);
+        assert!(matches!(
+            skip_res,
+            Err(TransformError::DestinationExistsSkipped)
+        ));
 
         // Rename appends _1
-        let rename_res = resolve_publication_path(dir.path(), "sample", "jpg", TransformCollisionPolicy::Rename).unwrap();
+        let rename_res = resolve_publication_path(
+            dir.path(),
+            "sample",
+            "jpg",
+            TransformCollisionPolicy::Rename,
+        )
+        .unwrap();
         assert_eq!(rename_res.file_name().unwrap(), "sample_1.jpg");
     }
 }

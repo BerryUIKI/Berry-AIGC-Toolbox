@@ -156,8 +156,8 @@ function toggleMode() {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: #202024;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0 8px;
   height: 30px;
@@ -168,18 +168,18 @@ function toggleMode() {
 .search-box:focus-within {
   border-color: rgba(168, 85, 247, 0.5);
   box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.15);
-  background: #242428;
+  background: var(--color-bg-tertiary);
 }
 
 .search-box.semantic-mode {
   border-color: rgba(139, 92, 246, 0.4);
-  background: #211d2e;
+  background: var(--color-bg-secondary);
 }
 
 .search-box.semantic-mode:focus-within {
   border-color: #8b5cf6;
   box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
-  background: #262136;
+  background: var(--color-bg-tertiary);
 }
 
 .mode-toggle-btn {
@@ -197,7 +197,7 @@ function toggleMode() {
 }
 
 .mode-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-hover);
   transform: scale(1.05);
 }
 
@@ -229,7 +229,7 @@ function toggleMode() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #71717a;
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -241,11 +241,11 @@ function toggleMode() {
   outline: none;
   font: inherit;
   font-size: 0.78rem;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .search-input::placeholder {
-  color: #52525b;
+  color: var(--color-text-muted);
 }
 
 .spinner {
@@ -256,7 +256,7 @@ function toggleMode() {
 .clear-btn {
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-text-muted);
   font-size: 0.75rem;
   cursor: pointer;
   padding: 2px 4px;
@@ -270,7 +270,7 @@ function toggleMode() {
 }
 
 .clear-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #f87171;
+  background: var(--color-bg-hover);
+  color: var(--color-danger);
 }
 </style>

@@ -64,3 +64,40 @@ test("TitleBar.vue uses theme variables for brand title and window controls", ()
   assert.ok(controlMatch, ".control-btn:hover rule should exist");
   assert.match(controlMatch[1], /background:\s*var\(--color-bg-hover\)/);
 });
+
+test("Core components and modals use semantic theme variables instead of hardcoded dark colors", () => {
+  // MenuBar
+  const menuBar = fs.readFileSync(path.join(rootDir, "src", "components", "MenuBar.vue"), "utf-8");
+  assert.doesNotMatch(menuBar, /background:\s*#1c1c20/);
+  assert.match(menuBar, /background:\s*var\(--color-bg-primary\)/);
+
+  // StatusBar
+  const statusBar = fs.readFileSync(path.join(rootDir, "src", "components", "StatusBar.vue"), "utf-8");
+  assert.doesNotMatch(statusBar, /background:\s*#111114/);
+  assert.match(statusBar, /background:\s*var\(--color-bg-primary\)/);
+
+  // VirtualGrid
+  const virtualGrid = fs.readFileSync(path.join(rootDir, "src", "components", "VirtualGrid.vue"), "utf-8");
+  assert.doesNotMatch(virtualGrid, /background:\s*#252525/);
+  assert.match(virtualGrid, /background:\s*var\(--color-bg-primary\)/);
+
+  // UpdateModal
+  const updateModal = fs.readFileSync(path.join(rootDir, "src", "components", "UpdateModal.vue"), "utf-8");
+  assert.doesNotMatch(updateModal, /background:\s*#18181c/);
+  assert.match(updateModal, /background:\s*var\(--color-bg-primary\)/);
+
+  // PromptStatsModal
+  const promptStats = fs.readFileSync(path.join(rootDir, "src", "components", "PromptStatsModal.vue"), "utf-8");
+  assert.doesNotMatch(promptStats, /background:\s*#1e1e1e/);
+  assert.match(promptStats, /background:\s*var\(--color-bg-primary\)/);
+
+  // ThumbnailDiagnosticsModal
+  const diagModal = fs.readFileSync(path.join(rootDir, "src", "components", "ThumbnailDiagnosticsModal.vue"), "utf-8");
+  assert.doesNotMatch(diagModal, /background:\s*#1e1e24/);
+  assert.match(diagModal, /background:\s*var\(--color-bg-primary\)/);
+
+  // PreviewPane
+  const previewPane = fs.readFileSync(path.join(rootDir, "src", "components", "PreviewPane.vue"), "utf-8");
+  assert.doesNotMatch(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*#1e1e1e/);
+  assert.match(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*var\(--color-bg-primary\)/);
+});

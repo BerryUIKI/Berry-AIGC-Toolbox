@@ -1056,20 +1056,13 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   position: relative;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border: 1px solid rgba(128, 128, 128, 0.2);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   user-select: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .grid-card {
-    background: #252525;
-    border-color: rgba(255, 255, 255, 0.12);
-  }
 }
 
 .grid-card:hover {
@@ -1092,9 +1085,9 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid rgba(100, 116, 139, 0.34);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: linear-gradient(145deg, #f8fafc, #e2e8f0);
+  background: var(--color-bg-secondary);
   pointer-events: none;
 }
 
@@ -1658,7 +1651,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   justify-content: space-between;
   align-items: center;
   font-size: 0.72em;
-  color: #888;
+  color: var(--color-text-secondary);
 }
 
 .card-container {

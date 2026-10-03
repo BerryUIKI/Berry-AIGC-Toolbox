@@ -480,16 +480,16 @@ async function handleOpenOutputFolder() {
 }
 
 .modal-dialog {
-  background: #181920;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 100%;
   max-width: 660px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.65);
-  color: #e2e8f0;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4);
+  color: var(--color-text-primary);
   overflow: hidden;
 }
 
@@ -498,34 +498,34 @@ async function handleOpenOutputFolder() {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .modal-subtitle {
   margin: 0.3rem 0 0 0;
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
 }
 
 .close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
 }
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .alert-box {
@@ -801,7 +801,8 @@ async function handleOpenOutputFolder() {
 
 .modal-footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -813,16 +814,17 @@ async function handleOpenOutputFolder() {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #cbd5e1;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   border-radius: 6px;
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
   cursor: pointer;
 }
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .btn-action {

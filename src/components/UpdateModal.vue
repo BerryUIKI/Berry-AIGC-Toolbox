@@ -373,12 +373,12 @@ function handleOpenUpdatesFolder() {
 .update-dialog {
   width: 560px;
   max-width: 90vw;
-  background: #18181c;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -388,7 +388,7 @@ function handleOpenUpdatesFolder() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-left {
@@ -406,13 +406,13 @@ function handleOpenUpdatesFolder() {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .close-btn {
   background: transparent;
   border: none;
-  color: #71717a;
+  color: var(--color-text-muted);
   cursor: pointer;
   padding: 4px;
   font-size: 0.85rem;
@@ -420,7 +420,7 @@ function handleOpenUpdatesFolder() {
 }
 
 .close-btn:hover {
-  color: #ffffff;
+  color: var(--color-text-primary);
 }
 
 .dialog-body {
@@ -495,13 +495,13 @@ function handleOpenUpdatesFolder() {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .state-desc {
   margin: 0;
   font-size: 0.78rem;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   max-width: 400px;
   line-height: 1.4;
 }
@@ -519,26 +519,26 @@ function handleOpenUpdatesFolder() {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #202024;
+  background: var(--color-bg-secondary);
   padding: 6px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
   font-size: 0.74rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
 .release-date {
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .version-compare-box {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: #202024;
+  background: var(--color-bg-secondary);
   padding: 10px 20px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
   margin-top: 4px;
 }
 
@@ -614,25 +614,25 @@ function handleOpenUpdatesFolder() {
   margin: 0;
   font-size: 0.92rem;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--color-text-primary);
 }
 
 .current-ver-sub {
   font-size: 0.7rem;
-  color: #94a3b8;
+  color: var(--color-text-muted);
 }
 
 .publish-time {
   font-size: 0.72rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
 }
 
 .changelog-container {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: #141417;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -642,11 +642,11 @@ function handleOpenUpdatesFolder() {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #202024;
+  background: var(--color-bg-secondary);
   font-size: 0.74rem;
   font-weight: 600;
-  color: #e2e8f0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .asset-name {
@@ -665,7 +665,7 @@ function handleOpenUpdatesFolder() {
   margin: 0;
   font-family: inherit;
   font-size: 0.74rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -678,8 +678,8 @@ function handleOpenUpdatesFolder() {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: #141417;
+  border-top: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
 }
 
 .btn {
@@ -689,14 +689,14 @@ function handleOpenUpdatesFolder() {
   cursor: pointer;
   font-family: inherit;
   transition: all 0.12s ease;
-  border: none;
-  background: rgba(255, 255, 255, 0.05);
-  color: #cbd5e1;
+  border: 1px solid var(--border-color);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .btn.primary {
@@ -742,13 +742,13 @@ function handleOpenUpdatesFolder() {
 .notice-text {
   font-size: 0.76rem;
   line-height: 1.45;
-  color: #a7f3d0;
+  color: var(--color-success, #10b981);
 }
 
 /* Download Progress Card */
 .download-progress-card {
-  background: #1e1e24;
-  border: 1px solid rgba(18, 181, 203, 0.3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 14px 16px;
   display: flex;
@@ -779,7 +779,7 @@ function handleOpenUpdatesFolder() {
 .progress-title {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .progress-speed {
@@ -791,7 +791,7 @@ function handleOpenUpdatesFolder() {
 .progress-bar-track {
   width: 100%;
   height: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-tertiary);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -808,12 +808,12 @@ function handleOpenUpdatesFolder() {
   align-items: center;
   justify-content: space-between;
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-family: monospace;
 }
 
 .progress-pct {
-  color: #f8fafc;
+  color: var(--color-text-primary);
   font-weight: 600;
 }
 
@@ -845,7 +845,7 @@ function handleOpenUpdatesFolder() {
 .ready-text {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #34d399;
+  color: #10b981;
 }
 
 .silent-option {
@@ -857,7 +857,7 @@ function handleOpenUpdatesFolder() {
   align-items: center;
   gap: 8px;
   font-size: 0.75rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 

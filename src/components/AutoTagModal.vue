@@ -427,15 +427,15 @@ onUnmounted(() => {
 }
 
 .modal-dialog {
-  background: #181926;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 90%;
   max-width: 620px;
   max-height: 88vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   overflow: hidden;
 }
 
@@ -444,8 +444,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
 }
 
 .header-left {
@@ -461,14 +461,14 @@ onUnmounted(() => {
 .modal-title {
   font-size: 1.05rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
   margin: 0;
 }
 
 .close-btn {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: var(--color-text-secondary);
   font-size: 1.1rem;
   cursor: pointer;
   padding: 4px;
@@ -477,8 +477,8 @@ onUnmounted(() => {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -490,8 +490,8 @@ onUnmounted(() => {
 }
 
 .section-box {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px 14px;
 }
@@ -770,8 +770,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
 }
 
 .footer-actions-right {
@@ -781,8 +781,8 @@ onUnmounted(() => {
 
 .btn-cancel {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #94a3b8;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 6px 14px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -791,8 +791,8 @@ onUnmounted(() => {
 }
 
 .btn-cancel:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .btn-primary {

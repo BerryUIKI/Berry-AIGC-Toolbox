@@ -812,8 +812,8 @@ function onWorkflowDragStart(e: DragEvent) {
 
 .preview-card {
   border-radius: 8px;
-  background: #202024;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   overflow: hidden;
   cursor: pointer;
   transition: all 0.15s;
@@ -827,7 +827,7 @@ function onWorkflowDragStart(e: DragEvent) {
   position: relative;
   width: 100%;
   height: 170px;
-  background: #0f0f12;
+  background: var(--color-bg-app);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -919,10 +919,10 @@ function onWorkflowDragStart(e: DragEvent) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #202024;
+  background: var(--color-bg-secondary);
   padding: 5px 8px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
 }
 
 .rating-stars {
@@ -1018,12 +1018,12 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .prompt-box {
-  background: #202024;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 8px;
   font-size: 0.76rem;
-  color: #e2e8f0;
+  color: var(--color-text-primary);
   line-height: 1.45;
   user-select: text;
 }
@@ -1044,7 +1044,7 @@ function onWorkflowDragStart(e: DragEvent) {
   gap: 3px;
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid var(--border-color);
 }
 
 .token-chip {
@@ -1057,12 +1057,12 @@ function onWorkflowDragStart(e: DragEvent) {
 
 .token-more {
   font-size: 0.66rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .empty-field {
   font-size: 0.72rem;
-  color: #475569;
+  color: var(--color-text-muted);
   font-style: italic;
   margin: 0;
 }
@@ -1077,10 +1077,10 @@ function onWorkflowDragStart(e: DragEvent) {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  background: #202024;
+  background: var(--color-bg-secondary);
   padding: 5px 7px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
 }
 
 .param-row.full-width {
@@ -1089,7 +1089,7 @@ function onWorkflowDragStart(e: DragEvent) {
 
 .param-label {
   font-size: 0.64rem;
-  color: #64748b;
+  color: var(--color-text-muted);
   text-transform: uppercase;
   font-weight: 600;
 }
@@ -1103,7 +1103,7 @@ function onWorkflowDragStart(e: DragEvent) {
 
 .param-val {
   font-size: 0.76rem;
-  color: #e2e8f0;
+  color: var(--color-text-primary);
   font-weight: 500;
 }
 
@@ -1169,13 +1169,13 @@ function onWorkflowDragStart(e: DragEvent) {
 .file-path-text {
   font-size: 0.7rem;
   font-family: monospace;
-  color: #64748b;
+  color: var(--color-text-muted);
   word-break: break-all;
   margin: 0;
-  background: #202024;
+  background: var(--color-bg-secondary);
   padding: 5px 7px;
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
 }
 
 .header-right-actions {
@@ -1186,16 +1186,16 @@ function onWorkflowDragStart(e: DragEvent) {
 
 .collapse-icon {
   font-size: 0.64rem;
-  color: #64748b;
+  color: var(--color-text-muted);
 }
 
 .raw-box {
   margin: 0;
   padding: 8px;
-  background: #111114;
+  background: var(--color-bg-tertiary);
   border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   font-family: monospace;
   font-size: 0.66rem;
   max-height: 160px;
@@ -1255,8 +1255,8 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .detected-lora-item {
-  background: #1e1e26;
-  border: 1px solid #333342;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 8px;
   display: flex;
@@ -1318,9 +1318,9 @@ function onWorkflowDragStart(e: DragEvent) {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: #16161e;
-  border: 1px solid #3a3a4c;
-  color: #cbd5e1;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.72rem;

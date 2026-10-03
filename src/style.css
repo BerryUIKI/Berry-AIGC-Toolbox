@@ -41,6 +41,11 @@
   /* Scrollbars */
   --scrollbar-thumb: rgba(255, 255, 255, 0.14);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.24);
+
+  /* Surface & compatibility aliases */
+  --bg-surface: var(--color-bg-primary);
+  --bg-card: var(--color-bg-secondary);
+  --color-border: var(--border-color);
 }
 
 :root[data-theme="graphite"] {
@@ -101,14 +106,27 @@
 :root[data-theme="light"] .settings-dialog,
 :root[data-theme="light"] .about-card,
 :root[data-theme="light"] .batch-bar,
-:root[data-theme="light"] .rating-menu {
+:root[data-theme="light"] .rating-menu,
+:root[data-theme="light"] .modal-dialog,
+:root[data-theme="light"] .modal-container,
+:root[data-theme="light"] .update-dialog,
+:root[data-theme="light"] .stats-dialog,
+:root[data-theme="light"] .warning-dialog,
+:root[data-theme="light"] .diag-dialog,
+:root[data-theme="light"] .preview-dialog,
+:root[data-theme="light"] .menu-dropdown,
+:root[data-theme="light"] .profile-menu,
+:root[data-theme="light"] .status-bar,
+:root[data-theme="light"] .help-drawer {
   background: var(--color-bg-primary) !important;
   border-color: var(--border-color) !important;
 }
 
 :root[data-theme="light"] .settings-tabs,
 :root[data-theme="light"] .setting-row,
-:root[data-theme="light"] .parser-item {
+:root[data-theme="light"] .parser-item,
+:root[data-theme="light"] .dialog-footer,
+:root[data-theme="light"] .search-bar-container {
   background: var(--color-bg-secondary) !important;
   border-color: var(--border-color) !important;
 }
@@ -119,14 +137,16 @@
 :root[data-theme="light"] .parser-name,
 :root[data-theme="light"] .card-title,
 :root[data-theme="light"] .target-title,
-:root[data-theme="light"] .brand-title {
+:root[data-theme="light"] .brand-title,
+:root[data-theme="light"] .modal-title {
   color: var(--color-text-primary) !important;
 }
 
 :root[data-theme="light"] .panel-subtitle,
 :root[data-theme="light"] .row-desc,
 :root[data-theme="light"] .card-meta,
-:root[data-theme="light"] .tab-btn {
+:root[data-theme="light"] .tab-btn,
+:root[data-theme="light"] .modal-desc {
   color: var(--color-text-secondary) !important;
 }
 
@@ -135,14 +155,27 @@
   :root[data-theme="system"] .settings-dialog,
   :root[data-theme="system"] .about-card,
   :root[data-theme="system"] .batch-bar,
-  :root[data-theme="system"] .rating-menu {
+  :root[data-theme="system"] .rating-menu,
+  :root[data-theme="system"] .modal-dialog,
+  :root[data-theme="system"] .modal-container,
+  :root[data-theme="system"] .update-dialog,
+  :root[data-theme="system"] .stats-dialog,
+  :root[data-theme="system"] .warning-dialog,
+  :root[data-theme="system"] .diag-dialog,
+  :root[data-theme="system"] .preview-dialog,
+  :root[data-theme="system"] .menu-dropdown,
+  :root[data-theme="system"] .profile-menu,
+  :root[data-theme="system"] .status-bar,
+  :root[data-theme="system"] .help-drawer {
     background: var(--color-bg-primary) !important;
     border-color: var(--border-color) !important;
   }
 
   :root[data-theme="system"] .settings-tabs,
   :root[data-theme="system"] .setting-row,
-  :root[data-theme="system"] .parser-item {
+  :root[data-theme="system"] .parser-item,
+  :root[data-theme="system"] .dialog-footer,
+  :root[data-theme="system"] .search-bar-container {
     background: var(--color-bg-secondary) !important;
     border-color: var(--border-color) !important;
   }
@@ -153,14 +186,16 @@
   :root[data-theme="system"] .parser-name,
   :root[data-theme="system"] .card-title,
   :root[data-theme="system"] .target-title,
-  :root[data-theme="system"] .brand-title {
+  :root[data-theme="system"] .brand-title,
+  :root[data-theme="system"] .modal-title {
     color: var(--color-text-primary) !important;
   }
 
   :root[data-theme="system"] .panel-subtitle,
   :root[data-theme="system"] .row-desc,
   :root[data-theme="system"] .card-meta,
-  :root[data-theme="system"] .tab-btn {
+  :root[data-theme="system"] .tab-btn,
+  :root[data-theme="system"] .modal-desc {
     color: var(--color-text-secondary) !important;
   }
 }

@@ -40,6 +40,12 @@ pub struct TransformSpec {
     #[serde(default)]
     pub max_edge: Option<u32>,
     #[serde(default)]
+    pub scale_percent: Option<u32>,
+    #[serde(default)]
+    pub align_multiple: Option<u32>,
+    #[serde(default)]
+    pub target_size_kb: Option<u32>,
+    #[serde(default)]
     pub metadata_policy: TransformMetadataPolicy,
     #[serde(default)]
     pub collision_policy: TransformCollisionPolicy,
@@ -51,6 +57,9 @@ impl Default for TransformSpec {
             format: TransformFormat::Original,
             quality: None,
             max_edge: None,
+            scale_percent: None,
+            align_multiple: None,
+            target_size_kb: None,
             metadata_policy: TransformMetadataPolicy::KeepSupported,
             collision_policy: TransformCollisionPolicy::Rename,
         }
@@ -139,12 +148,29 @@ mod tests {
             format: TransformFormat::Jpeg,
             quality: Some(85),
             max_edge: Some(2048),
+            scale_percent: Some(75),
+            align_multiple: Some(8),
+            target_size_kb: Some(500),
             metadata_policy: TransformMetadataPolicy::StripAi,
             collision_policy: TransformCollisionPolicy::Rename,
         };
         let json = serde_json::to_string(&spec).unwrap();
         let parsed: TransformSpec = serde_json::from_str(&json).unwrap();
         assert_eq!(spec, parsed);
+
+        // Backward compatibility: JSON missing scale_percent, align_multiple, target_size_kb
+        let legacy_json = r#"{
+            "format": "webp",
+            "quality": 80,
+            "max_edge": 1920,
+            "metadata_policy": "keep_supported",
+            "collision_policy": "skip"
+        }"#;
+        let legacy_parsed: TransformSpec = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(legacy_parsed.format, TransformFormat::Webp);
+        assert_eq!(legacy_parsed.scale_percent, None);
+        assert_eq!(legacy_parsed.align_multiple, None);
+        assert_eq!(legacy_parsed.target_size_kb, None);
     }
 
     #[test]

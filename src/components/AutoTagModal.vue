@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { t } from "../i18n";
 import type {
@@ -9,6 +10,7 @@ import type {
   TaggerModelSummary,
   TagPrediction,
   BatchTagResult,
+  TaggerDownloadProgress,
 } from "../types";
 
 const props = defineProps<{
@@ -34,6 +36,10 @@ const maxTags = ref<number>(50);
 
 const isDetecting = ref(false);
 const isApplying = ref(false);
+const isDownloading = ref(false);
+const downloadProgress = ref<TaggerDownloadProgress | null>(null);
+const downloadSource = ref<"auto" | "modelscope" | "hf-mirror" | "huggingface">("auto");
+let unlistenDownload: UnlistenFn | null = null;
 const predictions = ref<TagPrediction[]>([]);
 const message = ref<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -185,6 +191,90 @@ async function applyToBatch() {
   }
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0 || !Number.isFinite(bytes)) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+
+const displayPercent = computed(() => {
+  if (!downloadProgress.value) return 0;
+  const p = downloadProgress.value;
+  if (p.phase === "complete") return 100;
+  return Math.min(99, Math.floor(p.percent));
+});
+
+function getDownloadStatusText(): string {
+  if (!downloadProgress.value) return t.value.autoTagModal.downloadShort;
+  const p = downloadProgress.value;
+  if (p.phase === "downloading_tags") {
+    return t.value.autoTagModal.downloadingTags || `Downloading selected_tags.csv (1/2)`;
+  }
+  if (p.phase === "downloading_model") {
+    return t.value.autoTagModal.downloadingModel || `Downloading model.onnx (2/2)`;
+  }
+  if (p.phase === "complete") {
+    return t.value.autoTagModal.downloadFinishing || `Download complete, loading model...`;
+  }
+  return p.current_file || t.value.autoTagModal.downloadShort;
+}
+
+async function startDownloadModel() {
+  if (isDownloading.value) return;
+  isDownloading.value = true;
+  downloadProgress.value = null;
+  message.value = null;
+
+  try {
+    const summary = await invoke<TaggerModelSummary>("download_tagger_model", {
+      options: {
+        model_id: "wd-v1-4-convnext-tagger-v2",
+        mirror: downloadSource.value,
+      },
+      source: downloadSource.value,
+    });
+    message.value = {
+      type: "success",
+      text: t.value.autoTagModal.downloadSuccess,
+    };
+    await loadModelList();
+    if (summary) {
+      await onSelectModel(summary);
+    }
+  } catch (err: any) {
+    const errStr = String(err);
+    if (errStr.includes("cancelled") || errStr.includes("canceled")) {
+      message.value = {
+        type: "error",
+        text: t.value.autoTagModal.downloadCanceled,
+      };
+    } else {
+      message.value = {
+        type: "error",
+        text: `${t.value.autoTagModal.downloadFailed}: ${errStr}`,
+      };
+    }
+  } finally {
+    isDownloading.value = false;
+    downloadProgress.value = null;
+  }
+}
+
+async function cancelDownload() {
+  try {
+    await invoke("cancel_tagger_download");
+    isDownloading.value = false;
+    downloadProgress.value = null;
+    message.value = {
+      type: "error",
+      text: t.value.autoTagModal.downloadCanceled,
+    };
+  } catch (err: any) {
+    console.error("Failed to cancel tagger download:", err);
+  }
+}
+
 function getFileName(path: string) {
   const parts = path.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1] || path;
@@ -213,12 +303,26 @@ watch(
   },
 );
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("keydown", handleKeydown);
+  try {
+    unlistenDownload = await listen<TaggerDownloadProgress>(
+      "tagger-download-progress",
+      (event) => {
+        downloadProgress.value = event.payload;
+      },
+    );
+  } catch (err) {
+    console.error("Failed to listen to tagger-download-progress:", err);
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleKeydown);
+  if (unlistenDownload) {
+    unlistenDownload();
+    unlistenDownload = null;
+  }
 });
 </script>
 
@@ -237,7 +341,88 @@ onUnmounted(() => {
       <!-- Body -->
       <div class="modal-body">
         <!-- Model Selector & Status -->
-        <div class="section-box">
+        <!-- Downloading Progress Card -->
+        <div v-if="isDownloading" class="section-box download-progress-box">
+          <div class="download-header-row">
+            <div class="download-title-group">
+              <span class="download-icon">⚡</span>
+              <span class="download-filename">
+                {{ getDownloadStatusText() }}
+              </span>
+            </div>
+            <span class="download-pct">
+              {{ displayPercent }}%
+            </span>
+          </div>
+
+          <!-- Progress track -->
+          <div class="progress-track">
+            <div
+              class="progress-fill"
+              :style="{ width: `${Math.max(2, Math.min(100, displayPercent))}%` }"
+            ></div>
+          </div>
+
+          <!-- Progress metrics and cancel button -->
+          <div class="download-footer-row">
+            <div class="download-metrics">
+              <span v-if="downloadProgress && downloadProgress.total_bytes > 0">
+                {{ formatBytes(downloadProgress.downloaded_bytes) }} /
+                {{ formatBytes(Math.max(downloadProgress.downloaded_bytes, downloadProgress.total_bytes)) }}
+              </span>
+              <span v-if="downloadProgress && downloadProgress.speed_bytes_per_sec > 0" class="download-speed">
+                ({{ formatBytes(downloadProgress.speed_bytes_per_sec) }}/s)
+              </span>
+            </div>
+            <button
+              type="button"
+              class="cancel-download-btn"
+              @click="cancelDownload"
+            >
+              {{ t.autoTagModal.cancelDownload }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty Model Guide Card (When no model installed and not downloading) -->
+        <div v-else-if="models.length === 0" class="section-box empty-model-box">
+          <div class="empty-model-icon">🤖</div>
+          <h3 class="empty-model-title">{{ t.autoTagModal.noModelTitle }}</h3>
+          <p class="empty-model-desc">{{ t.autoTagModal.noModelDesc }}</p>
+
+          <div class="empty-model-actions">
+            <!-- Download Node Selector -->
+            <div class="source-select-group">
+              <label class="source-label">{{ t.autoTagModal.downloadSource }}:</label>
+              <select v-model="downloadSource" class="source-select">
+                <option value="auto">{{ t.autoTagModal.sourceAuto }}</option>
+                <option value="modelscope">{{ t.autoTagModal.sourceModelScope }}</option>
+                <option value="hf-mirror">{{ t.autoTagModal.sourceMirror }}</option>
+                <option value="huggingface">{{ t.autoTagModal.sourceOfficial }}</option>
+              </select>
+            </div>
+
+            <div class="empty-buttons-row">
+              <button
+                type="button"
+                class="btn-primary auto-download-btn"
+                @click="startDownloadModel"
+              >
+                ⚡ {{ t.autoTagModal.downloadModel }}
+              </button>
+              <button
+                type="button"
+                class="browse-btn"
+                @click="browseModelFolder"
+              >
+                📁 {{ t.autoTagModal.browseFolder }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Normal Model Selector & Status (When models exist and not downloading) -->
+        <div v-else class="section-box">
           <div class="section-title-row">
             <span class="section-title">{{ t.autoTagModal.modelLabel }}</span>
             <span v-if="loadedModel" class="model-status-pill online">
@@ -250,7 +435,6 @@ onUnmounted(() => {
 
           <div class="model-select-row">
             <select
-              v-if="models.length > 0"
               v-model="selectedModelPath"
               class="model-dropdown"
               @change="() => {
@@ -270,11 +454,15 @@ onUnmounted(() => {
             >
               📁 {{ t.autoTagModal.browseFolder }}
             </button>
+            <button
+              type="button"
+              class="download-action-btn"
+              :title="t.autoTagModal.downloadModel"
+              @click="startDownloadModel"
+            >
+              ⚡ {{ t.autoTagModal.downloadShort }}
+            </button>
           </div>
-
-          <p v-if="models.length === 0" class="empty-help-text">
-            ℹ️ {{ t.autoTagModal.noModels }}
-          </p>
         </div>
 
         <!-- Threshold & Configuration Sliders -->
@@ -352,7 +540,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="detect-btn"
-              :disabled="isDetecting || !loadedModel"
+              :disabled="isDetecting || !loadedModel || isDownloading"
               @click="detectTags"
             >
               {{ isDetecting ? t.autoTagModal.tagging : `🔍 ${t.autoTagModal.detectTags}` }}
@@ -387,7 +575,7 @@ onUnmounted(() => {
             v-if="selectedFileCount > 1"
             type="button"
             class="btn-primary batch-btn"
-            :disabled="isApplying || isDetecting || !loadedModel"
+            :disabled="isApplying || isDetecting || !loadedModel || isDownloading"
             @click="applyToBatch"
           >
             {{
@@ -402,7 +590,7 @@ onUnmounted(() => {
             v-if="selectedFile"
             type="button"
             class="btn-primary"
-            :disabled="isApplying || isDetecting || !loadedModel"
+            :disabled="isApplying || isDetecting || !loadedModel || isDownloading"
             @click="applyToCurrent"
           >
             {{ isApplying ? t.autoTagModal.tagging : t.autoTagModal.applyToCurrent }}
@@ -505,8 +693,8 @@ onUnmounted(() => {
 
 .section-title {
   font-size: 0.8rem;
-  font-weight: 600;
-  color: #cbd5e1;
+  font-weight: 700;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -519,15 +707,25 @@ onUnmounted(() => {
 }
 
 .model-status-pill.online {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+:root[data-theme="dark"] .model-status-pill.online {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
 .model-status-pill.offline {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+:root[data-theme="dark"] .model-status-pill.offline {
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .model-select-row {
@@ -538,19 +736,24 @@ onUnmounted(() => {
 
 .model-dropdown {
   flex: 1;
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #f8fafc;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 0.82rem;
   outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.model-dropdown:focus {
+  border-color: #6366f1;
 }
 
 .browse-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #e2e8f0;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -561,15 +764,214 @@ onUnmounted(() => {
 }
 
 .browse-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-hover);
+  border-color: var(--border-color-strong, var(--border-color));
 }
 
-.empty-help-text {
+.download-action-btn {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #4338ca;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+:root[data-theme="dark"] .download-action-btn {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #c7d2fe;
+}
+
+.download-action-btn:hover {
+  background: #6366f1;
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+/* Empty Model Box */
+.empty-model-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 20px 18px;
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: 8px;
+}
+
+.empty-model-icon {
+  font-size: 2rem;
+  margin-bottom: 6px;
+}
+
+.empty-model-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 6px 0;
+}
+
+.empty-model-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  max-width: 480px;
+  margin: 0 0 14px 0;
+}
+
+.empty-model-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.source-select-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.source-label {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.source-select {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.empty-buttons-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.auto-download-btn {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  padding: 7px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auto-download-btn:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+/* Download Progress Box */
+.download-progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.download-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.download-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-icon {
+  font-size: 1rem;
+}
+
+.download-filename {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.download-pct {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6366f1;
+}
+
+.progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.download-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.download-metrics {
   font-size: 0.75rem;
-  color: #94a3b8;
-  margin-top: 8px;
-  line-height: 1.4;
+  color: var(--color-text-secondary);
+  display: flex;
+  gap: 6px;
+}
+
+.download-speed {
+  color: #059669;
+  font-weight: 600;
+}
+
+:root[data-theme="dark"] .download-speed {
+  color: #34d399;
+}
+
+.cancel-download-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancel-download-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .controls-grid {
@@ -588,22 +990,33 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.78rem;
-  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
 .val-badge {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.15);
-  padding: 1px 6px;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  padding: 2px 7px;
   border-radius: 4px;
 }
 
+:root[data-theme="dark"] .val-badge {
+  color: #93c5fd;
+  background: rgba(96, 165, 250, 0.18);
+}
+
 .val-badge.green {
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.15);
+  color: #047857;
+  background: rgba(5, 150, 105, 0.12);
+}
+
+:root[data-theme="dark"] .val-badge.green {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.18);
 }
 
 .range-slider {
@@ -624,8 +1037,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
-  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
@@ -633,17 +1047,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
-  color: #cbd5e1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
 }
 
 .small-select {
-  background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #f8fafc;
-  padding: 2px 6px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+  padding: 3px 8px;
   border-radius: 4px;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  outline: none;
 }
 
 .preview-header {
@@ -662,9 +1078,9 @@ onUnmounted(() => {
 }
 
 .file-name {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #f8fafc;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -672,29 +1088,52 @@ onUnmounted(() => {
 }
 
 .count-badge {
-  font-size: 0.7rem;
-  color: #a5b4fc;
-  background: rgba(99, 102, 241, 0.15);
-  padding: 1px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4338ca;
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 7px;
   border-radius: 4px;
   white-space: nowrap;
 }
 
-.detect-btn {
-  background: rgba(99, 102, 241, 0.2);
-  border: 1px solid rgba(99, 102, 241, 0.4);
+:root[data-theme="dark"] .count-badge {
   color: #c7d2fe;
-  padding: 4px 10px;
-  border-radius: 5px;
-  font-size: 0.75rem;
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.detect-btn {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #4338ca;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .detect-btn:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.4);
-  color: #fff;
+  background: #6366f1;
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+:root[data-theme="dark"] .detect-btn {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #c7d2fe;
+}
+
+:root[data-theme="dark"] .detect-btn:hover:not(:disabled) {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.detect-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tags-container {
@@ -717,20 +1156,38 @@ onUnmounted(() => {
 }
 
 .tag-badge-general {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.3);
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #3730a3;
+}
+
+:root[data-theme="dark"] .tag-badge-general {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.35);
   color: #e0e7ff;
 }
 
 .tag-badge-character {
-  background: rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+:root[data-theme="dark"] .tag-badge-character {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.35);
   color: #a7f3d0;
 }
 
 .tag-badge-rating {
-  background: rgba(168, 85, 247, 0.15);
-  border-color: rgba(168, 85, 247, 0.3);
+  background: #faf5ff;
+  border-color: #e9d5ff;
+  color: #6b21a8;
+}
+
+:root[data-theme="dark"] .tag-badge-rating {
+  background: rgba(168, 85, 247, 0.18);
+  border-color: rgba(168, 85, 247, 0.35);
   color: #f3e8ff;
 }
 
@@ -740,28 +1197,38 @@ onUnmounted(() => {
 }
 
 .no-tags-prompt {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
   text-align: center;
-  padding: 12px 0;
+  padding: 14px 0;
 }
 
 .message-banner {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 600;
 }
 
 .message-banner.success {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(16, 185, 129, 0.12);
   border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #047857;
+}
+
+:root[data-theme="dark"] .message-banner.success {
+  background: rgba(16, 185, 129, 0.15);
   color: #34d399;
 }
 
 .message-banner.error {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.12);
   border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+
+:root[data-theme="dark"] .message-banner.error {
+  background: rgba(239, 68, 68, 0.15);
   color: #f87171;
 }
 

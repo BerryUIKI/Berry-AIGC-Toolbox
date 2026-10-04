@@ -171,7 +171,78 @@ export function findMatchingAsset(
 }
 
 /**
- * Check for updates against GitHub Releases API.
+ * Build a synthetic GitHubRelease structure from a release tag for fallback scenarios (e.g. GitHub API rate limits).
+ */
+export function buildSyntheticRelease(tag: string, repo = "BerryUIKI/Omera"): GitHubRelease {
+  const cleanTag = tag.trim();
+  const version = cleanTag.replace(/^v/, "");
+  const baseDownloadUrl = `https://github.com/${repo}/releases/download/${cleanTag}`;
+  return {
+    tag_name: cleanTag,
+    name: `Omera ${cleanTag}`,
+    body: `Release ${cleanTag} is available on GitHub.`,
+    published_at: new Date().toISOString(),
+    html_url: `https://github.com/${repo}/releases/tag/${cleanTag}`,
+    assets: [
+      {
+        name: `Omera_${version}_x64-setup.exe`,
+        browser_download_url: `${baseDownloadUrl}/Omera_${version}_x64-setup.exe`,
+        size: 0,
+      },
+      {
+        name: `Omera_${version}_x64_en-US.msi`,
+        browser_download_url: `${baseDownloadUrl}/Omera_${version}_x64_en-US.msi`,
+        size: 0,
+      },
+      {
+        name: `Omera_${version}_aarch64.dmg`,
+        browser_download_url: `${baseDownloadUrl}/Omera_${version}_aarch64.dmg`,
+        size: 0,
+      },
+      {
+        name: `Omera_macOS_aarch64.dmg`,
+        browser_download_url: `${baseDownloadUrl}/Omera_macOS_aarch64.dmg`,
+        size: 0,
+      },
+      {
+        name: `Omera_${version}_amd64.AppImage`,
+        browser_download_url: `${baseDownloadUrl}/Omera_${version}_amd64.AppImage`,
+        size: 0,
+      },
+      {
+        name: `Omera_${version}_amd64.deb`,
+        browser_download_url: `${baseDownloadUrl}/Omera_${version}_amd64.deb`,
+        size: 0,
+      },
+    ],
+  };
+}
+
+/**
+ * Fallback resolver querying the GitHub releases/latest redirect URL to bypass API rate limits.
+ */
+export async function fetchReleaseViaHtmlFallback(repo = "BerryUIKI/Omera"): Promise<GitHubRelease | null> {
+  try {
+    const htmlUrl = `https://github.com/${repo}/releases/latest`;
+    const resp = await fetch(htmlUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Omera-Updater",
+      },
+    });
+    const finalUrl = resp.url || "";
+    const match = finalUrl.match(/\/releases\/tag\/(v?[0-9]+\.[0-9]+\.[0-9]+[^\/\s]*)/);
+    if (match && match[1]) {
+      return buildSyntheticRelease(match[1], repo);
+    }
+  } catch {
+    // Ignore fallback errors
+  }
+  return null;
+}
+
+/**
+ * Check for updates against GitHub Releases API with transparent fallback.
  */
 export async function checkForUpdates(currentAppVersion: string): Promise<UpdateCheckResult> {
   const currentClean = currentAppVersion.replace(/^v/, "").trim();
@@ -179,14 +250,20 @@ export async function checkForUpdates(currentAppVersion: string): Promise<Update
   const url = `https://api.github.com/repos/${repo}/releases/latest`;
 
   try {
-    const resp = await fetch(url, {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
+    let data: GitHubRelease | null = null;
+    let apiError: string | null = null;
 
-    if (!resp.ok) {
-      if (resp.status === 404) {
+    try {
+      const resp = await fetch(url, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "Omera-Updater",
+        },
+      });
+
+      if (resp.ok) {
+        data = await resp.json();
+      } else if (resp.status === 404) {
         // No release published yet on this repository
         return {
           status: "ahead_of_release",
@@ -196,11 +273,22 @@ export async function checkForUpdates(currentAppVersion: string): Promise<Update
           errorMessage: null,
           matchedAsset: null,
         };
+      } else {
+        apiError = `GitHub API returned status ${resp.status} (${resp.statusText})`;
       }
-      throw new Error(`GitHub API returned status ${resp.status} (${resp.statusText})`);
+    } catch (e: any) {
+      apiError = e?.message || String(e);
     }
 
-    const data: GitHubRelease = await resp.json();
+    // If REST API fails (e.g. rate limit 403 or network restriction), use transparent redirect fallback
+    if (!data) {
+      data = await fetchReleaseViaHtmlFallback(repo);
+    }
+
+    if (!data) {
+      throw new Error(apiError || "Unable to retrieve latest release information from GitHub");
+    }
+
     const latestClean = (data.tag_name || "").replace(/^v/, "").trim();
     const matchedAsset = findMatchingAsset(data.assets || []);
 

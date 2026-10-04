@@ -159,8 +159,18 @@ export interface TransformSpec {
   format: TransformFormat;
   quality?: number | null;
   max_edge?: number | null;
+  scale_percent?: number | null;
+  align_multiple?: number | null;
+  target_size_kb?: number | null;
   metadata_policy: TransformMetadataPolicy;
   collision_policy: TransformCollisionPolicy;
+}
+
+export interface TransformPreset {
+  id: string;
+  name: string;
+  spec: TransformSpec;
+  original_disposition?: OriginalDisposition;
 }
 
 export type OriginalDisposition = "keep" | "archive" | "trash";
@@ -539,6 +549,16 @@ export interface TaggerModelSummary {
 export interface BatchTagResult {
   processed_files: number;
   tags_added: number;
+}
+
+export interface TaggerDownloadProgress {
+  phase: string;
+  current_file: string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  percent: number;
+  speed_bytes_per_sec: number;
+  error?: string | null;
 }
 
 export interface ClipModelSummary {

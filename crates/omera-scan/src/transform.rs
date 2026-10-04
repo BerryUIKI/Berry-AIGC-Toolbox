@@ -76,12 +76,34 @@ pub fn transform_file_staged(
     let mut img = image::open(source_path)
         .map_err(|e| TransformError::DecodeFailed(format!("Failed to open image: {e}")))?;
 
+    // Handle optional percentage scaling (T4)
+    if let Some(pct) = spec.scale_percent {
+        if pct > 0 && pct != 100 {
+            let (w, h) = img.dimensions();
+            let new_w = ((w as f64 * pct as f64 / 100.0).round() as u32).max(1);
+            let new_h = ((h as f64 * pct as f64 / 100.0).round() as u32).max(1);
+            img = img.resize_exact(new_w, new_h, FilterType::Lanczos3);
+        }
+    }
+
     // Handle optional maximum bounding edge downscaling
     if let Some(max_edge) = spec.max_edge {
         if max_edge > 0 {
             let (w, h) = img.dimensions();
             if w > max_edge || h > max_edge {
                 img = img.resize(max_edge, max_edge, FilterType::Lanczos3);
+            }
+        }
+    }
+
+    // Handle optional pixel-multiple alignment (T4, e.g. 8 or 16 multiples)
+    if let Some(mult) = spec.align_multiple {
+        if mult > 1 {
+            let (w, h) = img.dimensions();
+            let aligned_w = ((w / mult) * mult).max(mult);
+            let aligned_h = ((h / mult) * mult).max(mult);
+            if aligned_w != w || aligned_h != h {
+                img = img.resize_exact(aligned_w, aligned_h, FilterType::Lanczos3);
             }
         }
     }
@@ -98,8 +120,47 @@ pub fn transform_file_staged(
     );
     let staged_path = staging_dir.join(staged_file_name);
 
-    // Encode to staged path
-    encode_image_to_path(&img, &staged_path, &ext, spec.quality)?;
+    // Initial encode to staged path
+    let mut current_quality = spec.quality;
+    encode_image_to_path(&img, &staged_path, &ext, current_quality)?;
+
+    // Bounded target-size search (T4)
+    if let Some(target_kb) = spec.target_size_kb {
+        if target_kb > 0 {
+            let target_bytes = (target_kb as u64) * 1024;
+            let mut iter = 0;
+            while iter < 4 {
+                if let Ok(meta) = fs::metadata(&staged_path) {
+                    if meta.len() <= target_bytes {
+                        break;
+                    }
+                    iter += 1;
+                    let actual_len = meta.len() as f64;
+                    let ratio = target_bytes as f64 / actual_len;
+                    let cur_q = current_quality.unwrap_or(80);
+                    if cur_q > 25 {
+                        let new_q = ((cur_q as f64 * ratio.sqrt() * 0.95).round() as u8)
+                            .clamp(15, cur_q.saturating_sub(8));
+                        current_quality = Some(new_q);
+                        let _ = encode_image_to_path(&img, &staged_path, &ext, current_quality);
+                    } else {
+                        // Quality is already low, downscale dimensions slightly (0.85x)
+                        let (w, h) = img.dimensions();
+                        if w > 64 && h > 64 {
+                            let new_w = ((w as f64 * 0.85).round() as u32).max(32);
+                            let new_h = ((h as f64 * 0.85).round() as u32).max(32);
+                            img = img.resize_exact(new_w, new_h, FilterType::Lanczos3);
+                            let _ = encode_image_to_path(&img, &staged_path, &ext, current_quality);
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
 
     // Verification gate: verify file exists, has non-zero size, and decodes properly
     let metadata = fs::metadata(&staged_path)?;
@@ -916,5 +977,48 @@ mod tests {
         let updated_m = db.get_file_by_id(m_id).unwrap().unwrap();
         assert_eq!(updated_m.container, Container::Jpeg);
         assert!(Path::new(&updated_m.path).exists());
+    }
+
+    #[test]
+    fn test_transform_file_staged_t4_percentage_and_alignment() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("input.png");
+        let staging = dir.path().join("staging");
+        create_dummy_png(&src, 100, 100);
+
+        // Test scale_percent: 50% -> 50x50, align_multiple: 16 -> 48x48
+        let spec = TransformSpec {
+            format: TransformFormat::Png,
+            scale_percent: Some(50),
+            align_multiple: Some(16),
+            ..Default::default()
+        };
+
+        let staged = transform_file_staged(&src, &staging, &spec).unwrap();
+        assert!(staged.exists());
+
+        let decoded = image::open(&staged).unwrap();
+        assert_eq!(decoded.dimensions(), (48, 48));
+    }
+
+    #[test]
+    fn test_transform_file_staged_t4_target_size_bounded_search() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("photo.png");
+        let staging = dir.path().join("staging");
+        create_dummy_png(&src, 200, 200);
+
+        // Request target_size_kb: 2
+        let spec = TransformSpec {
+            format: TransformFormat::Jpeg,
+            quality: Some(95),
+            target_size_kb: Some(2),
+            ..Default::default()
+        };
+
+        let staged = transform_file_staged(&src, &staging, &spec).unwrap();
+        assert!(staged.exists());
+        let meta = fs::metadata(&staged).unwrap();
+        assert!(meta.len() > 0);
     }
 }

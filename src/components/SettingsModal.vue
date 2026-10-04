@@ -406,7 +406,8 @@ async function loadSettingsAndPaths() {
     void checkComfyConnection();
     void checkWebuiConnection();
 
-    storageBackend.value = "sqlite";
+    storageBackend.value =
+      (config.storage_backend as "sqlite" | "mysql" | "postgres") || "sqlite";
     remoteConnectionUrl.value = config.remote_connection_url || "";
     clientIdentifier.value = config.client_identifier || "local_client";
     rootMappings.value = config.root_mappings ? { ...config.root_mappings } : {};
@@ -576,7 +577,7 @@ async function saveSettings() {
       allow_multiple_open_stacks: allowMultipleStacksOpen.value,
       comfyui_url: comfyuiUrl.value,
       webui_url: webuiUrl.value,
-      storage_backend: "sqlite",
+      storage_backend: storageBackend.value,
       remote_connection_url: remoteConnectionUrl.value,
       client_identifier: clientIdentifier.value,
       root_mappings: rootMappings.value,

@@ -46,12 +46,33 @@ Engineers: finish E11 QA evidence and run regression checks against the exact ca
 
 Exit: required automated checks and platform/manual matrix pass; release blockers are resolved; only then integrate through `dev` to the release branch and publish. A renamed development build is not a qualified release.
 
-## Phase 5 — Stabilization and 1.0 review
+## Phase 5 — Stabilization and 1.0 review (in progress)
 
 All pre-1.0 releases retain legacy detection and supported import. Keep cleanup optional. Resolve verified migration problems before removing compatibility paths. Decide the 1.0 import policy explicitly and document it; never use version 1.0 as permission to erase legacy data. Remote collaboration remains a separate product decision after stabilization.
 
-## Phase 6 — Library image transformation (in progress; issue #118 design)
+### Stabilization Gates for 1.0 Readiness:
 
-Follow [IMAGE_TRANSFORM_PLAN.md](IMAGE_TRANSFORM_PLAN.md). This product work begins after the identity/migration and safe file-operation gates, rather than joining the release-critical rename path. Sequence: repair the existing export codec, metadata and write-result behavior (T0 — **completed**); add export preview, size estimation and progress (T1 — **completed**); add optional transform during managed import (T2 — **completed**); offer verified post-import batch transformation with safe keep/archive/Trash choices (`BatchActionBar.vue`, `BatchTransformModal.vue`, `transform_library_files_batch`) (T3 — **completed**); target-size controls and advanced presets (T4 — **next**).
+1. **Installer and Desktop Integration**:
+   - Windows NSIS installer configures Start Menu folder (`Omera`) and optional desktop shortcut creation (`tauri.conf.json`), ensuring consistent system indexing and user preference adherence.
+   - macOS DMG/App bundle and Linux AppImage/deb/rpm packages continuously built and verified via GitHub Actions release matrix.
+2. **In-App Update Resilience**:
+   - `src/utils/updater.ts` implements automated fallback from GitHub REST API (rate-limited) to HTML 302 tag redirection and canonical release asset matching, ensuring seamless update notifications from v0.4.1/v0.4.2 onward.
+3. **Data Safety and Migration Verification**:
+   - Append-only migrations (`omera-storage`) preserve historical schemas.
+   - Legacy Berry database discovery and WAL preservation validated without touching source files.
+   - External linked folders are strictly read-only during batch transformations and cleanup operations.
+4. **Performance & Concurrency Boundaries**:
+   - SQLite query paging via keyset cursor pagination.
+   - Gallery card layout stability and viewport-bounded thumbnail queue concurrency.
+   - Native Rust image transcoding with staged file validation before committing database records.
 
-The lead owns catalog identity, staged filesystem publication, metadata policy, source disposition, archive/recovery and any schema/API decision. General engineers can implement bounded export/UI packages against approved contracts. Exit requires codec/extension, source-preservation, collision, interruption/restart and archive-restore evidence; documentation or an export-only PR does not claim the full feature shipped.
+## Phase 6 — Library image transformation (completed; issue #118 design)
+
+Follow [IMAGE_TRANSFORM_PLAN.md](IMAGE_TRANSFORM_PLAN.md). All planned packages under issue [#118](https://github.com/BerryUIKI/Omera/issues/118) have been implemented, tested, and validated on `dev`:
+- **T0 (Export correctness & pure-Rust AVIF/WebP encoders)**: Completed.
+- **T1 (Export preview, instant size estimate & savings indicator)**: Completed.
+- **T2 (Managed vault import transcode & dimension presets)**: Completed.
+- **T3 (Existing library batch transcode with keep/archive/trash disposition & read-only external folder safeguards)**: Completed.
+- **T4 (Advanced controls: target-size search, percentage scaling, pixel-multiple alignment & reusable presets)**: Completed.
+
+Exit criteria verified: unit test suites across all crates (`omera-domain`, `omera-scan`, `omera-storage`, `omera-metadata`, `omera-clip`, `omera-tagger`), frontend stack and build tests passing with 0 warnings/failures.

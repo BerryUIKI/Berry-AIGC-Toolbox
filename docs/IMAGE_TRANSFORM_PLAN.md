@@ -1,13 +1,13 @@
 # Image transformation plan (issue #118)
 
-Status: **T0, T1, T2, and T3 completed and validated on `dev`**; T4 (advanced controls) scheduled next. Target: post-stabilization image workflow delivery in [DELIVERY_ROADMAP.md](DELIVERY_ROADMAP.md). This plan translates the workflow suggested in [#118](https://github.com/BerryUIKI/Omera/issues/118) into Omera's library import, batch action and export surfaces. It does not add ComfyUI nodes or require ComfyUI at runtime.
+Status: **T0, T1, T2, T3, and T4 completed and validated on `dev`**. All Phase 6 packages under issue [#118](https://github.com/BerryUIKI/Omera/issues/118) are delivered and tested. Target: transition to Phase 5 stabilization and 1.0 readiness in [DELIVERY_ROADMAP.md](DELIVERY_ROADMAP.md). This plan translates the workflow suggested in [#118](https://github.com/BerryUIKI/Omera/issues/118) into Omera's library import, batch action and export surfaces. It does not add ComfyUI nodes or require ComfyUI at runtime.
 
 ## User outcomes and rollout order
 
 1. **Export improvements (first — Completed).** Export selected images to JPEG, WebP, AVIF or PNG with effective quality control, optional resize, explicit metadata policy, collision handling, and instant before/after size estimation. Export never mutates library assets.
 2. **Transform during managed import (second — Completed).** Offer compression/conversion while copying into a managed vault. Decode and validate each staged derivative before registering it. The external source remains intact by default.
 3. **Transform existing managed assets (third — Completed).** Add a gallery batch action. Default to retaining the original; offer an explicit archive choice or move-to-system-Trash choice after the derivative and catalog update are verified. Never silently alter external linked folders.
-4. **Advanced controls (fourth — Next).** Target-size mode, percentage scaling, pixel-multiple alignment and reusable presets can follow measured demand. A target byte size is best effort and may require lowering quality or dimensions; do not promise visually lossless results.
+4. **Advanced controls (fourth — Completed).** Target-size mode with adaptive bounded search, percentage scaling (75%, 50%, 25%), pixel-multiple alignment (8x, 16x) and reusable presets across import and gallery batch transform modals. A target byte size uses best-effort iterative refinement while safeguarding source stability and bounding search cycles.
 
 This is a separate post-stabilization workstream, not part of the Berry-to-Omera migration or a release blocker. Export improvements can begin after the export/file-operation safety contracts are reviewed; import and post-import replacement require lead-owned persistence and filesystem contracts. Do not implement all phases in one PR.
 
@@ -78,7 +78,7 @@ The source selector must be a validated backend-managed selection, not an arbitr
 | T1: export experience | General UI engineer | Preview, instant size estimate and savings badge, collision selection, localized progress/results; manual directory/ZIP | **Completed on `dev`** |
 | [T2: managed import transform](https://github.com/BerryUIKI/Omera/issues/159) | Lead for catalog/filesystem contract; engineer for UI after approval | Verified staging, unchanged source by default, indexing of final image, resolution and transform presets (`ImportTransformModal.vue`) | **Completed on `dev`** |
 | [T3: existing-library batch](https://github.com/BerryUIKI/Omera/issues/160) | Lead for asset identity, journal, archive/Trash and schema decision; engineer for UI after approval | Staged verification, keep/archive/trash disposition, read-only linked folder protection, relation/curation preservation, gallery BatchActionBar & `BatchTransformModal.vue` | **Completed on `dev`** |
-| T4: advanced controls | General engineer after T0–T3 | Bounded target-size search and optional scaling/alignment with measured runtime/quality tradeoffs | Planned |
+| T4: advanced controls | General engineer after T0–T3 | Bounded target-size search and optional scaling/alignment with measured runtime/quality tradeoffs | **Completed on `dev`** |
 
 Use separate PRs targeting `dev`, with one bounded package per PR. Phase gates: identity/migration stability and safe file-operation contracts first; T0/T1 before T2; T2 before T3; T4 last. Required tests include codec signatures/extensions, alpha and orientation, metadata/sidecars, duplicate names in directory and ZIP, read-only/unavailable source, low disk space, cancellation at each publish stage, crash/restart and large batches under a measured memory limit. Test source preservation and actual restore from archive/Trash; a successful mock-only UI test does not qualify destructive behavior.
 

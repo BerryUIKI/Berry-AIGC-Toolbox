@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareSemver, findMatchingAsset } from '../src/utils/updater.ts';
+import { compareSemver, findMatchingAsset, buildSyntheticRelease } from '../src/utils/updater.ts';
 
 test('compareSemver: compares exact versions and prefixes', () => {
   assert.equal(compareSemver('0.3.0', '0.3.0'), 0);
@@ -110,3 +110,33 @@ test('findMatchingAsset: Linux matches AppImage and deb with strict rejection of
   // When only Windows exists
   assert.equal(findMatchingAsset([linuxAssets[0]], linuxUA, linuxPlatform), null);
 });
+
+test('buildSyntheticRelease: constructs canonical assets compatible with all platforms', () => {
+  const release = buildSyntheticRelease('v0.4.2', 'BerryUIKI/Omera');
+  assert.equal(release.tag_name, 'v0.4.2');
+  assert.equal(release.html_url, 'https://github.com/BerryUIKI/Omera/releases/tag/v0.4.2');
+  assert.equal(release.assets.length, 6);
+
+  const winUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+  const winMatched = findMatchingAsset(release.assets, winUA, 'Win32');
+  assert.ok(winMatched);
+  assert.equal(winMatched.name, 'Omera_0.4.2_x64-setup.exe');
+
+  const macUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7; arm64)';
+  const macMatched = findMatchingAsset(release.assets, macUA, 'MacIntel');
+  assert.ok(macMatched);
+  assert.ok(macMatched.name.includes('aarch64') && macMatched.name.endsWith('.dmg'));
+
+  const linuxUA = 'Mozilla/5.0 (X11; Linux x86_64)';
+  const linuxMatched = findMatchingAsset(release.assets, linuxUA, 'Linux x86_64');
+  assert.ok(linuxMatched);
+  assert.equal(linuxMatched.name, 'Omera_0.4.2_amd64.AppImage');
+});
+
+test('compareSemver: v0.4.1 client recognizes v0.4.2 as available update', () => {
+  assert.equal(compareSemver('0.4.2', '0.4.1'), 1);
+  assert.equal(compareSemver('v0.4.2', 'v0.4.1'), 1);
+  assert.equal(compareSemver('0.4.2', '0.4.2'), 0);
+  assert.equal(compareSemver('0.4.2', '0.4.3'), -1);
+});
+

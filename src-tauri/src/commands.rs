@@ -1731,14 +1731,19 @@ pub fn export_sqlite_to_central_migration(
 pub async fn export_files_batch(
     options: ExportOptions,
     app_handle: AppHandle,
-    state: State<'_, AppState>,
 ) -> Result<ExportSummary, String> {
-    let db_guard = db(&state)?;
-    let summary = execute_batch_export(&db_guard, &options, move |progress| {
-        let _ = app_handle.emit("omera://export-progress", &progress);
-        let _ = app_handle.emit("berry://export-progress", progress);
-    });
-    Ok(summary)
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_guard = db(&state)?;
+        let app_emit = app_handle.clone();
+        let summary = execute_batch_export(&db_guard, &options, move |progress| {
+            let _ = app_emit.emit("omera://export-progress", &progress);
+            let _ = app_emit.emit("berry://export-progress", progress);
+        });
+        Ok(summary)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Instant preview and size estimation for a selected file without writing to destination.
@@ -1761,28 +1766,33 @@ pub fn estimate_export_file(
 pub async fn transform_library_files_batch(
     request: LibraryTransformRequest,
     app_handle: AppHandle,
-    state: State<'_, AppState>,
 ) -> Result<TransformJobReceipt, String> {
-    let db_guard = db(&state)?;
-    execute_library_batch_transform(
-        &db_guard,
-        &request,
-        Some(move |current, total, current_path: &str| {
-            #[derive(Serialize, Clone)]
-            struct TransformProgressEvent<'a> {
-                current: usize,
-                total: usize,
-                current_path: &'a str,
-            }
-            let evt = TransformProgressEvent {
-                current,
-                total,
-                current_path,
-            };
-            let _ = app_handle.emit("omera://transform-progress", &evt);
-            let _ = app_handle.emit("berry://transform-progress", &evt);
-        }),
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let db_guard = db(&state)?;
+        let app_emit = app_handle.clone();
+        execute_library_batch_transform(
+            &db_guard,
+            &request,
+            Some(move |current, total, current_path: &str| {
+                #[derive(Serialize, Clone)]
+                struct TransformProgressEvent<'a> {
+                    current: usize,
+                    total: usize,
+                    current_path: &'a str,
+                }
+                let evt = TransformProgressEvent {
+                    current,
+                    total,
+                    current_path,
+                };
+                let _ = app_emit.emit("omera://transform-progress", &evt);
+                let _ = app_emit.emit("berry://transform-progress", &evt);
+            }),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Open an external URL in the system's default browser.
@@ -2724,134 +2734,138 @@ pub async fn batch_auto_tag_files(
     state.batch_tagger_cancel.store(false, Ordering::SeqCst);
     let cancel_flag = state.batch_tagger_cancel.clone();
 
-    let mut processed_files = 0;
-    let mut failed_files = 0;
-    let mut tags_added = 0;
-    let total = file_ids.len();
-
     let app_handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let mut processed_files = 0;
+        let mut failed_files = 0;
+        let mut tags_added = 0;
+        let total = file_ids.len();
 
-    for (index, fid) in file_ids.into_iter().enumerate() {
-        if cancel_flag.load(Ordering::Relaxed) {
+        for (index, fid) in file_ids.into_iter().enumerate() {
+            if cancel_flag.load(Ordering::Relaxed) {
+                let _ = app_handle.emit(
+                    "tagger-batch-progress",
+                    BatchTagProgress {
+                        current: index,
+                        total,
+                        percent: if total > 0 { (index as f64 / total as f64) * 100.0 } else { 100.0 },
+                        current_file: String::new(),
+                        processed_files,
+                        failed_files,
+                        tags_added,
+                        is_complete: false,
+                        is_canceled: true,
+                    },
+                );
+                break;
+            }
+
+            let file = {
+                let database = db(&state)?;
+                database.get_file_by_id(fid).map_err(|e| e.to_string())?
+            };
+
+            let file_path_str = file.as_ref().map(|f| f.path.clone()).unwrap_or_default();
+            let file_name_display = Path::new(&file_path_str)
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| format!("file-{fid}"));
+
             let _ = app_handle.emit(
                 "tagger-batch-progress",
                 BatchTagProgress {
-                    current: index,
+                    current: index + 1,
                     total,
-                    percent: if total > 0 { (index as f64 / total as f64) * 100.0 } else { 100.0 },
-                    current_file: String::new(),
+                    percent: if total > 0 {
+                        ((index as f64) / total as f64) * 100.0
+                    } else {
+                        100.0
+                    },
+                    current_file: file_name_display,
                     processed_files,
                     failed_files,
                     tags_added,
                     is_complete: false,
-                    is_canceled: true,
+                    is_canceled: false,
                 },
             );
-            break;
+
+            if let Some(file) = file {
+                let predictions_res = {
+                    let guard = tagger_guard(&state)?;
+                    if let Some(tagger) = guard.as_ref() {
+                        tagger.predict_file(Path::new(&file.path), &config)
+                    } else {
+                        return Err(
+                            "No WD14 tagger model loaded. Please load a model first.".to_string(),
+                        );
+                    }
+                };
+
+                match predictions_res {
+                    Ok(predictions) => {
+                        let database = db(&state)?;
+                        for pred in &predictions {
+                            if let Ok(tag) = database.get_or_create_tag(&pred.name, None) {
+                                if database.tag_file(fid, tag.id).is_ok() {
+                                    tags_added += 1;
+                                }
+                            }
+                        }
+
+                        if config.write_to_prompt && !predictions.is_empty() {
+                            let prompt_text = predictions
+                                .iter()
+                                .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
+                                .map(|p| p.name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            if !prompt_text.is_empty() {
+                                let _ = database.update_file_prompt(
+                                    fid,
+                                    &prompt_text,
+                                    config.append_prompt,
+                                    config.allow_override_existing_prompt,
+                                );
+                            }
+                        }
+
+                        processed_files += 1;
+                    }
+                    Err(_) => {
+                        failed_files += 1;
+                    }
+                }
+            } else {
+                failed_files += 1;
+            }
         }
 
-        let file = {
-            let database = db(&state)?;
-            database.get_file_by_id(fid).map_err(|e| e.to_string())?
-        };
-
-        let file_path_str = file.as_ref().map(|f| f.path.clone()).unwrap_or_default();
-        let file_name_display = Path::new(&file_path_str)
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| format!("file-{fid}"));
-
+        let is_canceled = cancel_flag.load(Ordering::Relaxed);
         let _ = app_handle.emit(
             "tagger-batch-progress",
             BatchTagProgress {
-                current: index + 1,
+                current: total,
                 total,
-                percent: if total > 0 {
-                    ((index as f64) / total as f64) * 100.0
-                } else {
-                    100.0
-                },
-                current_file: file_name_display,
+                percent: 100.0,
+                current_file: String::new(),
                 processed_files,
                 failed_files,
                 tags_added,
-                is_complete: false,
-                is_canceled: false,
+                is_complete: !is_canceled,
+                is_canceled,
             },
         );
 
-        if let Some(file) = file {
-            let predictions_res = {
-                let guard = tagger_guard(&state)?;
-                if let Some(tagger) = guard.as_ref() {
-                    tagger.predict_file(Path::new(&file.path), &config)
-                } else {
-                    return Err(
-                        "No WD14 tagger model loaded. Please load a model first.".to_string(),
-                    );
-                }
-            };
-
-            match predictions_res {
-                Ok(predictions) => {
-                    let database = db(&state)?;
-                    for pred in &predictions {
-                        if let Ok(tag) = database.get_or_create_tag(&pred.name, None) {
-                            if database.tag_file(fid, tag.id).is_ok() {
-                                tags_added += 1;
-                            }
-                        }
-                    }
-
-                    if config.write_to_prompt && !predictions.is_empty() {
-                        let prompt_text = predictions
-                            .iter()
-                            .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
-                            .map(|p| p.name.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ");
-
-                        if !prompt_text.is_empty() {
-                            let _ = database.update_file_prompt(
-                                fid,
-                                &prompt_text,
-                                config.append_prompt,
-                                config.allow_override_existing_prompt,
-                            );
-                        }
-                    }
-
-                    processed_files += 1;
-                }
-                Err(_) => {
-                    failed_files += 1;
-                }
-            }
-        } else {
-            failed_files += 1;
-        }
-    }
-
-    let is_canceled = cancel_flag.load(Ordering::Relaxed);
-    let _ = app_handle.emit(
-        "tagger-batch-progress",
-        BatchTagProgress {
-            current: total,
-            total,
-            percent: 100.0,
-            current_file: String::new(),
+        Ok(BatchTagResult {
             processed_files,
-            failed_files,
             tags_added,
-            is_complete: !is_canceled,
-            is_canceled,
-        },
-    );
-
-    Ok(BatchTagResult {
-        processed_files,
-        tags_added,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // --- CLIP / SigLIP Multi-Modal Semantic Search ---
@@ -4493,39 +4507,46 @@ pub fn auto_stack_images(
 // --- Generation Interoperability (ComfyUI & SD WebUI) ---
 
 #[tauri::command]
-pub fn check_generation_service(endpoint: String, service_type: String) -> Result<bool, String> {
-    let base = endpoint.trim_end_matches('/');
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(3))
-        .timeout_read(std::time::Duration::from_secs(3))
-        .build();
+pub async fn check_generation_service(
+    endpoint: String,
+    service_type: String,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = endpoint.trim_end_matches('/');
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(3))
+            .timeout_read(std::time::Duration::from_secs(3))
+            .build();
 
-    let primary_url = match service_type.as_str() {
-        "comfyui" => format!("{base}/system_stats"),
-        "webui" => format!("{base}/sdapi/v1/options"),
-        _ => format!("{base}/"),
-    };
+        let primary_url = match service_type.as_str() {
+            "comfyui" => format!("{base}/system_stats"),
+            "webui" => format!("{base}/sdapi/v1/options"),
+            _ => format!("{base}/"),
+        };
 
-    if let Ok(res) = agent.get(&primary_url).call() {
-        if res.status() == 200 {
-            return Ok(true);
+        if let Ok(res) = agent.get(&primary_url).call() {
+            if res.status() == 200 {
+                return Ok(true);
+            }
         }
-    }
 
-    // Fallback URLs
-    let fallback_url = match service_type.as_str() {
-        "comfyui" => format!("{base}/prompt"),
-        "webui" => format!("{base}/docs"),
-        _ => return Ok(false),
-    };
+        // Fallback URLs
+        let fallback_url = match service_type.as_str() {
+            "comfyui" => format!("{base}/prompt"),
+            "webui" => format!("{base}/docs"),
+            _ => return Ok(false),
+        };
 
-    if let Ok(res) = agent.get(&fallback_url).call() {
-        if res.status() == 200 {
-            return Ok(true);
+        if let Ok(res) = agent.get(&fallback_url).call() {
+            if res.status() == 200 {
+                return Ok(true);
+            }
         }
-    }
 
-    Ok(false)
+        Ok(false)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 pub fn prepare_comfyui_prompt_payload(parsed: &serde_json::Value) -> serde_json::Value {
@@ -4539,63 +4560,71 @@ pub fn prepare_comfyui_prompt_payload(parsed: &serde_json::Value) -> serde_json:
 }
 
 #[tauri::command]
-pub fn send_to_comfyui(
+pub async fn send_to_comfyui(
     endpoint: String,
     workflow_json: String,
 ) -> Result<serde_json::Value, String> {
-    let base = endpoint.trim_end_matches('/');
-    let target_url = format!("{base}/prompt");
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = endpoint.trim_end_matches('/');
+        let target_url = format!("{base}/prompt");
 
-    let parsed: serde_json::Value =
-        serde_json::from_str(&workflow_json).map_err(|e| format!("Invalid workflow JSON: {e}"))?;
+        let parsed: serde_json::Value = serde_json::from_str(&workflow_json)
+            .map_err(|e| format!("Invalid workflow JSON: {e}"))?;
 
-    let payload = prepare_comfyui_prompt_payload(&parsed);
-    let body = serde_json::to_string(&payload)
-        .map_err(|e| format!("Failed to serialize ComfyUI payload: {e}"))?;
+        let payload = prepare_comfyui_prompt_payload(&parsed);
+        let body = serde_json::to_string(&payload)
+            .map_err(|e| format!("Failed to serialize ComfyUI payload: {e}"))?;
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(5))
-        .timeout_read(std::time::Duration::from_secs(10))
-        .build();
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(5))
+            .timeout_read(std::time::Duration::from_secs(10))
+            .build();
 
-    let res = agent
-        .post(&target_url)
-        .set("Content-Type", "application/json")
-        .send_string(&body)
-        .map_err(|e| format!("Failed to send to ComfyUI ({target_url}): {e}"))?;
+        let res = agent
+            .post(&target_url)
+            .set("Content-Type", "application/json")
+            .send_string(&body)
+            .map_err(|e| format!("Failed to send to ComfyUI ({target_url}): {e}"))?;
 
-    let json: serde_json::Value = serde_json::from_reader(res.into_reader())
-        .map_err(|e| format!("Failed to parse ComfyUI response: {e}"))?;
+        let json: serde_json::Value = serde_json::from_reader(res.into_reader())
+            .map_err(|e| format!("Failed to parse ComfyUI response: {e}"))?;
 
-    Ok(json)
+        Ok(json)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn send_to_webui(
+pub async fn send_to_webui(
     endpoint: String,
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    let base = endpoint.trim_end_matches('/');
-    let target_url = format!("{base}/sdapi/v1/txt2img");
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = endpoint.trim_end_matches('/');
+        let target_url = format!("{base}/sdapi/v1/txt2img");
 
-    let body = serde_json::to_string(&payload)
-        .map_err(|e| format!("Failed to serialize WebUI payload: {e}"))?;
+        let body = serde_json::to_string(&payload)
+            .map_err(|e| format!("Failed to serialize WebUI payload: {e}"))?;
 
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(5))
-        .timeout_read(std::time::Duration::from_secs(30))
-        .build();
+        let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(5))
+            .timeout_read(std::time::Duration::from_secs(30))
+            .build();
 
-    let res = agent
-        .post(&target_url)
-        .set("Content-Type", "application/json")
-        .send_string(&body)
-        .map_err(|e| format!("Failed to send to SD WebUI ({target_url}): {e}"))?;
+        let res = agent
+            .post(&target_url)
+            .set("Content-Type", "application/json")
+            .send_string(&body)
+            .map_err(|e| format!("Failed to send to SD WebUI ({target_url}): {e}"))?;
 
-    let json: serde_json::Value = serde_json::from_reader(res.into_reader())
-        .map_err(|e| format!("Failed to parse SD WebUI response: {e}"))?;
+        let json: serde_json::Value = serde_json::from_reader(res.into_reader())
+            .map_err(|e| format!("Failed to parse SD WebUI response: {e}"))?;
 
-    Ok(json)
+        Ok(json)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Test connectivity and latency to the configured cloud backup provider.

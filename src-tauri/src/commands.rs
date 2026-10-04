@@ -2230,7 +2230,7 @@ pub fn list_tagger_models(
             .unwrap_or(false);
         if !models
             .iter()
-            .any(|m| m.model_path == root_model.to_string_lossy().to_string())
+            .any(|m| m.model_path == root_model.to_string_lossy())
         {
             models.push(TaggerModelSummary {
                 name: "WD14 (Default)".to_string(),
@@ -2281,6 +2281,7 @@ pub struct DownloadTaggerOptions {
     pub mirror: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn stream_download_tagger_file(
     app: &AppHandle,
     cancel_flag: &Arc<AtomicBool>,

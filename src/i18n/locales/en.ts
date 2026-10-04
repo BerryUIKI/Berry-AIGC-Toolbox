@@ -247,6 +247,11 @@ export const en = {
     downloadFinishing: "Download complete, verifying and loading model...",
     writeToPrompt: "Write recognized tags to prompt",
     appendPrompt: "Append to existing prompt",
+    batchProgressTitle: "Batch Tagging Progress",
+    batchProgressRatio: "{current} / {total} processed ({percent}%)",
+    cancelBatch: "Cancel",
+    batchCompleted: "Batch tagging complete ({processed} processed, {failed} failed, {tags} tags added).",
+    batchCanceled: "Batch tagging canceled.",
   },
   clipModal: {
     title: "CLIP / SigLIP AI Semantic Search Engine",

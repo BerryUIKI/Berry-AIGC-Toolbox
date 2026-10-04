@@ -249,6 +249,11 @@ export const fr: typeof en = {
     downloadFinishing: "Téléchargement terminé, chargement du modèle...",
     writeToPrompt: "Écrire les tags reconnus dans le prompt",
     appendPrompt: "Ajouter au prompt existant",
+    batchProgressTitle: "Progression du taggage par lot",
+    batchProgressRatio: "{current} / {total} traités ({percent}%)",
+    cancelBatch: "Annuler",
+    batchCompleted: "Taggage par lot terminé ({processed} traités, {failed} échoués, {tags} tags ajoutés).",
+    batchCanceled: "Taggage par lot annulé.",
   },
   clipModal: {
     title: "Moteur de recherche sémantique CLIP / SigLIP",

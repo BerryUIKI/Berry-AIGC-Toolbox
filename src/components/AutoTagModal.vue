@@ -9,9 +9,10 @@ import type {
   TaggerConfig,
   TaggerModelSummary,
   TagPrediction,
-  BatchTagResult,
+  BatchTagProgress,
   TaggerDownloadProgress,
 } from "../types";
+import { BatchAutoTagController } from "../utils/batch-tagger";
 
 const props = defineProps<{
   show: boolean;
@@ -50,12 +51,14 @@ const isDetecting = ref(false);
 const isApplyingCurrent = ref(false);
 const isApplyingBatch = ref(false);
 const isApplying = computed(() => isApplyingCurrent.value || isApplyingBatch.value);
+const batchController = new BatchAutoTagController();
+const batchProgress = ref<BatchTagProgress | null>(null);
 const isDownloading = ref(false);
 const downloadProgress = ref<TaggerDownloadProgress | null>(null);
 const downloadSource = ref<"auto" | "modelscope" | "hf-mirror" | "huggingface">("auto");
 let unlistenDownload: UnlistenFn | null = null;
 const predictions = ref<TagPrediction[]>([]);
-const message = ref<{ type: "success" | "error"; text: string } | null>(null);
+const message = ref<{ type: "success" | "error" | "info" | "warning"; text: string } | null>(null);
 
 const taggerConfig = computed<TaggerConfig>(() => ({
   general_threshold: generalThreshold.value / 100,
@@ -190,21 +193,57 @@ async function applyToCurrent() {
 async function applyToBatch() {
   if (props.selectedFileIds.length === 0) return;
   isApplyingBatch.value = true;
+  batchProgress.value = null;
   message.value = null;
   try {
-    const result = await invoke<BatchTagResult>("batch_auto_tag_files", {
+    const result = await batchController.start({
       fileIds: props.selectedFileIds,
       config: taggerConfig.value,
+      onProgress: (p) => {
+        batchProgress.value = p;
+      },
     });
-    message.value = {
-      type: "success",
-      text: `${t.value.autoTagModal.success} (${result.processed_files} files, ${result.tags_added} tags)`,
-    };
-    emit("tags-applied");
+
+    if (batchController.status === "completed") {
+      const failed = batchController.progress?.failed_files ?? 0;
+      if (failed > 0) {
+        message.value = {
+          type: "warning",
+          text: `${t.value.autoTagModal.success} (${result.processed_files} ok, ${failed} failed, ${result.tags_added} tags)`,
+        };
+      } else {
+        message.value = {
+          type: "success",
+          text: `${t.value.autoTagModal.success} (${result.processed_files} files, ${result.tags_added} tags)`,
+        };
+      }
+      emit("tags-applied");
+    } else if (batchController.status === "canceled") {
+      message.value = {
+        type: "info",
+        text: t.value.autoTagModal.batchCanceled,
+      };
+      if (result.processed_files > 0) {
+        emit("tags-applied");
+      }
+    }
   } catch (err: any) {
-    message.value = { type: "error", text: String(err) };
+    if (batchController.status === "canceled") {
+      message.value = {
+        type: "info",
+        text: t.value.autoTagModal.batchCanceled,
+      };
+    } else {
+      message.value = { type: "error", text: String(err) };
+    }
   } finally {
     isApplyingBatch.value = false;
+  }
+}
+
+async function cancelBatchAutoTag() {
+  if (isApplyingBatch.value) {
+    await batchController.cancel();
   }
 }
 
@@ -557,6 +596,42 @@ onUnmounted(() => {
                 🔒 {{ t.settings.promptProtected }}
               </span>
             </div>
+          </div>
+        </div>
+
+        <!-- Batch Tagging Progress Bar Card -->
+        <div v-if="isApplyingBatch && batchProgress" class="section-box batch-progress-box">
+          <div class="progress-header">
+            <div class="progress-title-row">
+              <span class="progress-phase">{{ t.autoTagModal.batchProgressTitle }}</span>
+              <span class="progress-ratio">
+                {{
+                  t.autoTagModal.batchProgressRatio
+                    .replace('{current}', String(batchProgress.current))
+                    .replace('{total}', String(batchProgress.total))
+                    .replace('{percent}', String(Math.floor(batchProgress.percent)))
+                }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="cancel-batch-btn"
+              @click="cancelBatchAutoTag"
+            >
+              {{ t.autoTagModal.cancelBatch }}
+            </button>
+          </div>
+          <div class="progress-bar-track">
+            <div
+              class="progress-bar-fill"
+              :style="{ width: `${Math.min(100, Math.max(0, batchProgress.percent))}%` }"
+            ></div>
+          </div>
+          <div class="progress-info-row">
+            <span class="file-name-hint">{{ batchProgress.current_file }}</span>
+            <span v-if="batchProgress.failed_files > 0" class="failed-badge">
+              {{ batchProgress.failed_files }} failed
+            </span>
           </div>
         </div>
 
@@ -1016,6 +1091,93 @@ onUnmounted(() => {
   border-color: rgba(239, 68, 68, 0.4);
   color: #ef4444;
   opacity: 1;
+}
+
+.batch-progress-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(99, 102, 241, 0.04);
+  border-color: rgba(99, 102, 241, 0.25);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-phase {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.progress-ratio {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.cancel-batch-btn {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+  opacity: 0.9;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cancel-batch-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  opacity: 1;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.progress-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.file-name-hint {
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.failed-badge {
+  color: #ef4444;
+  font-weight: 600;
 }
 
 .controls-grid {

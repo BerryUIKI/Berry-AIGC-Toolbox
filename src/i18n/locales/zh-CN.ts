@@ -249,6 +249,11 @@ export const zhCN: typeof en = {
     downloadFinishing: "下载完成，正在验证并加载模型...",
     writeToPrompt: "将识别标签写入图片正向提示词",
     appendPrompt: "追加到已有提示词后",
+    batchProgressTitle: "批量打标进度",
+    batchProgressRatio: "已处理 {current} / {total} 张 ({percent}%)",
+    cancelBatch: "取消处理",
+    batchCompleted: "批量打标完成（成功 {processed} 张，失败 {failed} 张，累计添加 {tags} 个标签）。",
+    batchCanceled: "批量打标已取消。",
   },
   clipModal: {
     title: "CLIP / SigLIP AI 文本语义搜图引擎",

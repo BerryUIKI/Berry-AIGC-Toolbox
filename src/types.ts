@@ -554,6 +554,18 @@ export interface BatchTagResult {
   tags_added: number;
 }
 
+export interface BatchTagProgress {
+  current: number;
+  total: number;
+  percent: number;
+  current_file: string;
+  processed_files: number;
+  failed_files: number;
+  tags_added: number;
+  is_complete: boolean;
+  is_canceled: boolean;
+}
+
 export interface TaggerDownloadProgress {
   phase: string;
   current_file: string;

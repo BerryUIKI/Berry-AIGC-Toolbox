@@ -249,6 +249,11 @@ export const es: typeof en = {
     downloadFinishing: "Descarga completada, cargando modelo...",
     writeToPrompt: "Escribir etiquetas reconocidas en el prompt",
     appendPrompt: "Añadir al prompt existente",
+    batchProgressTitle: "Progreso del etiquetado por lotes",
+    batchProgressRatio: "{current} / {total} procesados ({percent}%)",
+    cancelBatch: "Cancelar",
+    batchCompleted: "Etiquetado por lotes completado ({processed} procesados, {failed} fallidos, {tags} etiquetas añadidas).",
+    batchCanceled: "Etiquetado por lotes cancelado.",
   },
   clipModal: {
     title: "Motor de búsqueda semántica CLIP / SigLIP",

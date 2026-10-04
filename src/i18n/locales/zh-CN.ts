@@ -89,7 +89,7 @@ export const zhCN: typeof en = {
     copyPrompts: "💬 复制提示词",
     promptsCopied: "✓ 提示词已复制！",
     move: "📂 移动",
-    batchAutoTag: "🏷️ 自动打标",
+    batchAutoTag: "🤖 自动打标",
     copy: "📄 复制",
     trash: "🗑 移至废纸篓",
     export: "📤 批量导出...",

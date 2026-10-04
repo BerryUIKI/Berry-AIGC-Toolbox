@@ -89,7 +89,7 @@ export const zhTW: typeof en = {
     copyPrompts: "💬 複製提示詞",
     promptsCopied: "✓ 提示詞已複製！",
     move: "📂 移動",
-    batchAutoTag: "🏷️ 自動標籤",
+    batchAutoTag: "🤖 自動標籤",
     copy: "📄 複製",
     trash: "🗑 移至垃圾桶",
     export: "📤 批次匯出...",

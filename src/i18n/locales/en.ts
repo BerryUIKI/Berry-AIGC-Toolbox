@@ -87,7 +87,7 @@ export const en = {
     copyPrompts: "💬 Copy Prompts",
     promptsCopied: "✓ Prompts Copied!",
     move: "📂 Move",
-    batchAutoTag: "🏷️ Auto-Tag",
+    batchAutoTag: "🤖 Auto-Tag",
     copy: "📄 Copy",
     trash: "🗑 Trash",
     export: "📤 Export...",

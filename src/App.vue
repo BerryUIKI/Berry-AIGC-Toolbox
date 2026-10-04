@@ -60,6 +60,7 @@ import { checkForUpdates } from "./utils/updater";
 import { applyTheme, normalizeTheme, type AppTheme } from "./utils/theme";
 import ToastContainer from "./components/ToastContainer.vue";
 import { useNotification } from "./utils/notification";
+import { actionHistory } from "./utils/history";
 import { collaborationSync } from "./utils/collaborationSync";
 import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
 
@@ -411,6 +412,23 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   }
 
   if (hasActiveDialog()) {
+    return;
+  }
+
+  // Undo: Ctrl+Z / Cmd+Z (without shift)
+  if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
+    e.preventDefault();
+    void onUndo();
+    return;
+  }
+
+  // Redo: Ctrl+Y / Cmd+Y or Ctrl+Shift+Z / Cmd+Shift+Z
+  if (
+    ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y")) ||
+    ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "z" || e.key === "Z"))
+  ) {
+    e.preventDefault();
+    void onRedo();
     return;
   }
 
@@ -978,27 +996,74 @@ function onToggleAll() {
   }
 }
 
-async function onBatchRate(rating: number | null) {
-  const ids = selectedFilesList.value
-    .map((f) => f.id)
-    .filter((id): id is number => id != null);
-  if (ids.length === 0) return;
-
+async function onUndo() {
   try {
-    await invoke("set_files_rating", { fileIds: ids, rating });
-    for (const id of ids) {
-      fileDetailsManager.update(id, { rating: rating ?? undefined });
+    const actionName = await actionHistory.undo();
+    if (actionName) {
+      notification.showSuccess(`Undid: ${actionName}`, undefined, 2500);
     }
-    const idSet = new Set(ids);
+  } catch (err) {
+    notification.showError(`Undo failed: ${err}`);
+  }
+}
+
+async function onRedo() {
+  try {
+    const actionName = await actionHistory.redo();
+    if (actionName) {
+      notification.showSuccess(`Redid: ${actionName}`, undefined, 2500);
+    }
+  } catch (err) {
+    notification.showError(`Redo failed: ${err}`);
+  }
+}
+
+async function onBatchRate(rating: number | null) {
+  const targetFiles = selectedFilesList.value.filter((f): f is ImageFile & { id: number } => f.id != null);
+  if (targetFiles.length === 0) return;
+
+  const previousRatings = new Map<number, number | null>();
+  for (const f of targetFiles) {
+    previousRatings.set(f.id, f.rating ?? null);
+  }
+
+  const applyRatingState = async (ratingsMap: Map<number, number | null>) => {
+    // Group files by rating value for efficient backend calls
+    const grouped = new Map<number | null, number[]>();
+    for (const [id, r] of ratingsMap.entries()) {
+      const list = grouped.get(r) ?? [];
+      list.push(id);
+      grouped.set(r, list);
+    }
+    for (const [r, ids] of grouped.entries()) {
+      await invoke("set_files_rating", { fileIds: ids, rating: r });
+      for (const id of ids) {
+        const rating = r;
+        fileDetailsManager.update(id, { rating: rating ?? undefined });
+      }
+    }
     files.value = files.value.map((f) => {
-      if (f.id != null && idSet.has(f.id)) {
-        return { ...f, rating: rating ?? undefined };
+      if (f.id != null && ratingsMap.has(f.id)) {
+        return { ...f, rating: ratingsMap.get(f.id) ?? undefined };
       }
       return f;
     });
-    if (selectedFile.value?.id != null && idSet.has(selectedFile.value.id)) {
-      selectedFile.value.rating = rating ?? undefined;
+    if (selectedFile.value?.id != null && ratingsMap.has(selectedFile.value.id)) {
+      selectedFile.value.rating = ratingsMap.get(selectedFile.value.id) ?? undefined;
     }
+  };
+
+  try {
+    const newRatingsMap = new Map<number, number | null>();
+    for (const f of targetFiles) {
+      newRatingsMap.set(f.id, rating);
+    }
+
+    await actionHistory.execute({
+      name: `Set rating to ${rating ?? 0} stars (${targetFiles.length} files)`,
+      execute: () => applyRatingState(newRatingsMap),
+      undo: () => applyRatingState(previousRatings),
+    });
   } catch (e) {
     error.value = String(e);
   }
@@ -1465,50 +1530,110 @@ async function onAutoTagsApplied() {
 }
 
 async function onBatchToggleFavorite(isFavorite: boolean) {
-  const ids = selectedFilesList.value
-    .map((f) => f.id)
-    .filter((id): id is number => id != null);
-  if (ids.length === 0) return;
-  try {
-    await invoke("set_files_favorite", { fileIds: ids, isFavorite });
-    for (const id of ids) {
-      fileDetailsManager.update(id, { is_favorite: isFavorite });
+  const targetFiles = selectedFilesList.value.filter((f): f is ImageFile & { id: number } => f.id != null);
+  if (targetFiles.length === 0) return;
+
+  const previousFavs = new Map<number, boolean>();
+  for (const f of targetFiles) {
+    previousFavs.set(f.id, !!f.is_favorite);
+  }
+
+  const applyFavState = async (favMap: Map<number, boolean>) => {
+    const favIds: number[] = [];
+    const unfavIds: number[] = [];
+    for (const [id, fav] of favMap.entries()) {
+      if (fav) favIds.push(id);
+      else unfavIds.push(id);
     }
-    const updated = files.value.map((f) => {
-      if (selectedFilePaths.value.has(f.path)) {
-        return { ...f, is_favorite: isFavorite };
+    if (favIds.length > 0) {
+      await invoke("set_files_favorite", { fileIds: favIds, isFavorite: true });
+      for (const id of favIds) {
+        const isFavorite = true;
+        fileDetailsManager.update(id, { is_favorite: isFavorite });
+      }
+    }
+    if (unfavIds.length > 0) {
+      await invoke("set_files_favorite", { fileIds: unfavIds, isFavorite: false });
+      for (const id of unfavIds) {
+        const isFavorite = false;
+        fileDetailsManager.update(id, { is_favorite: isFavorite });
+      }
+    }
+    files.value = files.value.map((f) => {
+      if (f.id != null && favMap.has(f.id)) {
+        return { ...f, is_favorite: favMap.get(f.id) };
       }
       return f;
     });
-    files.value = updated;
-    if (selectedFile.value && selectedFilePaths.value.has(selectedFile.value.path)) {
-      selectedFile.value.is_favorite = isFavorite;
+    if (selectedFile.value?.id != null && favMap.has(selectedFile.value.id)) {
+      selectedFile.value.is_favorite = favMap.get(selectedFile.value.id);
     }
+  };
+
+  try {
+    const newFavMap = new Map<number, boolean>();
+    for (const f of targetFiles) newFavMap.set(f.id, isFavorite);
+
+    await actionHistory.execute({
+      name: `${isFavorite ? "Favorite" : "Unfavorite"} ${targetFiles.length} files`,
+      execute: () => applyFavState(newFavMap),
+      undo: () => applyFavState(previousFavs),
+    });
   } catch (err) {
     error.value = String(err);
   }
 }
 
 async function onBatchToggleNsfw(isNsfw: boolean) {
-  const ids = selectedFilesList.value
-    .map((f) => f.id)
-    .filter((id): id is number => id != null);
-  if (ids.length === 0) return;
-  try {
-    await invoke("set_files_nsfw", { fileIds: ids, isNsfw });
-    for (const id of ids) {
-      fileDetailsManager.update(id, { is_nsfw: isNsfw });
+  const targetFiles = selectedFilesList.value.filter((f): f is ImageFile & { id: number } => f.id != null);
+  if (targetFiles.length === 0) return;
+
+  const previousNsfw = new Map<number, boolean>();
+  for (const f of targetFiles) {
+    previousNsfw.set(f.id, !!f.is_nsfw);
+  }
+
+  const applyNsfwState = async (nsfwMap: Map<number, boolean>) => {
+    const nsfwIds: number[] = [];
+    const sfwIds: number[] = [];
+    for (const [id, nsfw] of nsfwMap.entries()) {
+      if (nsfw) nsfwIds.push(id);
+      else sfwIds.push(id);
     }
-    const updated = files.value.map((f) => {
-      if (selectedFilePaths.value.has(f.path)) {
-        return { ...f, is_nsfw: isNsfw };
+    if (nsfwIds.length > 0) {
+      await invoke("set_files_nsfw", { fileIds: nsfwIds, isNsfw: true });
+      for (const id of nsfwIds) {
+        const isNsfw = true;
+        fileDetailsManager.update(id, { is_nsfw: isNsfw });
+      }
+    }
+    if (sfwIds.length > 0) {
+      await invoke("set_files_nsfw", { fileIds: sfwIds, isNsfw: false });
+      for (const id of sfwIds) {
+        const isNsfw = false;
+        fileDetailsManager.update(id, { is_nsfw: isNsfw });
+      }
+    }
+    files.value = files.value.map((f) => {
+      if (f.id != null && nsfwMap.has(f.id)) {
+        return { ...f, is_nsfw: nsfwMap.get(f.id) };
       }
       return f;
     });
-    files.value = updated;
-    if (selectedFile.value && selectedFilePaths.value.has(selectedFile.value.path)) {
-      selectedFile.value.is_nsfw = isNsfw;
+    if (selectedFile.value?.id != null && nsfwMap.has(selectedFile.value.id)) {
+      selectedFile.value.is_nsfw = nsfwMap.get(selectedFile.value.id);
     }
+  };
+
+  try {
+    const newNsfwMap = new Map<number, boolean>();
+    for (const f of targetFiles) newNsfwMap.set(f.id, isNsfw);
+
+    await actionHistory.execute({
+      name: `Mark ${isNsfw ? "NSFW" : "SFW"} (${targetFiles.length} files)`,
+      execute: () => applyNsfwState(newNsfwMap),
+      undo: () => applyNsfwState(previousNsfw),
+    });
   } catch (err) {
     error.value = String(err);
   }

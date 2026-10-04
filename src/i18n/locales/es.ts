@@ -231,7 +231,7 @@ export const es: typeof en = {
     tagging: "Etiquetando en progreso...",
     success: "¡Etiquetas aplicadas con éxito!",
     noModelTitle: "No se detectó ningún modelo de etiquetado WD14",
-    noModelDesc: "El etiquetado WD14 requiere un modelo neuronal ONNX y un CSV de etiquetas. Puede descargar automáticamente el modelo recomendado ConvNeXt V2 (~110 MB) con un solo clic, o seleccionar una carpeta local existente.",
+    noModelDesc: "El etiquetado WD14 requiere un modelo neuronal ONNX y un CSV de etiquetas. Puede descargar automáticamente el modelo recomendado ConvNeXt V2 (~388 MB) con un solo clic, o seleccionar una carpeta local existente.",
     downloadModel: "Descargar modelo recomendado (WD14 ConvNeXt V2)",
     downloadShort: "Descargar modelo",
     downloadSource: "Nodo de descarga",
@@ -242,6 +242,9 @@ export const es: typeof en = {
     downloadSuccess: "¡Modelo WD14 descargado y cargado con éxito!",
     downloadFailed: "Error al descargar el modelo",
     downloadCanceled: "Descarga cancelada",
+    downloadingTags: "Descargando tabla de etiquetas (selected_tags.csv, 1/2)...",
+    downloadingModel: "Descargando pesos del modelo (model.onnx, 2/2)...",
+    downloadFinishing: "Descarga completada, cargando modelo...",
   },
   clipModal: {
     title: "Motor de búsqueda semántica CLIP / SigLIP",

@@ -231,7 +231,7 @@ export const de: typeof en = {
     tagging: "Verschlagwortung läuft...",
     success: "Tags erfolgreich angewendet!",
     noModelTitle: "Kein WD14-Tagger-Modell erkannt",
-    noModelDesc: "WD14 benötigt ein ONNX-Modell und eine CSV-Tagtabelle. Sie können das empfohlene ConvNeXt V2-Modell (~110MB) mit einem Klick automatisch herunterladen oder einen lokalen Modellordner wählen.",
+    noModelDesc: "WD14 benötigt ein ONNX-Modell und eine CSV-Tagtabelle. Sie können das empfohlene ConvNeXt V2-Modell (~388MB) mit einem Klick automatisch herunterladen oder einen lokalen Modellordner wählen.",
     downloadModel: "Empfohlenes Modell herunterladen (WD14 ConvNeXt V2)",
     downloadShort: "Modell herunterladen",
     downloadSource: "Download-Quelle",
@@ -242,6 +242,9 @@ export const de: typeof en = {
     downloadSuccess: "WD14-Modell erfolgreich heruntergeladen und geladen!",
     downloadFailed: "Modell-Download fehlgeschlagen",
     downloadCanceled: "Download abgebrochen",
+    downloadingTags: "Tag-Tabelle wird heruntergeladen (selected_tags.csv, 1/2)...",
+    downloadingModel: "Modellgewichte werden heruntergeladen (model.onnx, 2/2)...",
+    downloadFinishing: "Download abgeschlossen, Modell wird geladen...",
   },
   clipModal: {
     title: "CLIP / SigLIP KI-Semantiksuchmaschine",

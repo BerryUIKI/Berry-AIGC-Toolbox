@@ -229,7 +229,7 @@ export const en = {
     tagging: "Tagging in progress...",
     success: "Tags applied successfully!",
     noModelTitle: "No WD14 Tagger Model Detected",
-    noModelDesc: "WD14 auto-tagging requires an ONNX neural network model and tag CSV. You can automatically download the official recommended ConvNeXt V2 model (~110MB) with one click, or choose an existing local model folder.",
+    noModelDesc: "WD14 auto-tagging requires an ONNX neural network model and tag CSV. You can automatically download the official recommended ConvNeXt V2 model (~388MB) with one click, or choose an existing local model folder.",
     downloadModel: "Download Recommended Model (WD14 ConvNeXt V2)",
     downloadShort: "Download Model",
     downloadSource: "Download Mirror",
@@ -240,6 +240,9 @@ export const en = {
     downloadSuccess: "WD14 model downloaded and loaded successfully!",
     downloadFailed: "Model download failed",
     downloadCanceled: "Download canceled",
+    downloadingTags: "Downloading tag list (selected_tags.csv, 1/2)...",
+    downloadingModel: "Downloading model weights (model.onnx, 2/2)...",
+    downloadFinishing: "Download complete, verifying and loading model...",
   },
   clipModal: {
     title: "CLIP / SigLIP AI Semantic Search Engine",

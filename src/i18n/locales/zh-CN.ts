@@ -231,7 +231,7 @@ export const zhCN: typeof en = {
     tagging: "正在识别打标...",
     success: "标签已成功应用！",
     noModelTitle: "未检测到 WD14 打标模型",
-    noModelDesc: "WD14 自动打标需要 ONNX 格式神经网络模型与标签表。您可以一键自动下载官方推荐的 ConvNeXt V2 模型（约 110MB），也可以从本地指定已有的模型文件夹。",
+    noModelDesc: "WD14 自动打标需要 ONNX 格式神经网络模型与标签表。您可以一键自动下载官方推荐的 ConvNeXt V2 模型（约 388MB），也可以从本地指定已有的模型文件夹。",
     downloadModel: "一键下载官方推荐模型 (WD14 ConvNeXt V2)",
     downloadShort: "下载推荐模型",
     downloadSource: "下载节点",
@@ -242,6 +242,9 @@ export const zhCN: typeof en = {
     downloadSuccess: "WD14 模型下载成功并已自动加载！",
     downloadFailed: "模型下载失败",
     downloadCanceled: "下载已取消",
+    downloadingTags: "正在下载标签映射表 (selected_tags.csv, 1/2)...",
+    downloadingModel: "正在下载模型权重 (model.onnx, 2/2)...",
+    downloadFinishing: "下载完成，正在验证并加载模型...",
   },
   clipModal: {
     title: "CLIP / SigLIP AI 文本语义搜图引擎",

@@ -2281,17 +2281,19 @@ pub struct DownloadTaggerOptions {
     pub mirror: Option<String>,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn stream_download_tagger_file(
-    app: &AppHandle,
-    cancel_flag: &Arc<AtomicBool>,
-    urls: &[String],
-    dest_path: &Path,
-    filename: &str,
-    phase_label: &str,
+struct StreamDownloadSpec<'a> {
+    app: &'a AppHandle,
+    cancel_flag: &'a Arc<AtomicBool>,
+    urls: &'a [String],
+    dest_path: &'a Path,
+    filename: &'a str,
+    phase_label: &'a str,
     base_downloaded: u64,
     estimated_total: u64,
-) -> Result<u64, String> {
+    is_final_file: bool,
+}
+
+fn stream_download_tagger_file(spec: StreamDownloadSpec<'_>) -> Result<u64, String> {
     use std::io::{Read, Write};
     let agent = ureq::builder()
         .redirects(10)
@@ -2299,8 +2301,8 @@ fn stream_download_tagger_file(
         .build();
 
     let mut last_err = String::new();
-    for url in urls {
-        if cancel_flag.load(Ordering::Relaxed) {
+    for url in spec.urls {
+        if spec.cancel_flag.load(Ordering::Relaxed) {
             return Err("Download canceled by user".into());
         }
 
@@ -2321,7 +2323,7 @@ fn stream_download_tagger_file(
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(0);
 
-        let tmp_path = dest_path.with_extension("download_tmp");
+        let tmp_path = spec.dest_path.with_extension("download_tmp");
         let mut file = match std::fs::File::create(&tmp_path) {
             Ok(f) => f,
             Err(e) => return Err(format!("Failed creating temporary file: {e}")),
@@ -2336,16 +2338,16 @@ fn stream_download_tagger_file(
         let mut failed = false;
 
         loop {
-            if cancel_flag.load(Ordering::Relaxed) {
+            if spec.cancel_flag.load(Ordering::Relaxed) {
                 drop(file);
                 let _ = std::fs::remove_file(&tmp_path);
-                let _ = app.emit(
+                let _ = spec.app.emit(
                     "tagger-download-progress",
                     TaggerDownloadProgress {
                         phase: "canceled".into(),
-                        current_file: filename.into(),
-                        downloaded_bytes: base_downloaded + downloaded_bytes,
-                        total_bytes: estimated_total,
+                        current_file: spec.filename.into(),
+                        downloaded_bytes: spec.base_downloaded + downloaded_bytes,
+                        total_bytes: spec.estimated_total,
                         percent: 0.0,
                         speed_bytes_per_sec: 0,
                         error: None,
@@ -2374,26 +2376,30 @@ fn stream_download_tagger_file(
                         last_progress_time = std::time::Instant::now();
                         bytes_since_last = 0;
 
-                        let total_for_calc = if estimated_total > 0 {
-                            estimated_total
+                        let total_for_calc = if spec.is_final_file && file_total > 0 {
+                            spec.base_downloaded + file_total
+                        } else if spec.estimated_total > 0 {
+                            spec.estimated_total
                         } else if file_total > 0 {
-                            base_downloaded + file_total
+                            spec.base_downloaded + file_total
                         } else {
-                            0
-                        };
+                            spec.base_downloaded + downloaded_bytes
+                        }
+                        .max(spec.base_downloaded + downloaded_bytes);
 
-                        let current_total_bytes = base_downloaded + downloaded_bytes;
+                        let current_total_bytes = spec.base_downloaded + downloaded_bytes;
                         let percent = if total_for_calc > 0 {
-                            (current_total_bytes as f64 / total_for_calc as f64 * 100.0).min(99.9)
+                            (current_total_bytes as f64 / total_for_calc as f64 * 100.0)
+                                .clamp(0.0, 99.9)
                         } else {
                             0.0
                         };
 
-                        let _ = app.emit(
+                        let _ = spec.app.emit(
                             "tagger-download-progress",
                             TaggerDownloadProgress {
-                                phase: phase_label.into(),
-                                current_file: filename.into(),
+                                phase: spec.phase_label.into(),
+                                current_file: spec.filename.into(),
                                 downloaded_bytes: current_total_bytes,
                                 total_bytes: total_for_calc,
                                 percent,
@@ -2425,10 +2431,10 @@ fn stream_download_tagger_file(
         }
         drop(file);
 
-        if dest_path.exists() {
-            let _ = std::fs::remove_file(dest_path);
+        if spec.dest_path.exists() {
+            let _ = std::fs::remove_file(spec.dest_path);
         }
-        if let Err(e) = std::fs::rename(&tmp_path, dest_path) {
+        if let Err(e) = std::fs::rename(&tmp_path, spec.dest_path) {
             let _ = std::fs::remove_file(&tmp_path);
             last_err = format!("Failed renaming file: {e}");
             continue;
@@ -2490,31 +2496,34 @@ pub async fn download_tagger_model(
     let model_dest_clone = model_dest.clone();
 
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
-        let approx_total = 254_000 + 110_000_000;
+        // WD14 ConvNeXt V2 actual size: selected_tags.csv is ~254 KB, model.onnx is ~387.8 MB (total ~388.1 MB)
+        let approx_total = 253_906 + 387_820_405;
 
         // 1. Download selected_tags.csv
-        let tags_len = stream_download_tagger_file(
-            &app_clone,
-            &cancel_flag,
-            &tags_urls,
-            &tags_dest_clone,
-            "selected_tags.csv",
-            "downloading_tags",
-            0,
-            approx_total,
-        )?;
+        let tags_len = stream_download_tagger_file(StreamDownloadSpec {
+            app: &app_clone,
+            cancel_flag: &cancel_flag,
+            urls: &tags_urls,
+            dest_path: &tags_dest_clone,
+            filename: "selected_tags.csv",
+            phase_label: "downloading_tags",
+            base_downloaded: 0,
+            estimated_total: approx_total,
+            is_final_file: false,
+        })?;
 
         // 2. Download model.onnx
-        let model_len = stream_download_tagger_file(
-            &app_clone,
-            &cancel_flag,
-            &model_urls,
-            &model_dest_clone,
-            "model.onnx",
-            "downloading_model",
-            tags_len,
-            tags_len + 110_000_000,
-        )?;
+        let model_len = stream_download_tagger_file(StreamDownloadSpec {
+            app: &app_clone,
+            cancel_flag: &cancel_flag,
+            urls: &model_urls,
+            dest_path: &model_dest_clone,
+            filename: "model.onnx",
+            phase_label: "downloading_model",
+            base_downloaded: tags_len,
+            estimated_total: tags_len + 387_820_405,
+            is_final_file: true,
+        })?;
 
         let final_total = tags_len + model_len;
         let _ = app_clone.emit(

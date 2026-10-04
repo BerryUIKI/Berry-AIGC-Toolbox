@@ -231,7 +231,7 @@ export const ja: typeof en = {
     tagging: "タグ付け処理中...",
     success: "タグが正常に適用されました！",
     noModelTitle: "WD14 タガーモデルが見つかりません",
-    noModelDesc: "WD14 自動タグ付けには ONNX 形式のニューラルネットワークモデルとタグ対応表が必要です。公式推奨の ConvNeXt V2 モデル (約 110MB) をワンクリックで自動ダウンロードするか、ローカルフォルダを選択してください。",
+    noModelDesc: "WD14 自動タグ付けには ONNX 形式のニューラルネットワークモデルとタグ対応表が必要です。公式推奨の ConvNeXt V2 モデル (約 388MB) をワンクリックで自動ダウンロードするか、ローカルフォルダを選択してください。",
     downloadModel: "推奨モデルを自動ダウンロード (WD14 ConvNeXt V2)",
     downloadShort: "モデルをダウンロード",
     downloadSource: "ダウンロード拠点",
@@ -242,6 +242,9 @@ export const ja: typeof en = {
     downloadSuccess: "WD14 モデルのダウンロードが完了し、自動ロードされました！",
     downloadFailed: "モデルのダウンロードに失敗しました",
     downloadCanceled: "ダウンロードを中止しました",
+    downloadingTags: "タグ対応表をダウンロード中 (selected_tags.csv, 1/2)...",
+    downloadingModel: "モデルデータをダウンロード中 (model.onnx, 2/2)...",
+    downloadFinishing: "ダウンロード完了、モデルを検証・読み込み中...",
   },
   clipModal: {
     title: "CLIP / SigLIP AI テキストセマンティック検索エンジン",

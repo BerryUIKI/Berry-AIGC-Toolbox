@@ -231,7 +231,7 @@ export const fr: typeof en = {
     tagging: "Étiquetage en cours...",
     success: "Tags appliqués avec succès !",
     noModelTitle: "Aucun modèle de balisage WD14 détecté",
-    noModelDesc: "Le balisage WD14 nécessite un modèle de réseau neuronal ONNX et un fichier CSV. Vous pouvez télécharger automatiquement le modèle recommandé ConvNeXt V2 (~110 Mo) en un clic, ou choisir un dossier local existant.",
+    noModelDesc: "Le balisage WD14 nécessite un modèle de réseau neuronal ONNX et un fichier CSV. Vous pouvez télécharger automatiquement le modèle recommandé ConvNeXt V2 (~388 Mo) en un clic, ou choisir un dossier local existant.",
     downloadModel: "Télécharger le modèle recommandé (WD14 ConvNeXt V2)",
     downloadShort: "Télécharger le modèle",
     downloadSource: "Source de téléchargement",
@@ -242,6 +242,9 @@ export const fr: typeof en = {
     downloadSuccess: "Modèle WD14 téléchargé et chargé avec succès !",
     downloadFailed: "Échec du téléchargement du modèle",
     downloadCanceled: "Téléchargement annulé",
+    downloadingTags: "Téléchargement de la table des tags (selected_tags.csv, 1/2)...",
+    downloadingModel: "Téléchargement du modèle (model.onnx, 2/2)...",
+    downloadFinishing: "Téléchargement terminé, chargement du modèle...",
   },
   clipModal: {
     title: "Moteur de recherche sémantique CLIP / SigLIP",

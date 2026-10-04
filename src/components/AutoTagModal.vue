@@ -198,6 +198,28 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+const displayPercent = computed(() => {
+  if (!downloadProgress.value) return 0;
+  const p = downloadProgress.value;
+  if (p.phase === "complete") return 100;
+  return Math.min(99, Math.floor(p.percent));
+});
+
+function getDownloadStatusText(): string {
+  if (!downloadProgress.value) return t.value.autoTagModal.downloadShort;
+  const p = downloadProgress.value;
+  if (p.phase === "downloading_tags") {
+    return t.value.autoTagModal.downloadingTags || `Downloading selected_tags.csv (1/2)`;
+  }
+  if (p.phase === "downloading_model") {
+    return t.value.autoTagModal.downloadingModel || `Downloading model.onnx (2/2)`;
+  }
+  if (p.phase === "complete") {
+    return t.value.autoTagModal.downloadFinishing || `Download complete, loading model...`;
+  }
+  return p.current_file || t.value.autoTagModal.downloadShort;
+}
+
 async function startDownloadModel() {
   if (isDownloading.value) return;
   isDownloading.value = true;
@@ -321,15 +343,11 @@ onUnmounted(() => {
             <div class="download-title-group">
               <span class="download-icon">⚡</span>
               <span class="download-filename">
-                {{
-                  downloadProgress
-                    ? `${downloadProgress.phase}: ${downloadProgress.current_file}`
-                    : t.autoTagModal.downloadShort
-                }}
+                {{ getDownloadStatusText() }}
               </span>
             </div>
             <span class="download-pct">
-              {{ downloadProgress ? Math.round(downloadProgress.percent) : 0 }}%
+              {{ displayPercent }}%
             </span>
           </div>
 
@@ -337,7 +355,7 @@ onUnmounted(() => {
           <div class="progress-track">
             <div
               class="progress-fill"
-              :style="{ width: `${downloadProgress ? Math.max(2, Math.min(100, downloadProgress.percent)) : 5}%` }"
+              :style="{ width: `${Math.max(2, Math.min(100, displayPercent))}%` }"
             ></div>
           </div>
 
@@ -345,7 +363,8 @@ onUnmounted(() => {
           <div class="download-footer-row">
             <div class="download-metrics">
               <span v-if="downloadProgress && downloadProgress.total_bytes > 0">
-                {{ formatBytes(downloadProgress.downloaded_bytes) }} / {{ formatBytes(downloadProgress.total_bytes) }}
+                {{ formatBytes(downloadProgress.downloaded_bytes) }} /
+                {{ formatBytes(Math.max(downloadProgress.downloaded_bytes, downloadProgress.total_bytes)) }}
               </span>
               <span v-if="downloadProgress && downloadProgress.speed_bytes_per_sec > 0" class="download-speed">
                 ({{ formatBytes(downloadProgress.speed_bytes_per_sec) }}/s)

@@ -108,7 +108,7 @@ pub struct SyncItem {
 // -----------------------------------------------------------------------------
 
 pub fn cancel_cloud_sync(sync_state: &Arc<Mutex<CloudSyncState>>) {
-    let state = sync_state.lock().unwrap();
+    let state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
     state.cancel_flag.store(true, Ordering::SeqCst);
 }
 
@@ -124,7 +124,7 @@ pub fn start_cloud_sync(
 
     // Initialize state
     {
-        let mut state = sync_state.lock().unwrap();
+        let mut state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.is_running = true;
         state.cancel_flag = Arc::clone(&cancel_flag);
         state.progress = CloudSyncProgress {
@@ -137,7 +137,7 @@ pub fn start_cloud_sync(
     }
 
     let _ = app.emit("cloud-sync://progress", {
-        let state = sync_state.lock().unwrap();
+        let state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.progress.clone()
     });
 
@@ -167,19 +167,19 @@ fn run_cloud_sync_worker(
     let total_files = items.len();
 
     {
-        let mut state = sync_state.lock().unwrap();
+        let mut state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.progress.phase = CloudSyncPhase::Syncing;
         state.progress.total_files = total_files;
         state.progress.total_bytes = total_bytes;
     }
 
     let _ = app.emit("cloud-sync://progress", {
-        let state = sync_state.lock().unwrap();
+        let state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.progress.clone()
     });
 
     if total_files == 0 {
-        let mut state = sync_state.lock().unwrap();
+        let mut state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.is_running = false;
         state.progress.phase = CloudSyncPhase::Completed;
         state.summary = Some(CloudSyncResult {
@@ -233,7 +233,7 @@ fn run_cloud_sync_worker(
                 }
 
                 let item = {
-                    let mut q = queue.lock().unwrap();
+                    let mut q = queue.lock().unwrap_or_else(|e| e.into_inner());
                     q.pop_front()
                 };
 
@@ -259,7 +259,7 @@ fn run_cloud_sync_worker(
                     }
                     Err(err_msg) => {
                         failed.fetch_add(1, Ordering::SeqCst);
-                        let mut errs = errors.lock().unwrap();
+                        let mut errs = errors.lock().unwrap_or_else(|e| e.into_inner());
                         if errs.len() < 50 {
                             errs.push(format!("{}: {}", item.remote_key, err_msg));
                         }
@@ -278,7 +278,7 @@ fn run_cloud_sync_worker(
                 let eta = remaining_bytes.checked_div(speed);
 
                 {
-                    let mut state = sync_state_ref.lock().unwrap();
+                    let mut state = sync_state_ref.lock().unwrap_or_else(|e| e.into_inner());
                     state.progress.completed_files = cur_completed;
                     state.progress.skipped_files = cur_skipped;
                     state.progress.failed_files = cur_failed;
@@ -291,7 +291,7 @@ fn run_cloud_sync_worker(
                 // Periodic emit (every few files to avoid GUI flooding)
                 let total_done = cur_completed + cur_skipped + cur_failed;
                 if total_done.is_multiple_of(5) || total_done == total_files {
-                    let state = sync_state_ref.lock().unwrap();
+                    let state = sync_state_ref.lock().unwrap_or_else(|e| e.into_inner());
                     let _ = app_handle.emit("cloud-sync://progress", state.progress.clone());
                 }
             }
@@ -310,7 +310,10 @@ fn run_cloud_sync_worker(
     let final_skipped = skipped_files_counter.load(Ordering::SeqCst);
     let final_failed = failed_files_counter.load(Ordering::SeqCst);
     let final_transferred = transferred_bytes_counter.load(Ordering::SeqCst);
-    let final_errors = errors_list.lock().unwrap().clone();
+    let final_errors = errors_list
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
 
     let final_phase = if is_cancelled {
         CloudSyncPhase::Cancelled
@@ -333,7 +336,7 @@ fn run_cloud_sync_worker(
     };
 
     {
-        let mut state = sync_state.lock().unwrap();
+        let mut state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.is_running = false;
         state.progress.phase = final_phase;
         state.progress.current_file = None;
@@ -343,7 +346,7 @@ fn run_cloud_sync_worker(
     }
 
     let _ = app.emit("cloud-sync://progress", {
-        let state = sync_state.lock().unwrap();
+        let state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.progress.clone()
     });
 }
@@ -526,7 +529,7 @@ fn sync_single_item(
 
     // Apply bandwidth throttling
     {
-        let mut limiter = rate_limiter.lock().unwrap();
+        let mut limiter = rate_limiter.lock().unwrap_or_else(|e| e.into_inner());
         limiter.acquire(data.len());
     }
 
@@ -591,5 +594,25 @@ mod tests {
         assert_eq!(opts.remote_prefix, "media/");
         assert!(!opts.dry_run);
         assert_eq!(opts.strategy, CloudSyncStrategy::FastFingerprint);
+    }
+
+    #[test]
+    fn test_cloud_sync_lock_poisoning_resilience() {
+        let state = Arc::new(Mutex::new(CloudSyncState::default()));
+        let state_clone = Arc::clone(&state);
+
+        // Intentionally poison the mutex
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = state_clone.lock().unwrap();
+            panic!("Simulated worker panic");
+        }));
+
+        assert!(state.is_poisoned());
+
+        // cancel_cloud_sync must recover gracefully rather than panicking on poison
+        cancel_cloud_sync(&state);
+
+        let recovered = state.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(recovered.cancel_flag.load(Ordering::SeqCst));
     }
 }

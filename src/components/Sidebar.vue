@@ -26,6 +26,7 @@ const emit = defineEmits<{
   openAlbumModal: [];
   openTagModal: [];
   openPromptStats: [];
+  openAutoTagger: [];
   openModelManager: [];
   openDbManager: [];
   openShortcutsHelp: [];
@@ -574,6 +575,15 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
         >
           <span class="tool-icon">📊</span>
           <span class="tool-text">{{ t.search.insights }}</span>
+        </button>
+        <button
+          type="button"
+          class="tool-btn"
+          :title="t.search.autoTagger"
+          @click="emit('openAutoTagger')"
+        >
+          <span class="tool-icon">🤖</span>
+          <span class="tool-text">{{ t.search.autoTagger }}</span>
         </button>
         <button
           type="button"

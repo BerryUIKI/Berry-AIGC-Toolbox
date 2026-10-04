@@ -19,6 +19,7 @@ const props = defineProps<{
   selectedFile: ImageFile | null;
   selectedFileCount: number;
   selectedFileIds: number[];
+  selectedFiles?: ImageFile[];
   allowOverridePrompt?: boolean;
 }>();
 
@@ -37,6 +38,7 @@ const includeRating = ref<boolean>(false);
 const maxTags = ref<number>(50);
 const writeToPrompt = ref(false);
 const appendPrompt = ref(false);
+const batchScope = ref<"all" | "untagged" | "no-prompt">("all");
 
 const hasExistingPrompt = computed(() => {
   const p = props.selectedFile?.metadata?.prompt;
@@ -45,6 +47,33 @@ const hasExistingPrompt = computed(() => {
 
 const isPromptWriteLocked = computed(() => {
   return hasExistingPrompt.value && !props.allowOverridePrompt;
+});
+
+const filteredBatchFiles = computed(() => {
+  const list = props.selectedFiles || [];
+  if (batchScope.value === "untagged") {
+    // Files with no tags (or empty prompt and empty tags)
+    return list.filter((f) => {
+      const hasPrompt = Boolean(f.metadata?.prompt && f.metadata.prompt.trim().length > 0);
+      return !hasPrompt;
+    });
+  }
+  if (batchScope.value === "no-prompt") {
+    return list.filter((f) => {
+      const prompt = f.metadata?.prompt;
+      return !prompt || prompt.trim().length === 0;
+    });
+  }
+  return list;
+});
+
+const effectiveBatchFileIds = computed<number[]>(() => {
+  if (props.selectedFiles && props.selectedFiles.length > 0) {
+    return filteredBatchFiles.value
+      .map((f) => f.id)
+      .filter((id): id is number => typeof id === "number");
+  }
+  return props.selectedFileIds;
 });
 
 const isDetecting = ref(false);
@@ -191,13 +220,25 @@ async function applyToCurrent() {
 }
 
 async function applyToBatch() {
-  if (props.selectedFileIds.length === 0) return;
+  const targetIds = effectiveBatchFileIds.value;
+  if (targetIds.length === 0) return;
+
+  if (targetIds.length > 10) {
+    const confirmMsg = t.value.autoTagModal.confirmBatchMessage.replace(
+      "{count}",
+      String(targetIds.length),
+    );
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+  }
+
   isApplyingBatch.value = true;
   batchProgress.value = null;
   message.value = null;
   try {
     const result = await batchController.start({
-      fileIds: props.selectedFileIds,
+      fileIds: targetIds,
       config: taggerConfig.value,
       onProgress: (p) => {
         batchProgress.value = p;
@@ -596,6 +637,22 @@ onUnmounted(() => {
                 🔒 {{ t.settings.promptProtected }}
               </span>
             </div>
+
+            <!-- Batch Scope Selector (When multiple files are selected) -->
+            <div v-if="selectedFileCount > 1" class="control-item-row scope-opts-row">
+              <label class="scope-label">{{ t.autoTagModal.scopeLabel }}:</label>
+              <select v-model="batchScope" class="scope-select">
+                <option value="all">
+                  {{ t.autoTagModal.scopeAll.replace('{count}', String(selectedFileCount)) }}
+                </option>
+                <option value="no-prompt">
+                  {{ t.autoTagModal.scopeNoPromptOnly.replace('{count}', String(effectiveBatchFileIds.length)) }}
+                </option>
+                <option value="untagged">
+                  {{ t.autoTagModal.scopeUntaggedOnly.replace('{count}', String(effectiveBatchFileIds.length)) }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -687,13 +744,13 @@ onUnmounted(() => {
             v-if="selectedFileCount > 1"
             type="button"
             class="btn-primary batch-btn"
-            :disabled="isApplying || isDetecting || !loadedModel || isDownloading"
+            :disabled="isApplying || isDetecting || !loadedModel || isDownloading || effectiveBatchFileIds.length === 0"
             @click="applyToBatch"
           >
             {{
               isApplyingBatch
                 ? t.autoTagModal.tagging
-                : t.autoTagModal.applyToBatch.replace('{count}', String(selectedFileCount))
+                : t.autoTagModal.applyToBatch.replace('{count}', String(effectiveBatchFileIds.length))
             }}
           </button>
 
@@ -1263,6 +1320,32 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   color: var(--color-text-primary);
   padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.scope-opts-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.scope-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.scope-select {
+  flex: 1;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-primary);
+  padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.78rem;
   outline: none;

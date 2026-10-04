@@ -149,7 +149,65 @@ export interface MigrationSummary {
   duration_ms: number;
 }
 
-export type ExportFormat = "original" | "webp" | "jpeg" | "png";
+export type ExportFormat = "original" | "webp" | "jpeg" | "png" | "avif";
+
+export type TransformFormat = "original" | "webp" | "jpeg" | "png" | "avif";
+export type TransformMetadataPolicy = "keep_supported" | "strip_ai" | "strip_all";
+export type TransformCollisionPolicy = "rename" | "skip";
+
+export interface TransformSpec {
+  format: TransformFormat;
+  quality?: number | null;
+  max_edge?: number | null;
+  metadata_policy: TransformMetadataPolicy;
+  collision_policy: TransformCollisionPolicy;
+}
+
+export type OriginalDisposition = "keep" | "archive" | "trash";
+
+export interface LibraryTransformRequest {
+  file_ids: number[];
+  spec: TransformSpec;
+  original_disposition: OriginalDisposition;
+}
+
+export type TransformItemStatus = "succeeded" | "failed" | "skipped" | "canceled";
+
+export interface TransformItemReceipt {
+  source_id_or_path: string;
+  output_id_or_path?: string | null;
+  status: TransformItemStatus;
+  error_code?: string | null;
+  original_action?: string | null;
+}
+
+export interface TransformJobReceipt {
+  job_id: string;
+  phase: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  canceled: number;
+  items: TransformItemReceipt[];
+}
+
+export interface TransformProgressEvent {
+  current: number;
+  total: number;
+  current_path: string;
+}
+
+export interface ExportEstimateResult {
+  original_bytes: number;
+  estimated_bytes: number;
+  original_width: number;
+  original_height: number;
+  output_width: number;
+  output_height: number;
+  format: string;
+  savings_percent: number;
+}
 
 export type MetadataPrivacyMode =
   | "keep_all"

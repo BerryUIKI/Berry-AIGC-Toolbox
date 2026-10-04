@@ -9,6 +9,7 @@ pub enum TransformFormat {
     Jpeg,
     Webp,
     Png,
+    Avif,
 }
 
 /// Metadata handling policy for image transformations.

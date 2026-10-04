@@ -24,6 +24,8 @@ const emit = defineEmits<{
   (e: "trashSelected"): void;
   (e: "trash"): void;
   (e: "exportSelected"): void;
+  (e: "transformSelected"): void;
+  (e: "transform"): void;
   (e: "cullSelectedDrafts"): void;
   (e: "cullDrafts"): void;
   (e: "setRating", rating: number | null): void;
@@ -130,6 +132,11 @@ function onCopy() {
 function onCull() {
   emit("cullSelectedDrafts");
   emit("cullDrafts");
+}
+
+function onTransform() {
+  emit("transformSelected");
+  emit("transform");
 }
 
 function onTrash() {
@@ -303,6 +310,16 @@ function onTrash() {
             {{ t.batch.export }}
           </button>
 
+          <!-- Transform Selected -->
+          <button
+            type="button"
+            class="action-btn transform-btn"
+            :title="t.batch.transform"
+            @click="onTransform"
+          >
+            {{ t.batch.transform }}
+          </button>
+
           <!-- Cull Lower-Rated Drafts in Stacks -->
           <button
             v-if="hasStacks"
@@ -352,6 +369,9 @@ function onTrash() {
             </button>
             <button type="button" class="more-opt" @click="emit('exportSelected'); moreMenuOpen = false">
               {{ t.batch.export }}
+            </button>
+            <button type="button" class="more-opt" @click="onTransform(); moreMenuOpen = false">
+              {{ t.batch.transform }}
             </button>
             <button v-if="hasStacks" type="button" class="more-opt" @click="onCull(); moreMenuOpen = false">
               🧹 {{ t.stack.cullDrafts }}

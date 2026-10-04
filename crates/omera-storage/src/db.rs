@@ -638,6 +638,26 @@ impl Database {
         Ok(())
     }
 
+    /// Update a file's path, container format, size and modified_at timestamp (e.g. after in-place transformation)
+    /// while retaining its row ID and existing ratings, flags, tags, and album relationships.
+    pub fn update_file_transformed(
+        &self,
+        file_id: i64,
+        new_path: &str,
+        container: &str,
+        size_bytes: u64,
+        modified_at: i64,
+    ) -> Result<(), DatabaseError> {
+        let affected = self.conn.execute(
+            "UPDATE files SET path = ?1, container = ?2, size_bytes = ?3, modified_at = ?4 WHERE id = ?5",
+            params![new_path, container, size_bytes as i64, modified_at, file_id],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(file_id));
+        }
+        Ok(())
+    }
+
     /// Delete a file record by path (e.g. after trashing).
     pub fn delete_file_by_path(&self, path: &str) -> Result<(), DatabaseError> {
         self.conn

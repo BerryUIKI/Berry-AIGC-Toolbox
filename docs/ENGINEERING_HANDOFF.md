@@ -128,9 +128,9 @@ Files: `tests/`, `.github/workflows/ci.yml`, `package.json`.
 
 Create a one-command version bump using an agreed authoritative source. Update generated manifests and lockfiles consistently; validate SemVer and refuse a dirty/conflicting partial bump. This touches release inputs: propose the contract first and get lead review before integrating. Do not reset versions for Omera or trigger a release from the bump command.
 
-### Deferred product request (#118)
+### Image transformation and transcoding (#118)
 
-The ComfyUI batch conversion/compression node is a new feature, not a prerequisite for rename safety. Specify node inputs, outputs, supported image formats, destination/collision behavior, cancellation and packaging before implementation. Reuse safe export services; schedule after the migration release stabilizes.
+Follows `IMAGE_TRANSFORM_PLAN.md`. Phase 6 packages T0 (export contract/pure-Rust AVIF/WebP), T1 (instant export size estimation & savings badge), T2 (managed vault import transcode/resize presets), and T3 (gallery batch transformation with safe keep/archive/trash disposition, linked folder read-only protection, and metadata preservation) are implemented and validated on `dev`. Package T4 (advanced target-size controls and alignment presets) is scheduled next.
 
 ## In-progress code: known limits
 

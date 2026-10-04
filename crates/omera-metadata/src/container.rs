@@ -39,6 +39,13 @@ pub fn detect_container(bytes: &[u8]) -> Option<Container> {
         return Some(Container::WebP);
     }
 
+    if bytes.len() >= 12 && bytes[4..8] == *b"ftyp" {
+        if &bytes[8..12] == b"avif" || &bytes[8..12] == b"avis" {
+            return Some(Container::Avif);
+        }
+        return Some(Container::Mp4);
+    }
+
     if bytes.len() >= 8 && bytes[4..8] == *b"ftyp" {
         return Some(Container::Mp4);
     }
@@ -81,6 +88,13 @@ mod tests {
         let mut bytes = b"\x00\x00\x00\x18ftypmp42".to_vec();
         bytes.extend_from_slice(b"\x00\x00\x00\x00");
         assert_eq!(detect_container(&bytes), Some(Container::Mp4));
+    }
+
+    #[test]
+    fn detects_avif_signature() {
+        let mut bytes = b"\x00\x00\x00\x1cftypavif".to_vec();
+        bytes.extend_from_slice(b"\x00\x00\x00\x00mif1avif");
+        assert_eq!(detect_container(&bytes), Some(Container::Avif));
     }
 
     #[test]

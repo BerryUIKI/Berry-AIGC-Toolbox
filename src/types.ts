@@ -536,6 +536,9 @@ export interface TaggerConfig {
   character_threshold: number;
   include_rating: boolean;
   max_tags: number;
+  write_to_prompt?: boolean;
+  append_prompt?: boolean;
+  allow_override_existing_prompt?: boolean;
 }
 
 export interface TaggerModelSummary {

@@ -247,6 +247,8 @@ export const zhCN: typeof en = {
     downloadingTags: "正在下载标签映射表 (selected_tags.csv, 1/2)...",
     downloadingModel: "正在下载模型权重 (model.onnx, 2/2)...",
     downloadFinishing: "下载完成，正在验证并加载模型...",
+    writeToPrompt: "将识别标签写入图片正向提示词",
+    appendPrompt: "追加到已有提示词后",
   },
   clipModal: {
     title: "CLIP / SigLIP AI 文本语义搜图引擎",

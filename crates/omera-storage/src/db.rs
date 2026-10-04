@@ -621,6 +621,51 @@ impl Database {
         }
     }
 
+    /// Update or append prompt metadata for an image file.
+    /// If `allow_override` is false and an existing prompt is already non-empty,
+    /// returns `Ok(false)` without modifying the prompt.
+    /// Returns `Ok(true)` if prompt was updated.
+    pub fn update_file_prompt(
+        &self,
+        file_id: i64,
+        prompt: &str,
+        append: bool,
+        allow_override: bool,
+    ) -> Result<bool, DatabaseError> {
+        let file = match self.get_file_by_id(file_id)? {
+            Some(f) => f,
+            None => return Err(DatabaseError::FileNotFound(file_id)),
+        };
+
+        let mut meta = file.metadata.unwrap_or_default();
+        let target_prompt = if let Some(ref existing) = meta.prompt {
+            let trimmed = existing.trim();
+            if !trimmed.is_empty() {
+                if !allow_override {
+                    return Ok(false);
+                }
+                if append {
+                    format!("{trimmed}, {prompt}")
+                } else {
+                    prompt.to_string()
+                }
+            } else {
+                prompt.to_string()
+            }
+        } else {
+            prompt.to_string()
+        };
+
+        meta.prompt = Some(target_prompt);
+        let meta_json = serde_json::to_string(&meta)?;
+
+        self.conn.execute(
+            "UPDATE files SET metadata = ?1 WHERE id = ?2",
+            params![meta_json, file_id],
+        )?;
+        Ok(true)
+    }
+
     /// Update file path and folder_id when a file is moved.
     pub fn move_file_record(
         &self,
@@ -5898,5 +5943,58 @@ mod tests {
         let res_root = db.search_files(&root_single).unwrap();
         assert_eq!(res_root.len(), 1);
         assert_eq!(res_root[0].path, "/library/root_img.png");
+    }
+
+    #[test]
+    fn update_file_prompt_works_and_respects_safeguards() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/test_prompt").unwrap();
+        let mut file = image(folder.id, "/test_prompt/img.png");
+        file.metadata = None;
+        let id = db.upsert_file(&file).unwrap();
+
+        // 1. Write prompt to file with no initial prompt
+        let updated = db
+            .update_file_prompt(id, "1girl, solo, smile", false, false)
+            .unwrap();
+        assert!(updated);
+        let reloaded = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(
+            reloaded.metadata.as_ref().unwrap().prompt.as_deref(),
+            Some("1girl, solo, smile")
+        );
+
+        // 2. Attempt to overwrite when allow_override is false -> should return false and not overwrite
+        let overwritten = db
+            .update_file_prompt(id, "new prompt", false, false)
+            .unwrap();
+        assert!(!overwritten);
+        let reloaded2 = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(
+            reloaded2.metadata.as_ref().unwrap().prompt.as_deref(),
+            Some("1girl, solo, smile")
+        );
+
+        // 3. Append to existing prompt when allow_override is true
+        let appended = db
+            .update_file_prompt(id, "night sky, outdoors", true, true)
+            .unwrap();
+        assert!(appended);
+        let reloaded3 = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(
+            reloaded3.metadata.as_ref().unwrap().prompt.as_deref(),
+            Some("1girl, solo, smile, night sky, outdoors")
+        );
+
+        // 4. Overwrite when allow_override is true
+        let replaced = db
+            .update_file_prompt(id, "masterpiece, best quality", false, true)
+            .unwrap();
+        assert!(replaced);
+        let reloaded4 = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(
+            reloaded4.metadata.as_ref().unwrap().prompt.as_deref(),
+            Some("masterpiece, best quality")
+        );
     }
 }

@@ -247,6 +247,8 @@ export const fr: typeof en = {
     downloadingTags: "Téléchargement de la table des tags (selected_tags.csv, 1/2)...",
     downloadingModel: "Téléchargement du modèle (model.onnx, 2/2)...",
     downloadFinishing: "Téléchargement terminé, chargement du modèle...",
+    writeToPrompt: "Écrire les tags reconnus dans le prompt",
+    appendPrompt: "Ajouter au prompt existant",
   },
   clipModal: {
     title: "Moteur de recherche sémantique CLIP / SigLIP",

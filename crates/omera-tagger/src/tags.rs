@@ -65,6 +65,12 @@ pub struct TaggerConfig {
     pub character_threshold: f32,
     pub include_rating: bool,
     pub max_tags: usize,
+    #[serde(default)]
+    pub write_to_prompt: bool,
+    #[serde(default)]
+    pub append_prompt: bool,
+    #[serde(default)]
+    pub allow_override_existing_prompt: bool,
 }
 
 impl Default for TaggerConfig {
@@ -74,6 +80,9 @@ impl Default for TaggerConfig {
             character_threshold: 0.85,
             include_rating: false,
             max_tags: 50,
+            write_to_prompt: false,
+            append_prompt: false,
+            allow_override_existing_prompt: false,
         }
     }
 }

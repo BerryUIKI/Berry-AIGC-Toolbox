@@ -247,6 +247,8 @@ export const de: typeof en = {
     downloadingTags: "Tag-Tabelle wird heruntergeladen (selected_tags.csv, 1/2)...",
     downloadingModel: "Modellgewichte werden heruntergeladen (model.onnx, 2/2)...",
     downloadFinishing: "Download abgeschlossen, Modell wird geladen...",
+    writeToPrompt: "Erkannte Tags in den Prompt schreiben",
+    appendPrompt: "An bestehenden Prompt anhängen",
   },
   clipModal: {
     title: "CLIP / SigLIP KI-Semantiksuchmaschine",

@@ -9,6 +9,9 @@
 !macroend
 
 !macro NSIS_HOOK_POSTUNINSTALL
+  ; Clean up desktop shortcuts if created by user
+  Delete "$DESKTOP\${PRODUCTNAME}.lnk"
+  Delete "$DESKTOP\Omera.lnk"
   ; Clean up Start Menu folder if left behind
   RMDir "$SMPROGRAMS\${PRODUCTNAME}"
   RMDir "$SMPROGRAMS\Omera"

@@ -117,4 +117,11 @@ test("Core components and modals use semantic theme variables instead of hardcod
   const previewPane = fs.readFileSync(path.join(rootDir, "src", "components", "PreviewPane.vue"), "utf-8");
   assert.doesNotMatch(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*#1e1e1e/);
   assert.match(previewPane, /\.preview-dialog\s*\{[^}]*background:\s*var\(--color-bg-primary\)/);
+
+  // AutoTagModal
+  const autoTagModal = fs.readFileSync(path.join(rootDir, "src", "components", "AutoTagModal.vue"), "utf-8");
+  assert.match(autoTagModal, /\.section-title\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(autoTagModal, /\.empty-model-desc\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(autoTagModal, /\.source-label\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(autoTagModal, /\.no-tags-prompt\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
 });

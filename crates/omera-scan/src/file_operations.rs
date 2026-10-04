@@ -194,7 +194,14 @@ mod tests {
 
         let link_folder = db.add_folder(&link_dir.to_string_lossy()).unwrap();
         let managed_folder = db
-            .add_folder_with_mode(&managed_dir.to_string_lossy(), "managed", None, None, None, false)
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                false,
+            )
             .unwrap();
 
         let file_path = link_dir.join("photo.png");
@@ -246,7 +253,14 @@ mod tests {
 
         let link_folder = db.add_folder(&link_dir.to_string_lossy()).unwrap();
         let managed_folder = db
-            .add_folder_with_mode(&managed_dir.to_string_lossy(), "managed", None, None, None, false)
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                false,
+            )
             .unwrap();
 
         let file_path = managed_dir.join("photo.png");
@@ -277,7 +291,9 @@ mod tests {
             Operation::Copy,
         );
         assert!(res.is_err());
-        assert!(res.unwrap_err().contains("Destination folder cannot be an external linked folder"));
+        assert!(res
+            .unwrap_err()
+            .contains("Destination folder cannot be an external linked folder"));
 
         // Attempting to move into linked folder must fail
         let res_move = execute(
@@ -287,7 +303,9 @@ mod tests {
             Operation::Move,
         );
         assert!(res_move.is_err());
-        assert!(res_move.unwrap_err().contains("Destination folder cannot be an external linked folder"));
+        assert!(res_move
+            .unwrap_err()
+            .contains("Destination folder cannot be an external linked folder"));
     }
 
     #[test]
@@ -303,7 +321,14 @@ mod tests {
 
         let link_folder = db.add_folder(&link_dir.to_string_lossy()).unwrap();
         let managed_folder = db
-            .add_folder_with_mode(&managed_dir.to_string_lossy(), "managed", None, None, None, false)
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                false,
+            )
             .unwrap();
 
         let file_path = link_dir.join("photo.png");

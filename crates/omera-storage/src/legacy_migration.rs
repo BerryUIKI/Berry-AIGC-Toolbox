@@ -537,4 +537,173 @@ mod tests {
             crate::migrations::LATEST_VERSION
         );
     }
+
+    #[test]
+    fn test_legacy_berry_database_zero_loss_full_migration() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+        let staging_dir = tempfile::tempdir().unwrap();
+
+        let source_db = source_dir.path().join("berry.db");
+        let dest_db = dest_dir.path().join("omera.db");
+
+        // 1. Construct historical Berry database at schema version 4
+        let conn = Connection::open(&source_db).unwrap();
+        conn.execute_batch("PRAGMA journal_mode=WAL;").unwrap();
+        for sql in crate::migrations::MIGRATIONS.iter().take(4) {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.pragma_update(None, "user_version", 4).unwrap();
+
+        // Populate historical folder
+        conn.execute(
+            "INSERT INTO folders (id, path, added_at) VALUES (1, '/media/legacy_photos', '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+
+        // Populate historical files with rich AI metadata
+        let metadata_json = serde_json::json!({
+            "format": "A1111",
+            "prompt": "masterpiece, ultra-detailed cyberpunk cityscape, neon reflections, 8k",
+            "negative_prompt": "blurry, low quality, artifacts, watermark",
+            "steps": 30,
+            "sampler": "DPM++ 2M Karras",
+            "cfg_scale": 7.5,
+            "seed": "987654321",
+            "width": 1024,
+            "height": 1024,
+            "model_name": "cyberpunk_v2",
+            "model_hash": "a1b2c3d4e5f6"
+        })
+        .to_string();
+
+        conn.execute(
+            "INSERT INTO files (id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw)
+             VALUES (1, 1, '/media/legacy_photos/city.png', 'png', 2048576, 1700000000, ?1, 5, 0.92, 1, 0)",
+            [&metadata_json],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO files (id, folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw)
+             VALUES (2, 1, '/media/legacy_photos/avatar.jpg', 'jpg', 512000, 1700001000, NULL, 4, 0.78, 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        // Populate historical album and album associations
+        conn.execute(
+            "INSERT INTO albums (id, name, description) VALUES (1, 'Cyberpunk Portfolio', 'Best generation works')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO album_files (album_id, file_id) VALUES (1, 1), (1, 2)",
+            [],
+        )
+        .unwrap();
+
+        // Populate historical tags and tag associations
+        conn.execute(
+            "INSERT INTO tags (id, name, color) VALUES (1, 'cyberpunk', '#3b82f6'), (2, 'masterpiece', '#10b981')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO file_tags (file_id, tag_id) VALUES (1, 1), (1, 2), (2, 1)",
+            [],
+        )
+        .unwrap();
+
+        drop(conn);
+
+        // 2. Perform safe, non-destructive migration to Omera
+        let migrated_bytes = migrate_database(&source_db, &dest_db, staging_dir.path()).unwrap();
+        assert!(migrated_bytes > 0);
+        assert!(dest_db.exists());
+
+        // 3. Connect to destination Omera database and verify zero-loss integrity
+        let omera_db = crate::Database::connect(&dest_db).unwrap();
+        assert_eq!(
+            omera_db.user_version().unwrap(),
+            crate::migrations::LATEST_VERSION
+        );
+
+        // Verify folder and auto-migrated folder_type 'link'
+        let folders = omera_db.list_folders().unwrap();
+        assert_eq!(folders.len(), 1);
+        assert_eq!(folders[0].path, "/media/legacy_photos");
+        assert_eq!(folders[0].folder_type, "link");
+
+        // Verify files and metadata fidelity
+        let file1 = omera_db
+            .get_file_by_id(1)
+            .unwrap()
+            .expect("file 1 must exist");
+        assert_eq!(file1.path, "/media/legacy_photos/city.png");
+        assert_eq!(file1.size_bytes, 2048576);
+        assert_eq!(file1.container, omera_domain::Container::Png);
+        assert_eq!(file1.rating, Some(5));
+        assert!(file1.is_favorite);
+        assert!(!file1.is_nsfw);
+
+        let meta = file1.metadata.expect("metadata must be preserved");
+        assert_eq!(
+            meta.prompt.as_deref(),
+            Some("masterpiece, ultra-detailed cyberpunk cityscape, neon reflections, 8k")
+        );
+        assert_eq!(
+            meta.negative_prompt.as_deref(),
+            Some("blurry, low quality, artifacts, watermark")
+        );
+        assert_eq!(meta.steps, Some(30));
+        assert_eq!(meta.sampler.as_deref(), Some("DPM++ 2M Karras"));
+        assert_eq!(meta.cfg_scale, Some(7.5));
+        assert_eq!(meta.seed.as_deref(), Some("987654321"));
+        assert_eq!(meta.model_hash.as_deref(), Some("a1b2c3d4e5f6"));
+
+        // Verify albums and relationships
+        let albums = omera_db.list_albums().unwrap();
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].name, "Cyberpunk Portfolio");
+        assert_eq!(
+            albums[0].description.as_deref(),
+            Some("Best generation works")
+        );
+
+        let album_files = omera_db.list_album_files(1).unwrap();
+        assert_eq!(album_files.len(), 2);
+        assert!(album_files.iter().any(|f| f.id == Some(1)));
+        assert!(album_files.iter().any(|f| f.id == Some(2)));
+
+        // Verify tags and relationships
+        let tags = omera_db.list_tags().unwrap();
+        assert_eq!(tags.len(), 2);
+        let file1_tags = omera_db.get_file_tags(1).unwrap();
+        assert_eq!(file1_tags.len(), 2);
+        assert!(file1_tags.iter().any(|t| t.name == "cyberpunk"));
+        assert!(file1_tags.iter().any(|t| t.name == "masterpiece"));
+
+        let file2_tags = omera_db.get_file_tags(2).unwrap();
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0].name, "cyberpunk");
+
+        drop(omera_db);
+
+        // 4. Assert source database invariance (completely untouched)
+        let source_conn = Connection::open(&source_db).unwrap();
+        let src_version: i64 = source_conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(src_version, 4, "Source database version must remain 4");
+
+        let src_file_count: i64 = source_conn
+            .query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(
+            src_file_count, 2,
+            "Source files count must remain exactly 2"
+        );
+    }
 }

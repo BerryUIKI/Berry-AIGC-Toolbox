@@ -58,6 +58,8 @@ import {
 } from "./utils/config";
 import { checkForUpdates } from "./utils/updater";
 import { applyTheme, normalizeTheme, type AppTheme } from "./utils/theme";
+import ToastContainer from "./components/ToastContainer.vue";
+import { useNotification } from "./utils/notification";
 import { collaborationSync } from "./utils/collaborationSync";
 import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
 
@@ -353,6 +355,14 @@ const sortField = ref<FileSortField>("modified_at");
 const sortDirection = ref<SortDirection>("desc");
 const progress = ref<ScanProgress | null>(null);
 const error = ref("");
+const notification = useNotification();
+
+watch(error, (newErr) => {
+  if (newErr) {
+    notification.showError(newErr);
+  }
+});
+
 const organizeLibraryRunning = ref(false);
 const organizeLibraryNotice = ref("");
 let organizeLibraryNoticeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -2636,6 +2646,9 @@ function onResetZoom() {
       :context="helpGuideContext"
       @close="helpGuideDrawerOpen = false"
     />
+
+    <!-- Floating Error / Info Toast Notifications -->
+    <ToastContainer />
   </div>
 </template>
 

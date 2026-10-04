@@ -5,6 +5,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { t } from "../i18n";
 import type { Album, Folder, LibraryCounts, NavTarget, ScanProgress, ScanStats, SubdirectoryEntry, Tag } from "../types";
 import FolderTreeNode from "./FolderTreeNode.vue";
+import { useNotification } from "../utils/notification";
 
 const props = defineProps<{
   folders: Folder[];
@@ -42,6 +43,7 @@ const emit = defineEmits<{
 const addingFolder = ref(false);
 const running = ref<{ id: number; action: "scan" | "rebuild" | "harvest" } | null>(null);
 const error = ref("");
+const notification = useNotification();
 
 const subdirectories = ref<Record<string, SubdirectoryEntry[]>>({});
 const expandedPaths = ref<Set<string>>(new Set());
@@ -74,6 +76,7 @@ async function harvest(folder: Folder, e: MouseEvent) {
     emit("scanned", folder.id);
   } catch (e) {
     error.value = String(e);
+    notification.showError(String(e), "Harvest failed");
   } finally {
     running.value = null;
   }
@@ -93,6 +96,7 @@ async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
     emit("scanned", folder.id);
   } catch (e) {
     error.value = String(e);
+    notification.showError(String(e), "Folder scan failed");
   } finally {
     running.value = null;
   }
@@ -114,6 +118,7 @@ async function removeFolder(folder: Folder, e: MouseEvent) {
     emit("removed", folder.id);
   } catch (e) {
     error.value = String(e);
+    notification.showError(String(e), "Failed to remove folder");
   }
 }
 

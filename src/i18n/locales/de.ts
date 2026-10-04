@@ -593,6 +593,11 @@ export const de: typeof en = {
     resetWarnings: "Warnmeldungen zurücksetzen",
     warningsReset: "Unterdrückte Warnmeldungen wurden zurückgesetzt.",
     noSuppressedWarnings: "Derzeit sind keine Warnmeldungen unterdrückt.",
+    desktopShortcut: "Desktop-Verknüpfung",
+    desktopShortcutDesc: "Erstellen oder aktualisieren Sie das Omera-Startsymbol auf Ihrem Windows-Desktop",
+    createDesktopShortcut: "Verknüpfung erstellen",
+    desktopShortcutCreated: "Desktop-Verknüpfung erfolgreich erstellt",
+    desktopShortcutExists: "Desktop-Verknüpfung existiert bereits",
   },
   addFolder: {
     title: "Ordner zur Bibliothek hinzufügen",

@@ -53,7 +53,7 @@ All pre-1.0 releases retain legacy detection and supported import. Keep cleanup 
 ### Stabilization Gates for 1.0 Readiness:
 
 1. **Installer and Desktop Integration**:
-   - Windows NSIS installer configures Start Menu folder (`Omera`) and optional desktop shortcut creation (`tauri.conf.json`), ensuring consistent system indexing and user preference adherence.
+   - Windows NSIS installer configures Start Menu folder (`Omera`), native 7-language installer localization (`tauri.conf.json`), optional desktop shortcut creation (`$(createDesktop)`), pre-install process termination and uninstall cleanup (`hooks.nsh`), and in-app desktop shortcut management (`commands::create_desktop_shortcut`), ensuring consistent system indexing and user preference adherence.
    - macOS DMG/App bundle and Linux AppImage/deb/rpm packages continuously built and verified via GitHub Actions release matrix.
 2. **In-App Update Resilience**:
    - `src/utils/updater.ts` implements automated fallback from GitHub REST API (rate-limited) to HTML 302 tag redirection and canonical release asset matching, ensuring seamless update notifications from v0.4.1/v0.4.2 onward.

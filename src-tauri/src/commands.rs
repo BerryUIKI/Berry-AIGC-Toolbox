@@ -3778,6 +3778,95 @@ pub fn install_update(
     Ok(())
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DesktopShortcutResult {
+    pub success: bool,
+    pub path: String,
+    pub message: String,
+}
+
+/// Checks whether an Omera desktop shortcut currently exists on the user's desktop.
+#[tauri::command]
+pub fn check_desktop_shortcut_exists() -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let script = r#"
+            $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop);
+            if (-not (Test-Path $desktop)) {
+                $desktop = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop");
+            }
+            $shortcutPath = [System.IO.Path]::Combine($desktop, "Omera.lnk");
+            if (Test-Path $shortcutPath) { Write-Output "1" } else { Write-Output "0" }
+        "#;
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .output()
+            .map_err(|e| format!("Failed to check desktop shortcut: {e}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(stdout == "1")
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(false)
+    }
+}
+
+/// Creates or updates an Omera desktop shortcut on the user's desktop (Windows only).
+#[tauri::command]
+pub fn create_desktop_shortcut(_app: AppHandle) -> Result<DesktopShortcutResult, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let current_exe = std::env::current_exe()
+            .map_err(|e| format!("Cannot locate current executable: {e}"))?;
+        let exe_str = current_exe.to_string_lossy().to_string();
+        let script = format!(
+            r#"
+            $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop);
+            if (-not (Test-Path $desktop)) {{
+                $desktop = [System.IO.Path]::Combine($env:USERPROFILE, "Desktop");
+            }}
+            $shortcutPath = [System.IO.Path]::Combine($desktop, "Omera.lnk");
+            $ws = New-Object -ComObject WScript.Shell;
+            $s = $ws.CreateShortcut($shortcutPath);
+            $s.TargetPath = '{}';
+            $s.WorkingDirectory = [System.IO.Path]::GetDirectoryName('{}');
+            $s.IconLocation = '{}';
+            $s.Description = 'Omera - Local Asset Manager & Studio';
+            $s.Save();
+            Write-Output $shortcutPath;
+            "#,
+            exe_str.replace('\'', "''"),
+            exe_str.replace('\'', "''"),
+            exe_str.replace('\'', "''")
+        );
+
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .output()
+            .map_err(|e| format!("Failed to execute shortcut creation: {e}"))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(format!("Shortcut creation failed: {stderr}"));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        Ok(DesktopShortcutResult {
+            success: true,
+            path: stdout,
+            message: "Desktop shortcut created successfully".into(),
+        })
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(DesktopShortcutResult {
+            success: false,
+            path: String::new(),
+            message: "Desktop shortcut creation is only supported on Windows".into(),
+        })
+    }
+}
+
 // ---------------------------------------------------------------------------
 // AIGC Ingestion Pipeline & Local AI Tool Autodetection
 // ---------------------------------------------------------------------------

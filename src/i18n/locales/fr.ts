@@ -593,6 +593,11 @@ export const fr: typeof en = {
     resetWarnings: "Réinitialiser les avertissements",
     warningsReset: "Les avertissements masqués ont été réinitialisés.",
     noSuppressedWarnings: "Aucun avertissement n’est actuellement masqué.",
+    desktopShortcut: "Raccourci sur le bureau",
+    desktopShortcutDesc: "Créer ou actualiser l'icône de lancement Omera sur votre bureau Windows",
+    createDesktopShortcut: "Créer le raccourci",
+    desktopShortcutCreated: "Raccourci sur le bureau créé avec succès",
+    desktopShortcutExists: "Le raccourci sur le bureau existe déjà",
   },
   addFolder: {
     title: "Ajouter un dossier à la bibliothèque",

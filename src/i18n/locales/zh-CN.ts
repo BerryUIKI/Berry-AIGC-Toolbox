@@ -593,6 +593,11 @@ export const zhCN: typeof en = {
     resetWarnings: "重置已隐藏的警告",
     warningsReset: "已重置隐藏的警告对话框。",
     noSuppressedWarnings: "当前没有隐藏的警告对话框。",
+    desktopShortcut: "桌面快捷方式",
+    desktopShortcutDesc: "在当前 Windows 桌面创建或更新 Omera 启动图标",
+    createDesktopShortcut: "创建桌面快捷方式",
+    desktopShortcutCreated: "已成功创建桌面快捷方式",
+    desktopShortcutExists: "桌面快捷方式已存在",
   },
   addFolder: {
     title: "添加文件夹至媒体库",

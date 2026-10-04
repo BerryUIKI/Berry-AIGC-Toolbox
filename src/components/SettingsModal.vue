@@ -431,6 +431,7 @@ async function loadSettingsAndPaths() {
     }
 
     storagePaths.value = await getStoragePaths();
+    void checkDesktopShortcut();
   } catch (e) {
     console.warn("Failed to load config from config.json:", e);
   }
@@ -463,6 +464,43 @@ async function handleResetWarnings() {
     warningResetMessage.value = String(e);
   } finally {
     resettingWarnings.value = false;
+  }
+}
+
+const isWindows = ref(
+  typeof navigator !== "undefined" &&
+    (navigator.userAgent.includes("Windows") || navigator.platform.includes("Win"))
+);
+const hasDesktopShortcut = ref(false);
+const creatingShortcut = ref(false);
+const shortcutFeedback = ref("");
+
+async function checkDesktopShortcut() {
+  if (!isWindows.value) return;
+  try {
+    const exists = await invoke<boolean>("check_desktop_shortcut_exists");
+    hasDesktopShortcut.value = Boolean(exists);
+  } catch {
+    // Ignore
+  }
+}
+
+async function handleCreateDesktopShortcut() {
+  creatingShortcut.value = true;
+  shortcutFeedback.value = "";
+  try {
+    const res = await invoke<{ success: boolean; path: string; message: string }>("create_desktop_shortcut");
+    if (res.success) {
+      hasDesktopShortcut.value = true;
+      shortcutFeedback.value = t.value.settings.desktopShortcutCreated;
+    }
+  } catch (err: any) {
+    shortcutFeedback.value = err?.message || String(err);
+  } finally {
+    creatingShortcut.value = false;
+    setTimeout(() => {
+      shortcutFeedback.value = "";
+    }, 4000);
   }
 }
 
@@ -744,6 +782,24 @@ async function saveSettings() {
                 @click="handleResetWarnings"
               >
                 {{ t.settings.resetWarnings }}
+              </button>
+            </div>
+
+            <div v-if="isWindows" class="setting-row immediate-action-row">
+              <div class="row-info">
+                <span class="row-label">{{ t.settings.desktopShortcut }}</span>
+                <span class="row-desc">{{ t.settings.desktopShortcutDesc }}</span>
+                <span v-if="shortcutFeedback" class="setting-feedback">
+                  {{ shortcutFeedback }}
+                </span>
+              </div>
+              <button
+                type="button"
+                class="btn secondary"
+                :disabled="creatingShortcut"
+                @click="handleCreateDesktopShortcut"
+              >
+                {{ t.settings.createDesktopShortcut }}
               </button>
             </div>
           </div>

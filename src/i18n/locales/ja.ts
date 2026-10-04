@@ -593,6 +593,11 @@ export const ja: typeof en = {
     resetWarnings: "非表示の警告をリセット",
     warningsReset: "非表示の警告ダイアログをリセットしました。",
     noSuppressedWarnings: "現在、非表示の警告ダイアログはありません。",
+    desktopShortcut: "デスクトップショートカット",
+    desktopShortcutDesc: "Windows デスクトップに Omera の起動アイコンを作成または更新します",
+    createDesktopShortcut: "ショートカットを作成",
+    desktopShortcutCreated: "デスクトップショートカットを作成しました",
+    desktopShortcutExists: "デスクトップショートカットは既に存在します",
   },
   addFolder: {
     title: "フォルダをライブラリに追加",

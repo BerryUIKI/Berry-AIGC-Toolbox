@@ -256,6 +256,8 @@ pub fn run() {
             commands::open_storage_dir,
             commands::download_update,
             commands::install_update,
+            commands::check_desktop_shortcut_exists,
+            commands::create_desktop_shortcut,
             commands::add_folder_with_options,
             commands::autodetect_local_ai_paths,
             commands::harvest_pipeline_folder,

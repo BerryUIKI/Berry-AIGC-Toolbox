@@ -593,6 +593,11 @@ export const zhTW: typeof en = {
     resetWarnings: "重設已隱藏的警告",
     warningsReset: "已重設隱藏的警告對話框。",
     noSuppressedWarnings: "目前沒有隱藏的警告對話框。",
+    desktopShortcut: "桌面捷徑",
+    desktopShortcutDesc: "在當前 Windows 桌面建立或更新 Omera 啟動圖示",
+    createDesktopShortcut: "建立桌面捷徑",
+    desktopShortcutCreated: "已成功建立桌面捷徑",
+    desktopShortcutExists: "桌面捷徑已存在",
   },
   addFolder: {
     title: "新增資料夾至媒體庫",

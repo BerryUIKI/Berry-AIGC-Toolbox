@@ -593,6 +593,11 @@ export const es: typeof en = {
     resetWarnings: "Restablecer advertencias",
     warningsReset: "Se restablecieron las advertencias ocultas.",
     noSuppressedWarnings: "Actualmente no hay advertencias ocultas.",
+    desktopShortcut: "Acceso directo en el escritorio",
+    desktopShortcutDesc: "Crear o actualizar el icono de inicio de Omera en el escritorio de Windows",
+    createDesktopShortcut: "Crear acceso directo",
+    desktopShortcutCreated: "Acceso directo en el escritorio creado con éxito",
+    desktopShortcutExists: "El acceso directo en el escritorio ya existe",
   },
   addFolder: {
     title: "Añadir carpeta a la biblioteca",

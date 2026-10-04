@@ -591,6 +591,11 @@ export const en = {
     resetWarnings: "Reset Suppressed Warnings",
     warningsReset: "Suppressed warning dialogs were reset.",
     noSuppressedWarnings: "No warning dialogs are currently suppressed.",
+    desktopShortcut: "Desktop Shortcut",
+    desktopShortcutDesc: "Create or refresh the Omera launcher icon on your Windows desktop",
+    createDesktopShortcut: "Create Desktop Shortcut",
+    desktopShortcutCreated: "Desktop shortcut created successfully",
+    desktopShortcutExists: "Desktop shortcut already exists",
   },
   addFolder: {
     title: "Add Folder to Library",

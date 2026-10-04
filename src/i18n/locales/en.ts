@@ -245,6 +245,8 @@ export const en = {
     downloadingTags: "Downloading tag list (selected_tags.csv, 1/2)...",
     downloadingModel: "Downloading model weights (model.onnx, 2/2)...",
     downloadFinishing: "Download complete, verifying and loading model...",
+    writeToPrompt: "Write recognized tags to prompt",
+    appendPrompt: "Append to existing prompt",
   },
   clipModal: {
     title: "CLIP / SigLIP AI Semantic Search Engine",

@@ -33,6 +33,8 @@ const generalThreshold = ref<number>(35);
 const characterThreshold = ref<number>(85);
 const includeRating = ref<boolean>(false);
 const maxTags = ref<number>(50);
+const writeToPrompt = ref(false);
+const appendPrompt = ref(false);
 
 const isDetecting = ref(false);
 const isApplyingCurrent = ref(false);
@@ -50,6 +52,8 @@ const taggerConfig = computed<TaggerConfig>(() => ({
   character_threshold: characterThreshold.value / 100,
   include_rating: includeRating.value,
   max_tags: maxTags.value,
+  write_to_prompt: writeToPrompt.value,
+  append_prompt: appendPrompt.value,
 }));
 
 async function loadModelList() {
@@ -522,6 +526,18 @@ onUnmounted(() => {
                   <option :value="150">150</option>
                 </select>
               </div>
+            </div>
+
+            <!-- Prompt Metadata Options -->
+            <div class="control-item-row prompt-opts-row">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="writeToPrompt" />
+                <span>{{ t.autoTagModal.writeToPrompt }}</span>
+              </label>
+              <label v-if="writeToPrompt" class="checkbox-label append-label">
+                <input type="checkbox" v-model="appendPrompt" />
+                <span>{{ t.autoTagModal.appendPrompt }}</span>
+              </label>
             </div>
           </div>
         </div>

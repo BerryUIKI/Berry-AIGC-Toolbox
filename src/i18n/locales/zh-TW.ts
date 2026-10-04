@@ -247,6 +247,8 @@ export const zhTW: typeof en = {
     downloadingTags: "正在下載標籤對照表 (selected_tags.csv, 1/2)...",
     downloadingModel: "正在下載模型權重 (model.onnx, 2/2)...",
     downloadFinishing: "下載完成，正在驗證並載入模型...",
+    writeToPrompt: "將識別標籤寫入圖片正向提示詞",
+    appendPrompt: "追加到已有提示詞後",
   },
   clipModal: {
     title: "CLIP / SigLIP AI 文字語意搜圖引擎",

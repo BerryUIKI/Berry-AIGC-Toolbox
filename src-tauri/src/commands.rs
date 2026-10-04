@@ -2660,6 +2660,25 @@ pub async fn auto_tag_file(
             }
         }
 
+        if config.write_to_prompt && !predictions.is_empty() {
+            let prompt_text = predictions
+                .iter()
+                .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            if !prompt_text.is_empty() {
+                let database = db(&state)?;
+                let _ = database.update_file_prompt(
+                    file_id,
+                    &prompt_text,
+                    config.append_prompt,
+                    config.allow_override_existing_prompt,
+                );
+            }
+        }
+
         Ok(predictions)
     })
     .await
@@ -2696,13 +2715,32 @@ pub async fn batch_auto_tag_files(
 
             if let Some(predictions) = predictions {
                 let database = db(&state)?;
-                for pred in predictions {
+                for pred in &predictions {
                     if let Ok(tag) = database.get_or_create_tag(&pred.name, None) {
                         if database.tag_file(fid, tag.id).is_ok() {
                             tags_added += 1;
                         }
                     }
                 }
+
+                if config.write_to_prompt && !predictions.is_empty() {
+                    let prompt_text = predictions
+                        .iter()
+                        .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
+                        .map(|p| p.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    if !prompt_text.is_empty() {
+                        let _ = database.update_file_prompt(
+                            fid,
+                            &prompt_text,
+                            config.append_prompt,
+                            config.allow_override_existing_prompt,
+                        );
+                    }
+                }
+
                 processed_files += 1;
             }
         }

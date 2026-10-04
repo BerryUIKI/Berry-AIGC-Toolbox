@@ -247,6 +247,8 @@ export const ja: typeof en = {
     downloadingTags: "タグ対応表をダウンロード中 (selected_tags.csv, 1/2)...",
     downloadingModel: "モデルデータをダウンロード中 (model.onnx, 2/2)...",
     downloadFinishing: "ダウンロード完了、モデルを検証・読み込み中...",
+    writeToPrompt: "認識されたタグをプロンプトに書き込む",
+    appendPrompt: "既存のプロンプトに追加する",
   },
   clipModal: {
     title: "CLIP / SigLIP AI テキストセマンティック検索エンジン",

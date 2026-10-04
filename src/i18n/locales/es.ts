@@ -247,6 +247,8 @@ export const es: typeof en = {
     downloadingTags: "Descargando tabla de etiquetas (selected_tags.csv, 1/2)...",
     downloadingModel: "Descargando pesos del modelo (model.onnx, 2/2)...",
     downloadFinishing: "Descarga completada, cargando modelo...",
+    writeToPrompt: "Escribir etiquetas reconocidas en el prompt",
+    appendPrompt: "Añadir al prompt existente",
   },
   clipModal: {
     title: "Motor de búsqueda semántica CLIP / SigLIP",

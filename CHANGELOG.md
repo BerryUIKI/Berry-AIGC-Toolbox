@@ -5,6 +5,39 @@ All notable changes to the Omera project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-10-05
+
+### Phase 6 T4 Advanced Transform Controls, Resilient In-App Updater & Windows NSIS Integration
+
+Version 0.4.3 delivers Phase 6 T4 (Advanced Image Transcoding Controls #118, #184), fortifies the in-app GitHub updater against API rate limits, deepens Windows installer integration with Start Menu folder indexing and process safety hooks, introduces ModelScope ultra-fast domestic model mirror downloads for WD14 AI Auto-Tagger, and unifies adaptive UI contrast across 7 languages:
+
+#### ⚡ Phase 6 T4: Advanced Image Transform Controls (#118, #184)
+- **Target Size Search (Byte Budget Optimization)**: Iterative search algorithm (bounded to 4 cycles) that converges image quality and dimension downscaling toward an exact target file size (e.g. 1MB/2MB sharing targets) without overshoot or degenerative cycles.
+- **Scale Percentage Downscaling**: Aspect-ratio-preserving Lanczos3 scaling supporting 75%, 50%, and 25% downsampling constraints across both managed vault imports and bulk gallery optimizations.
+- **Pixel Multiple Alignment**: Enforces 8x (codec DCT block friendly) or 16x (AI tensor/latent friendly) dimension alignment to eliminate padding artifacts and optimize compression efficiency.
+- **One-Click Reusable Presets**: Built-in presets for Web Fast Sharing (WebP 80% / 1920px), Archive Grade (AVIF 65%), Target 1MB, and Lossless WebP.
+- **Adaptive UI Integration**: Seamlessly integrated into `BatchTransformModal.vue` and `ImportTransformModal.vue` with real-time responsive form controls and estimated savings feedback.
+
+#### 🔄 Resilient In-App Updater & GitHub Fallback (#184)
+- **Rate-Limit Resilience (GitHub 403 Fallback)**: Added custom `Omera-Updater` user-agent and an automated fallback engine in `src/utils/updater.ts` that gracefully recovers from GitHub REST API anonymous rate limits (HTTP 403) by querying releases via HTML 302 tag redirection.
+- **Canonical Multi-Platform Asset Matching**: Robust asset matcher for Windows (.exe / .msi / legacy installers), macOS (.dmg universal / aarch64), and Linux (.AppImage / .deb), ensuring seamless one-click update detection from v0.4.1 and v0.4.2 onward.
+
+#### 🪟 Windows NSIS Installer Customization & Desktop Integration (#184)
+- **Start Menu Folder Organization**: Explicitly sets `startMenuFolder: "Omera"` in NSIS configuration, registering shortcuts cleanly under `%AppData%\Microsoft\Windows\Start Menu\Programs\Omera`.
+- **Optional Desktop Shortcut**: Configured NSIS page allowing users to toggle desktop shortcut creation during installation.
+- **Process Safety Hooks (`hooks.nsh`)**: Pre-install termination hook (`taskkill /F /IM omera.exe`) to prevent file lock errors during updates, and clean uninstall hooks to remove empty parent application directories.
+- **In-App Desktop Shortcut Creation**: Added one-click "Create Desktop Shortcut" button in Settings (`SettingsModal.vue`) with dynamic Shell COM path resolution for both local and OneDrive redirected desktops.
+
+#### 🤖 WD14 AI Auto-Tagger UX & Mainland China Mirror (ModelScope) (#184)
+- **ModelScope Domestic Mirror**: Added high-speed direct download support for WD14 Tagger models (`BerryUIKI/wd-v1-4-convnext-tagger-v2`) via ModelScope (`modelscope.cn`), solving slow or blocked network downloads in mainland China.
+- **One-Click Auto-Download & Progress Monitoring**: Seamless empty-state onboarding card that downloads models with a single click, streaming real-time download progress, downloaded bytes, and speed (MB/s) with full cancellation support.
+- **Light Theme Contrast & Accessibility**: Replaced hardcoded slate/white text in `AutoTagModal.vue` with semantic CSS variables (`var(--color-text-primary)`, `var(--color-text-secondary)`), guaranteeing crisp readability across all themes.
+
+#### 🌐 Complete 7-Language Internationalization
+- **Multi-Language Coverage**: Added localized strings across English (`en`), Simplified Chinese (`zh-CN`), Traditional Chinese (`zh-TW`), Japanese (`ja`), German (`de`), French (`fr`), and Spanish (`es`) for all new transform presets, mirror sources, installer options, and download states.
+
+---
+
 ## [0.4.2] - 2026-10-04
 
 ### Phase 6: Native Image Transcoding, Managed Import Presets & Safe Gallery Optimization

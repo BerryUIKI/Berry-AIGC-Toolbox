@@ -301,6 +301,7 @@ watch(
       void loadModelList();
     }
   },
+  { immediate: true },
 );
 
 onMounted(async () => {

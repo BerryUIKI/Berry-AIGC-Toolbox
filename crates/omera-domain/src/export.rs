@@ -13,6 +13,8 @@ pub enum ExportFormat {
     Jpeg,
     /// Encode as PNG.
     Png,
+    /// Encode as AVIF (high efficiency next-gen compression).
+    Avif,
 }
 
 /// Level of metadata sanitization applied during export.
@@ -90,6 +92,19 @@ pub struct ExportSummary {
     pub duration_ms: u64,
     pub output_path: String,
     pub errors: Vec<String>,
+}
+
+/// Instant estimation result comparing original image vs compressed/transformed derivative.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExportEstimateResult {
+    pub original_bytes: u64,
+    pub estimated_bytes: u64,
+    pub original_width: u32,
+    pub original_height: u32,
+    pub output_width: u32,
+    pub output_height: u32,
+    pub format: String,
+    pub savings_percent: f64,
 }
 
 #[cfg(test)]

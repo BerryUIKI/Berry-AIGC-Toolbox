@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use image::ImageReader;
 use omera_domain::{
-    ExportFormat, ExportOptions, ExportProgressEvent, ExportSidecar, ExportSummary, ImageFile,
-    MetadataPrivacyMode,
+    ExportEstimateResult, ExportFormat, ExportOptions, ExportProgressEvent, ExportSidecar,
+    ExportSummary, ImageFile, MetadataPrivacyMode,
 };
 use omera_storage::Database;
 use rayon::prelude::*;
@@ -134,6 +134,8 @@ pub struct ProcessedExportItem {
     pub base_filename: String,
     pub image_filename: String,
     pub image_bytes: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
     pub sidecar: Option<(String, Vec<u8>)>,
     pub showcase_item: Option<ShowcaseItemMetadata>,
 }
@@ -158,6 +160,7 @@ pub fn process_single_image(
         ExportFormat::Webp => "webp".to_string(),
         ExportFormat::Jpeg => "jpg".to_string(),
         ExportFormat::Png => "png".to_string(),
+        ExportFormat::Avif => "avif".to_string(),
     };
 
     let image_filename =
@@ -203,7 +206,8 @@ pub fn process_single_image(
         let mut buffer = Vec::new();
         match options.format {
             ExportFormat::Webp => {
-                img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::WebP)
+                let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut buffer);
+                img.write_with_encoder(encoder)
                     .map_err(|e| format!("Failed to encode WebP: {e}"))?;
             }
             ExportFormat::Jpeg => {
@@ -215,6 +219,14 @@ pub fn process_single_image(
                 encoder
                     .encode_image(&rgb)
                     .map_err(|e| format!("Failed to encode JPEG: {e}"))?;
+            }
+            ExportFormat::Avif => {
+                let q = options.quality.clamp(1, 100);
+                let speed: u8 = 6;
+                let encoder =
+                    image::codecs::avif::AvifEncoder::new_with_speed_quality(&mut buffer, speed, q);
+                img.write_with_encoder(encoder)
+                    .map_err(|e| format!("Failed to encode AVIF: {e}"))?;
             }
             ExportFormat::Png => {
                 img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png)
@@ -231,8 +243,19 @@ pub fn process_single_image(
                         .encode_image(&rgb)
                         .map_err(|e| format!("Failed to encode JPEG: {e}"))?;
                 } else if target_ext == "webp" {
-                    img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::WebP)
+                    let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut buffer);
+                    img.write_with_encoder(encoder)
                         .map_err(|e| format!("Failed to encode WebP: {e}"))?;
+                } else if target_ext == "avif" {
+                    let q = options.quality.clamp(1, 100);
+                    let speed: u8 = 6;
+                    let encoder = image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                        &mut buffer,
+                        speed,
+                        q,
+                    );
+                    img.write_with_encoder(encoder)
+                        .map_err(|e| format!("Failed to encode AVIF: {e}"))?;
                 } else {
                     img.write_to(&mut Cursor::new(&mut buffer), image::ImageFormat::Png)
                         .map_err(|e| format!("Failed to encode PNG: {e}"))?;
@@ -350,8 +373,61 @@ pub fn process_single_image(
         base_filename: base_stem,
         image_filename,
         image_bytes,
+        width: final_width,
+        height: final_height,
         sidecar,
         showcase_item,
+    })
+}
+
+/// Compute size estimation and dimensions for an image without writing to disk.
+pub fn estimate_export_single_image(
+    file: &ImageFile,
+    options: &ExportOptions,
+) -> Result<ExportEstimateResult, String> {
+    let src_path = Path::new(&file.path);
+    if !src_path.exists() {
+        return Err(format!("Source image does not exist: {}", file.path));
+    }
+
+    let original_bytes = match fs::metadata(src_path) {
+        Ok(m) => m.len(),
+        Err(_) => file.size_bytes,
+    };
+
+    let processed = process_single_image(file, options, 0)?;
+    let estimated_bytes = processed.image_bytes.len() as u64;
+
+    let (original_width, original_height) = (
+        file.metadata.as_ref().and_then(|m| m.width).unwrap_or(0),
+        file.metadata.as_ref().and_then(|m| m.height).unwrap_or(0),
+    );
+
+    let (output_width, output_height) = (processed.width, processed.height);
+
+    let savings_percent = if original_bytes > 0 {
+        ((original_bytes as f64 - estimated_bytes as f64) / original_bytes as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let format_str = match options.format {
+        ExportFormat::Original => "original".to_string(),
+        ExportFormat::Webp => "webp".to_string(),
+        ExportFormat::Jpeg => "jpeg".to_string(),
+        ExportFormat::Png => "png".to_string(),
+        ExportFormat::Avif => "avif".to_string(),
+    };
+
+    Ok(ExportEstimateResult {
+        original_bytes,
+        estimated_bytes,
+        original_width,
+        original_height,
+        output_width,
+        output_height,
+        format: format_str,
+        savings_percent,
     })
 }
 
@@ -769,5 +845,59 @@ mod tests {
         assert_eq!(processed.image_filename, "photo.jpg");
         // Verify output is valid JPEG (SOI marker 0xFF 0xD8) and NOT PNG
         assert_eq!(&processed.image_bytes[0..2], &[0xFF, 0xD8]);
+    }
+
+    #[test]
+    fn test_process_single_image_avif_and_estimate() {
+        let dir = tempfile::tempdir().unwrap();
+        let src_img_path = dir.path().join("hero.png");
+
+        let mut img = RgbImage::new(120, 120);
+        for pixel in img.pixels_mut() {
+            *pixel = Rgb([50, 120, 200]);
+        }
+        img.save(&src_img_path).unwrap();
+
+        let file = ImageFile {
+            id: Some(42),
+            folder_id: 1,
+            path: src_img_path.to_string_lossy().to_string(),
+            container: Container::Png,
+            size_bytes: fs::metadata(&src_img_path).unwrap().len(),
+            modified_at: 1726000000,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+
+        let options = ExportOptions {
+            file_ids: vec![42],
+            format: ExportFormat::Avif,
+            quality: 70,
+            privacy: MetadataPrivacyMode::KeepAll,
+            sidecar: ExportSidecar::None,
+            filename_template: "{name}".to_string(),
+            destination_path: dir.path().join("out").to_string_lossy().to_string(),
+            as_zip: false,
+            max_edge: Some(60),
+            export_html_showcase: false,
+            html_title: None,
+        };
+
+        let processed = process_single_image(&file, &options, 0).unwrap();
+        assert_eq!(processed.image_filename, "hero.avif");
+        assert_eq!(processed.width, 60);
+        assert_eq!(processed.height, 60);
+
+        // Verify estimate function
+        let estimate = estimate_export_single_image(&file, &options).unwrap();
+        assert_eq!(estimate.format, "avif");
+        assert_eq!(estimate.output_width, 60);
+        assert_eq!(estimate.output_height, 60);
+        assert!(estimate.estimated_bytes > 0);
     }
 }

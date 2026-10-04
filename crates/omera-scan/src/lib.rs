@@ -14,7 +14,8 @@ pub mod thumbnail;
 pub mod transform;
 
 pub use export::{
-    execute_batch_export, format_export_filename, sanitize_filename_part, ProcessedExportItem,
+    estimate_export_single_image, execute_batch_export, format_export_filename,
+    sanitize_filename_part, ProcessedExportItem,
 };
 pub use html_showcase::{generate_html_showcase, ShowcaseItemMetadata};
 pub use scanner::{ScanError, ScanProgress, ScanStats, Scanner};

@@ -5,6 +5,7 @@ import { save, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { t } from "../i18n";
 import type {
+  ExportEstimateResult,
   ExportFormat,
   ExportOptions,
   ExportProgressEvent,
@@ -45,7 +46,81 @@ const progress = ref<ExportProgressEvent | null>(null);
 const summary = ref<ExportSummary | null>(null);
 const error = ref<string | null>(null);
 
+const estimate = ref<ExportEstimateResult | null>(null);
+const estimating = ref<boolean>(false);
+let estimateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 let unlistenProgress: UnlistenFn[] = [];
+
+async function runEstimate() {
+  if (!props.show || props.files.length === 0) {
+    estimate.value = null;
+    return;
+  }
+  const sample = props.files[0];
+  if (!sample || typeof sample.id !== "number") {
+    estimate.value = null;
+    return;
+  }
+
+  let max_edge: number | null = null;
+  if (maxEdgeMode.value === "3840") max_edge = 3840;
+  else if (maxEdgeMode.value === "2048") max_edge = 2048;
+  else if (maxEdgeMode.value === "1080") max_edge = 1080;
+  else if (maxEdgeMode.value === "custom" && customMaxEdge.value > 0) {
+    max_edge = customMaxEdge.value;
+  }
+
+  const options: ExportOptions = {
+    file_ids: [sample.id],
+    format: format.value,
+    quality: quality.value,
+    privacy: privacy.value,
+    sidecar: sidecar.value,
+    filename_template: filenameTemplate.value.trim() || "{name}",
+    destination_path: destinationPath.value.trim() || "preview",
+    as_zip: false,
+    max_edge,
+    export_html_showcase: false,
+  };
+
+  estimating.value = true;
+  try {
+    const res = await invoke<ExportEstimateResult>("estimate_export_file", {
+      fileId: sample.id,
+      options,
+    });
+    estimate.value = res;
+  } catch (err) {
+    console.warn("Estimation failed:", err);
+    estimate.value = null;
+  } finally {
+    estimating.value = false;
+  }
+}
+
+function queueEstimate() {
+  if (estimateDebounceTimer) clearTimeout(estimateDebounceTimer);
+  estimateDebounceTimer = setTimeout(() => {
+    runEstimate();
+  }, 250);
+}
+
+const projectedBatchText = computed(() => {
+  if (!estimate.value || props.files.length <= 1) return null;
+  const totalOrig = props.files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
+  if (totalOrig <= 0) return null;
+  const ratio = estimate.value.estimated_bytes / Math.max(1, estimate.value.original_bytes);
+  const totalEst = Math.round(totalOrig * ratio);
+  const saved = Math.max(0, totalOrig - totalEst);
+  return t.value.exportModal.batchProjection
+    .replace("{totalEst}", formatBytes(totalEst))
+    .replace("{saved}", formatBytes(saved));
+});
+
+watch([format, quality, maxEdgeMode, customMaxEdge, privacy], () => {
+  queueEstimate();
+});
 
 watch(
   () => props.show,
@@ -56,6 +131,7 @@ watch(
       error.value = null;
       exporting.value = false;
       destinationPath.value = "";
+      queueEstimate();
 
       if (unlistenProgress.length === 0) {
         const u1 = await listen<ExportProgressEvent>(
@@ -73,6 +149,8 @@ watch(
         unlistenProgress = [u1, u2];
       }
     } else {
+      if (estimateDebounceTimer) clearTimeout(estimateDebounceTimer);
+      estimate.value = null;
       unlistenProgress.forEach((fn) => fn());
       unlistenProgress = [];
     }
@@ -81,6 +159,7 @@ watch(
 );
 
 onUnmounted(() => {
+  if (estimateDebounceTimer) clearTimeout(estimateDebounceTimer);
   unlistenProgress.forEach((fn) => fn());
   unlistenProgress = [];
 });
@@ -233,13 +312,14 @@ async function handleOpenOutputFolder() {
               <label class="form-label">{{ t.exportModal.format }}</label>
               <select v-model="format" class="form-select" :disabled="exporting">
                 <option value="webp">{{ t.exportModal.formatWebp }}</option>
+                <option value="avif">{{ t.exportModal.formatAvif }}</option>
                 <option value="jpeg">{{ t.exportModal.formatJpeg }}</option>
                 <option value="png">{{ t.exportModal.formatPng }}</option>
                 <option value="original">{{ t.exportModal.formatOriginal }}</option>
               </select>
             </div>
 
-            <div v-if="format === 'jpeg'" class="form-group">
+            <div v-if="format === 'jpeg' || format === 'avif'" class="form-group">
               <div class="label-with-value">
                 <label class="form-label">{{ t.exportModal.quality }}</label>
                 <span class="value-badge">{{ quality }}%</span>
@@ -253,6 +333,12 @@ async function handleOpenOutputFolder() {
                 class="form-range"
                 :disabled="exporting"
               />
+            </div>
+            <div v-else-if="format === 'webp'" class="form-group">
+              <label class="form-label">{{ t.exportModal.quality }}</label>
+              <div class="lossless-badge">
+                <span>🛡️ {{ t.exportModal.losslessWebpNote }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -284,6 +370,35 @@ async function handleOpenOutputFolder() {
                 :disabled="exporting"
               />
             </div>
+          </div>
+        </div>
+
+        <!-- Instant Preview & Size Comparison -->
+        <div v-if="estimate" class="estimate-card">
+          <div class="estimate-header">
+            <span class="estimate-title">⚡ {{ t.exportModal.previewEstimate }}</span>
+            <span
+              class="estimate-badge"
+              :class="estimate.savings_percent >= 0 ? 'badge-save' : 'badge-grow'"
+            >
+              {{ estimate.savings_percent >= 0 ? `-${Math.round(estimate.savings_percent)}%` : `+${Math.round(-estimate.savings_percent)}%` }}
+            </span>
+          </div>
+          <div class="estimate-grid">
+            <div class="estimate-col">
+              <span class="col-label">{{ t.exportModal.originalSize }}</span>
+              <span class="col-value">{{ formatBytes(estimate.original_bytes) }}</span>
+              <span class="col-sub">{{ estimate.original_width }} × {{ estimate.original_height }} px</span>
+            </div>
+            <div class="estimate-arrow">➔</div>
+            <div class="estimate-col">
+              <span class="col-label">{{ t.exportModal.estimatedSize }}</span>
+              <span class="col-value highlight">{{ formatBytes(estimate.estimated_bytes) }}</span>
+              <span class="col-sub">{{ estimate.output_width }} × {{ estimate.output_height }} px ({{ estimate.format.toUpperCase() }})</span>
+            </div>
+          </div>
+          <div v-if="projectedBatchText" class="estimate-batch-note">
+            <span>📊 {{ projectedBatchText }}</span>
           </div>
         </div>
 
@@ -858,5 +973,103 @@ async function handleOpenOutputFolder() {
 .btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.lossless-badge {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  color: #818cf8;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.estimate-card {
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  padding: 0.9rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.estimate-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.estimate-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: #e0e7ff;
+}
+
+.estimate-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.badge-save {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-grow {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.estimate-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  padding: 0.65rem 0.5rem;
+}
+
+.estimate-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.col-label {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.col-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.col-value.highlight {
+  color: #818cf8;
+}
+
+.col-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.estimate-arrow {
+  color: #6366f1;
+  font-size: 1.1rem;
+}
+
+.estimate-batch-note {
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 0.5rem;
 }
 </style>

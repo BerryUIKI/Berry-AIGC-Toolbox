@@ -55,6 +55,7 @@ pub fn resolve_extension(source_path: &Path, format: TransformFormat) -> String 
         TransformFormat::Jpeg => "jpg".to_string(),
         TransformFormat::Webp => "webp".to_string(),
         TransformFormat::Png => "png".to_string(),
+        TransformFormat::Avif => "avif".to_string(),
     }
 }
 
@@ -109,16 +110,40 @@ pub fn transform_file_staged(
         ));
     }
 
-    let verified_img = image::open(&staged_path).map_err(|e| {
-        let _ = fs::remove_file(&staged_path);
-        TransformError::VerificationFailed(format!("Failed to re-decode staged derivative: {e}"))
-    })?;
+    if ext == "avif" {
+        // Pure-Rust container verification for AVIF
+        let mut header = [0u8; 16];
+        let mut file = File::open(&staged_path)?;
+        use std::io::Read;
+        let read_bytes = file.read(&mut header)?;
+        if read_bytes < 12 || &header[4..8] != b"ftyp" {
+            let _ = fs::remove_file(&staged_path);
+            return Err(TransformError::VerificationFailed(
+                "Staged AVIF derivative has invalid ftyp header".to_string(),
+            ));
+        }
+        let brand = &header[8..12];
+        if brand != b"avif" && brand != b"avis" && brand != b"mif1" {
+            let _ = fs::remove_file(&staged_path);
+            return Err(TransformError::VerificationFailed(format!(
+                "Staged AVIF derivative has unexpected brand: {:?}",
+                String::from_utf8_lossy(brand)
+            )));
+        }
+    } else {
+        let verified_img = image::open(&staged_path).map_err(|e| {
+            let _ = fs::remove_file(&staged_path);
+            TransformError::VerificationFailed(format!(
+                "Failed to re-decode staged derivative: {e}"
+            ))
+        })?;
 
-    if verified_img.width() == 0 || verified_img.height() == 0 {
-        let _ = fs::remove_file(&staged_path);
-        return Err(TransformError::VerificationFailed(
-            "Staged derivative has invalid dimensions".to_string(),
-        ));
+        if verified_img.width() == 0 || verified_img.height() == 0 {
+            let _ = fs::remove_file(&staged_path);
+            return Err(TransformError::VerificationFailed(
+                "Staged derivative has invalid dimensions".to_string(),
+            ));
+        }
     }
 
     Ok(staged_path)
@@ -144,7 +169,16 @@ fn encode_image_to_path(
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
         }
         "webp" => {
-            img.write_to(&mut writer, image::ImageFormat::WebP)
+            let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut writer);
+            img.write_with_encoder(encoder)
+                .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+        }
+        "avif" => {
+            let q = quality.unwrap_or(80).clamp(1, 100);
+            let speed: u8 = 6;
+            let encoder =
+                image::codecs::avif::AvifEncoder::new_with_speed_quality(&mut writer, speed, q);
+            img.write_with_encoder(encoder)
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
         }
         "png" => {
@@ -683,5 +717,41 @@ mod tests {
         )
         .unwrap();
         assert_eq!(rename_res.file_name().unwrap(), "sample_1.jpg");
+    }
+
+    #[test]
+    fn test_transform_file_staged_avif_and_webp() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("test_input.png");
+        create_dummy_png(&src, 80, 80);
+
+        let staging = dir.path().join("staging");
+
+        // AVIF
+        let avif_spec = TransformSpec {
+            format: TransformFormat::Avif,
+            quality: Some(75),
+            max_edge: Some(40),
+            ..Default::default()
+        };
+        let staged_avif = transform_file_staged(&src, &staging, &avif_spec).unwrap();
+        assert!(staged_avif.exists());
+        assert_eq!(staged_avif.extension().unwrap(), "avif");
+        let avif_bytes = fs::read(&staged_avif).unwrap();
+        assert!(avif_bytes.len() > 32);
+        assert_eq!(&avif_bytes[4..8], b"ftyp");
+
+        // WebP
+        let webp_spec = TransformSpec {
+            format: TransformFormat::Webp,
+            max_edge: Some(60),
+            ..Default::default()
+        };
+        let staged_webp = transform_file_staged(&src, &staging, &webp_spec).unwrap();
+        assert!(staged_webp.exists());
+        assert_eq!(staged_webp.extension().unwrap(), "webp");
+        let verified_webp = image::open(&staged_webp).unwrap();
+        assert_eq!(verified_webp.width(), 60);
+        assert_eq!(verified_webp.height(), 60);
     }
 }

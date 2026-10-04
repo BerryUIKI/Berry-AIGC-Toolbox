@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { t } from "../i18n";
 import type { Album, Folder, LibraryCounts, NavTarget, ScanProgress, ScanStats, SubdirectoryEntry, Tag } from "../types";
 import FolderTreeNode from "./FolderTreeNode.vue";
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   openDbManager: [];
   openShortcutsHelp: [];
   openAddFolderModal: [];
+  openImportModal: [payload: { filePaths: string[]; folderId?: number | null; albumId?: number | null }];
   moveFilesToFolder: [payload: { filePaths: string[]; folderId: number }];
   addFilesToAlbum: [payload: { fileIds: number[]; albumId: number }];
   importExternalFilesToAlbum: [payload: { filePaths: string[]; albumId: number }];
@@ -183,17 +185,65 @@ function isTargetActive(target: NavTarget): boolean {
 function onDropOnFolder(e: DragEvent, folder: Folder) {
   e.preventDefault();
   const data = e.dataTransfer?.getData("application/json");
-  if (!data) return;
+  if (data) {
+    try {
+      const payload = JSON.parse(data);
+      if (payload.file_paths && payload.file_paths.length > 0) {
+        emit("moveFilesToFolder", {
+          filePaths: payload.file_paths,
+          folderId: folder.id,
+        });
+        return;
+      }
+    } catch (err) {
+      console.error("Drop on folder parse error:", err);
+    }
+  }
+
+  // Handle external OS file drops onto managed folder
+  if (folder.folder_type === "managed") {
+    const droppedFiles = e.dataTransfer?.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      const filePaths: string[] = [];
+      for (let i = 0; i < droppedFiles.length; i++) {
+        const f = droppedFiles[i] as any;
+        if (f.path) {
+          filePaths.push(f.path);
+        }
+      }
+      if (filePaths.length > 0) {
+        emit("openImportModal", {
+          filePaths,
+          folderId: folder.id,
+        });
+        return;
+      }
+    }
+  }
+}
+
+async function handleImportToManaged(folder: Folder, e: MouseEvent) {
+  e.stopPropagation();
   try {
-    const payload = JSON.parse(data);
-    if (payload.file_paths && payload.file_paths.length > 0) {
-      emit("moveFilesToFolder", {
-        filePaths: payload.file_paths,
-        folderId: folder.id,
-      });
+    const selected = await openDialog({
+      multiple: true,
+      directory: false,
+      title: t.value.importModal.title,
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "webp", "avif", "bmp", "gif", "tiff", "tga"],
+        },
+      ],
+    });
+    if (selected) {
+      const paths = Array.isArray(selected) ? selected : [selected];
+      if (paths.length > 0) {
+        emit("openImportModal", { filePaths: paths, folderId: folder.id });
+      }
     }
   } catch (err) {
-    console.error("Drop on folder parse error:", err);
+    console.error("Open file dialog error:", err);
   }
 }
 
@@ -367,6 +417,16 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               <span v-if="counts?.folders" class="item-badge">{{ counts.folders[folder.id] ?? 0 }}</span>
 
               <div class="folder-actions" @click.stop>
+                <button
+                  v-if="folder.folder_type === 'managed'"
+                  type="button"
+                  class="icon-btn import-btn"
+                  :disabled="isBusy(folder.id)"
+                  :title="t.importModal.title || 'Import Files'"
+                  @click="handleImportToManaged(folder, $event)"
+                >
+                  📥
+                </button>
                 <button
                   v-if="folder.folder_type === 'pipeline'"
                   type="button"

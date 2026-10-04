@@ -208,6 +208,7 @@ pub fn run() {
             commands::test_database_connection,
             commands::export_sqlite_to_central_migration,
             commands::export_files_batch,
+            commands::estimate_export_file,
             commands::open_external_url,
             commands::get_or_create_thumbnail,
             commands::save_video_thumbnail,

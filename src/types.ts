@@ -149,7 +149,30 @@ export interface MigrationSummary {
   duration_ms: number;
 }
 
-export type ExportFormat = "original" | "webp" | "jpeg" | "png";
+export type ExportFormat = "original" | "webp" | "jpeg" | "png" | "avif";
+
+export type TransformFormat = "original" | "webp" | "jpeg" | "png" | "avif";
+export type TransformMetadataPolicy = "keep_supported" | "strip_ai" | "strip_all";
+export type TransformCollisionPolicy = "rename" | "skip";
+
+export interface TransformSpec {
+  format: TransformFormat;
+  quality?: number | null;
+  max_edge?: number | null;
+  metadata_policy: TransformMetadataPolicy;
+  collision_policy: TransformCollisionPolicy;
+}
+
+export interface ExportEstimateResult {
+  original_bytes: number;
+  estimated_bytes: number;
+  original_width: number;
+  original_height: number;
+  output_width: number;
+  output_height: number;
+  format: string;
+  savings_percent: number;
+}
 
 export type MetadataPrivacyMode =
   | "keep_all"

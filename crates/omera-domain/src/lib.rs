@@ -45,8 +45,8 @@ pub use collaboration::{
 };
 pub use database_stats::DatabaseStats;
 pub use export::{
-    ExportFormat, ExportOptions, ExportProgressEvent, ExportSidecar, ExportSummary,
-    MetadataPrivacyMode,
+    ExportEstimateResult, ExportFormat, ExportOptions, ExportProgressEvent, ExportSidecar,
+    ExportSummary, MetadataPrivacyMode,
 };
 pub use extracted_metadata::ExtractedMetadata;
 pub use filesystem_change::FilesystemChange;

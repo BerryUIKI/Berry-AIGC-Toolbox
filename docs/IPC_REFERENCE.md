@@ -43,7 +43,7 @@ The generator validates command coverage, not Serde field compatibility, safety,
 | `count_album_files` | `albumId: i64` | `Result<i64, String>` |
 | `get_album_counts` | (none) | `Result<HashMap<i64, i64>, String>` |
 | `list_album_files` | `albumId: i64` | `Result<Vec<ImageFile>, String>` |
-| `import_files_to_managed_vault` | `filePaths: Vec<String>`<br>`targetFolderId: Option<i64>`<br>`targetAlbumId: Option<i64>` | `Result<Vec<i64>, String>` |
+| `import_files_to_managed_vault` | `filePaths: Vec<String>`<br>`targetFolderId: Option<i64>`<br>`targetAlbumId: Option<i64>`<br>`transformSpec: Option<TransformSpec>` | `Result<Vec<i64>, String>` |
 | `create_tag` | `name: String`<br>`color: Option<String>` | `Result<Tag, String>` |
 | `list_tags` | (none) | `Result<Vec<Tag>, String>` |
 | `delete_tag` | `id: i64` | `Result<(), String>` |
@@ -83,6 +83,7 @@ The generator validates command coverage, not Serde field compatibility, safety,
 | `test_database_connection` | `backend: String`<br>`connectionUrl: String` | `Result<DatabasePingResult, String>` |
 | `export_sqlite_to_central_migration` | `options: MigrationOptions` | `Result<MigrationSummary, String>` |
 | `export_files_batch` | `options: ExportOptions` | `Result<ExportSummary, String>` |
+| `estimate_export_file` | `fileId: i64`<br>`options: ExportOptions` | `Result<ExportEstimateResult, String>` |
 | `open_external_url` | `url: String` | `Result<(), String>` |
 | `get_or_create_thumbnail` | `request: ThumbnailRequestArgs` | `Result<String, String>` |
 | `save_video_thumbnail` | `fileId: i64`<br>`modifiedAt: i64`<br>`maxEdge: u32`<br>`base64Data: String` | `Result<String, String>` |

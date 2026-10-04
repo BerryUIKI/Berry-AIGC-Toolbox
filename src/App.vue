@@ -85,6 +85,9 @@ const CullDraftsModal = defineAsyncComponent(
   () => import("./components/CullDraftsModal.vue"),
 );
 const ExportModal = defineAsyncComponent(() => import("./components/ExportModal.vue"));
+const ImportTransformModal = defineAsyncComponent(
+  () => import("./components/ImportTransformModal.vue")
+);
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
@@ -164,6 +167,10 @@ const cullHeroes = ref<ImageFile[]>([]);
 const cullDrafts = ref<ImageFile[]>([]);
 const exportModalOpen = ref(false);
 const exportFilesList = ref<ImageFile[]>([]);
+const importModalOpen = ref(false);
+const importModalFiles = ref<string[]>([]);
+const importModalFolderId = ref<number | null>(null);
+const importModalAlbumId = ref<number | null>(null);
 
 interface StackMergePlan {
   targetStackId: string;
@@ -1821,25 +1828,36 @@ async function onDropAddFilesToAlbum(payload: { fileIds: number[]; albumId: numb
   }
 }
 
-async function onDropImportExternalFilesToAlbum(payload: { filePaths: string[]; albumId: number }) {
-  try {
-    const currentManagedId = (activeTarget.value.type === "folder" && activeTarget.value.folder.folder_type === "managed" ? activeTarget.value.folder.id : null)
-      || folders.value.find((f) => f.folder_type === "managed")?.id
-      || null;
+function openImportModal(payload: {
+  filePaths: string[];
+  folderId?: number | null;
+  albumId?: number | null;
+}) {
+  importModalFiles.value = payload.filePaths;
+  importModalFolderId.value = payload.folderId ?? null;
+  importModalAlbumId.value = payload.albumId ?? null;
+  importModalOpen.value = true;
+}
 
-    const importedIds = await invoke<number[]>("import_files_to_managed_vault", {
-      filePaths: payload.filePaths,
-      targetFolderId: currentManagedId,
-      targetAlbumId: payload.albumId,
-    });
-    if (importedIds && importedIds.length > 0) {
-      await loadAlbumsAndTags();
-      await refreshCounts();
-      await loadFiles();
-    }
-  } catch (err) {
-    error.value = String(err);
+async function onImportCompleted(importedIds: number[]) {
+  importModalOpen.value = false;
+  if (importedIds && importedIds.length > 0) {
+    await loadAlbumsAndTags();
+    await refreshCounts();
+    await loadFiles();
   }
+}
+
+function onDropImportExternalFilesToAlbum(payload: { filePaths: string[]; albumId: number }) {
+  const currentManagedId = (activeTarget.value.type === "folder" && activeTarget.value.folder.folder_type === "managed" ? activeTarget.value.folder.id : null)
+    || folders.value.find((f) => f.folder_type === "managed")?.id
+    || null;
+
+  openImportModal({
+    filePaths: payload.filePaths,
+    folderId: currentManagedId,
+    albumId: payload.albumId,
+  });
 }
 
 async function onDropTagFiles(payload: { fileIds: number[]; tagId: number }) {
@@ -2074,6 +2092,7 @@ function onResetZoom() {
         @move-files-to-folder="onDropMoveFiles"
         @add-files-to-album="onDropAddFilesToAlbum"
         @import-external-files-to-album="onDropImportExternalFilesToAlbum"
+        @open-import-modal="openImportModal"
         @tag-files="onDropTagFiles"
       />
 
@@ -2512,6 +2531,18 @@ function onResetZoom() {
       :files="exportFilesList"
       @close="exportModalOpen = false"
       @exported="onExportCompleted"
+    />
+
+    <ImportTransformModal
+      v-if="importModalOpen"
+      :show="importModalOpen"
+      :file-paths="importModalFiles"
+      :initial-folder-id="importModalFolderId"
+      :initial-album-id="importModalAlbumId"
+      :folders="folders"
+      :albums="albums"
+      @close="importModalOpen = false"
+      @imported="onImportCompleted"
     />
 
     <!-- Help & Feature Guide Drawer -->

@@ -25,10 +25,11 @@ use omera_clip::{ClipEngine, ClipModelInfo};
 use omera_domain::{
     plan_prompt_stacks, Album, ChangeLogEntry, ChangeLogSyncQuery, CheckpointModelStat,
     CleanupQueueItem, CursorFilePage, DatabasePingResult, DatabaseStats, DetectedLora,
-    ExportOptions, ExportSummary, FilePage, FileSortField, Folder, ImageFile, LoraModel,
-    MigrationOptions, MigrationSummary, ModelCacheEntry, MutationResult, NormalizedPath,
+    ExportEstimateResult, ExportOptions, ExportSummary, FilePage, FileSortField, Folder, ImageFile,
+    LoraModel, MigrationOptions, MigrationSummary, ModelCacheEntry, MutationResult, NormalizedPath,
     PathResolver, PipelineDetectedPath, PromptStackCandidate, PromptStat, SearchCriteria,
-    SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
+    SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag, TransformFormat,
+    TransformMetadataPolicy, TransformSpec,
 };
 use omera_scan::{execute_batch_export, ScanStats, Scanner};
 use omera_storage::Database;
@@ -724,16 +725,23 @@ pub fn list_album_files(
         .map_err(|e| e.to_string())
 }
 
-/// Ingest external files into a managed vault folder and optionally associate with an album.
+/// Ingest external files into a managed vault folder and optionally associate with an album and transcode.
 #[tauri::command]
 pub fn import_files_to_managed_vault(
     file_paths: Vec<String>,
     target_folder_id: Option<i64>,
     target_album_id: Option<i64>,
+    transform_spec: Option<TransformSpec>,
     state: State<'_, AppState>,
 ) -> Result<Vec<i64>, String> {
     let db = db(&state)?;
-    import_files_to_managed_vault_inner(&db, &file_paths, target_folder_id, target_album_id)
+    import_files_to_managed_vault_inner(
+        &db,
+        &file_paths,
+        target_folder_id,
+        target_album_id,
+        transform_spec.as_ref(),
+    )
 }
 
 pub fn import_files_to_managed_vault_inner(
@@ -741,6 +749,7 @@ pub fn import_files_to_managed_vault_inner(
     file_paths: &[String],
     target_folder_id: Option<i64>,
     target_album_id: Option<i64>,
+    transform_spec: Option<&TransformSpec>,
 ) -> Result<Vec<i64>, String> {
     if file_paths.is_empty() {
         return Ok(Vec::new());
@@ -769,11 +778,25 @@ pub fn import_files_to_managed_vault_inner(
     std::fs::create_dir_all(dest_dir)
         .map_err(|e| format!("Failed to create destination directory: {e}"))?;
 
-    let supported_exts = ["png", "jpg", "jpeg", "webp", "mp4", "webm"];
+    let supported_exts = ["png", "jpg", "jpeg", "webp", "avif", "mp4", "webm"];
     let now_ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64;
+
+    let should_transform = match transform_spec {
+        Some(spec) => {
+            spec.format != TransformFormat::Original
+                || spec.max_edge.is_some()
+                || spec.quality.is_some()
+        }
+        None => false,
+    };
+
+    let staging_dir = dest_dir.join(".omera_staging");
+    if should_transform {
+        let _ = std::fs::create_dir_all(&staging_dir);
+    }
 
     let mut imported_ids = Vec::new();
 
@@ -783,7 +806,7 @@ pub fn import_files_to_managed_vault_inner(
             continue;
         }
 
-        let ext = src_path
+        let mut ext = src_path
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
@@ -809,58 +832,122 @@ pub fn import_files_to_managed_vault_inner(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(now_ts);
 
-        let file_name = match src_path.file_name() {
-            Some(n) => n.to_string_lossy().to_string(),
-            None => continue,
-        };
+        let dest_path: PathBuf;
 
-        let mut dest_path = dest_dir.join(&file_name);
-        if dest_path.exists() {
-            let is_same = dest_path
-                .metadata()
-                .map(|m| m.len() == meta.len())
-                .unwrap_or(false);
-            if !is_same {
-                let stem = src_path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("file");
-                let ext_part = if ext.is_empty() {
-                    String::new()
-                } else {
-                    format!(".{ext}")
-                };
-                let mut counter = 1;
-                while dest_path.exists() {
-                    dest_path = dest_dir.join(format!("{stem}_{counter}{ext_part}"));
-                    counter += 1;
+        if should_transform && ext != "mp4" && ext != "webm" {
+            let spec = transform_spec.unwrap();
+            let staged_res = omera_scan::transform_file_staged(src_path, &staging_dir, spec);
+            let staged_path = match staged_res {
+                Ok(p) => p,
+                Err(e) => return Err(format!("Failed to transform image {src_path_str}: {e}")),
+            };
+
+            let target_ext = omera_scan::resolve_extension(src_path, spec.format);
+            let stem = src_path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("image");
+
+            let pub_path = omera_scan::resolve_publication_path(
+                dest_dir,
+                stem,
+                &target_ext,
+                spec.collision_policy,
+            )
+            .map_err(|e| e.to_string())?;
+
+            if let Err(e) = std::fs::rename(&staged_path, &pub_path) {
+                let _ = std::fs::remove_file(&staged_path);
+                return Err(format!("Failed to publish staged file to destination: {e}"));
+            }
+
+            if spec.metadata_policy != TransformMetadataPolicy::StripAll {
+                for sidecar_ext in ["txt", "json"] {
+                    let src_sidecar = src_path.with_extension(sidecar_ext);
+                    if src_sidecar != src_path && src_sidecar.is_file() {
+                        let dest_sidecar = pub_path.with_extension(sidecar_ext);
+                        let _ = std::fs::copy(&src_sidecar, &dest_sidecar);
+                    }
                 }
             }
-        }
 
-        if !dest_path.exists() {
-            std::fs::copy(src_path, &dest_path)
-                .map_err(|e| format!("Failed to copy {src_path_str} to destination: {e}"))?;
+            dest_path = pub_path;
+            ext = target_ext;
+        } else {
+            let file_name = match src_path.file_name() {
+                Some(n) => n.to_string_lossy().to_string(),
+                None => continue,
+            };
 
-            for sidecar_ext in ["txt", "json"] {
-                let src_sidecar = src_path.with_extension(sidecar_ext);
-                if src_sidecar != src_path && src_sidecar.is_file() {
-                    let dest_sidecar = dest_path.with_extension(sidecar_ext);
-                    let _ = std::fs::copy(&src_sidecar, &dest_sidecar);
+            let mut candidate = dest_dir.join(&file_name);
+            if candidate.exists() {
+                let is_same = candidate
+                    .metadata()
+                    .map(|m| m.len() == meta.len())
+                    .unwrap_or(false);
+                if !is_same {
+                    let stem = src_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("file");
+                    let ext_part = if ext.is_empty() {
+                        String::new()
+                    } else {
+                        format!(".{ext}")
+                    };
+                    let mut counter = 1;
+                    while candidate.exists() {
+                        candidate = dest_dir.join(format!("{stem}_{counter}{ext_part}"));
+                        counter += 1;
+                    }
                 }
             }
+
+            if !candidate.exists() {
+                std::fs::copy(src_path, &candidate)
+                    .map_err(|e| format!("Failed to copy {src_path_str} to destination: {e}"))?;
+
+                for sidecar_ext in ["txt", "json"] {
+                    let src_sidecar = src_path.with_extension(sidecar_ext);
+                    if src_sidecar != src_path && src_sidecar.is_file() {
+                        let dest_sidecar = candidate.with_extension(sidecar_ext);
+                        let _ = std::fs::copy(&src_sidecar, &dest_sidecar);
+                    }
+                }
+            }
+            dest_path = candidate;
         }
 
         let container = match ext.as_str() {
             "png" => omera_domain::Container::Png,
             "jpg" | "jpeg" => omera_domain::Container::Jpeg,
             "webp" => omera_domain::Container::WebP,
+            "avif" => omera_domain::Container::Avif,
             "mp4" => omera_domain::Container::Mp4,
             "webm" => omera_domain::Container::Webm,
             _ => continue,
         };
 
-        let metadata = omera_metadata::extract_metadata(container, &dest_path);
+        let mut metadata = omera_metadata::extract_metadata(container, &dest_path)
+            .or_else(|| omera_metadata::extract_metadata(container, src_path));
+
+        if let Some(spec) = transform_spec {
+            match spec.metadata_policy {
+                TransformMetadataPolicy::StripAll => {
+                    metadata = None;
+                }
+                TransformMetadataPolicy::StripAi => {
+                    if let Some(m) = metadata.as_mut() {
+                        m.prompt = None;
+                        m.negative_prompt = None;
+                        m.parameters = None;
+                        m.raw = None;
+                    }
+                }
+                TransformMetadataPolicy::KeepSupported => {}
+            }
+        }
+
         let tgt_str = {
             let canonical = dest_path
                 .canonicalize()
@@ -869,11 +956,13 @@ pub fn import_files_to_managed_vault_inner(
             text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
         };
 
+        let final_meta = dest_path.metadata().unwrap_or(meta);
+
         let image_file = ImageFile {
             id: None,
             folder_id: managed_folder.id,
             path: tgt_str.clone(),
-            size_bytes: meta.len(),
+            size_bytes: final_meta.len(),
             modified_at: file_mtime,
             container,
             metadata,
@@ -896,6 +985,10 @@ pub fn import_files_to_managed_vault_inner(
         }
 
         imported_ids.push(file_id);
+    }
+
+    if should_transform {
+        let _ = std::fs::remove_dir(&staging_dir);
     }
 
     Ok(imported_ids)
@@ -1646,6 +1739,21 @@ pub async fn export_files_batch(
         let _ = app_handle.emit("berry://export-progress", progress);
     });
     Ok(summary)
+}
+
+/// Instant preview and size estimation for a selected file without writing to destination.
+#[tauri::command]
+pub fn estimate_export_file(
+    file_id: i64,
+    options: ExportOptions,
+    state: State<'_, AppState>,
+) -> Result<ExportEstimateResult, String> {
+    let db_guard = db(&state)?;
+    let file = db_guard
+        .get_file_by_id(file_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("File id {file_id} not found"))?;
+    omera_scan::estimate_export_single_image(&file, &options)
 }
 
 /// Open an external URL in the system's default browser.
@@ -4184,7 +4292,7 @@ mod tests {
 
         let paths = vec![ext_img.to_string_lossy().to_string()];
         let imported =
-            import_files_to_managed_vault_inner(&db, &paths, Some(folder.id), Some(album.id))
+            import_files_to_managed_vault_inner(&db, &paths, Some(folder.id), Some(album.id), None)
                 .unwrap();
 
         assert_eq!(imported.len(), 1);
@@ -4205,6 +4313,58 @@ mod tests {
         let album_files = db.list_album_files(album.id).unwrap();
         assert_eq!(album_files.len(), 1);
         assert_eq!(album_files[0].id, Some(file_id));
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_import_files_to_managed_vault_with_transform() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_managed_tx_{}", std::process::id()));
+        let vault_dir = temp_dir.join("vault");
+        let external_dir = temp_dir.join("external");
+        std::fs::create_dir_all(&vault_dir).unwrap();
+        std::fs::create_dir_all(&external_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &vault_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let ext_img = external_dir.join("photo.png");
+        let mut img = image::RgbImage::new(100, 100);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgb([10, 20, 30]);
+        }
+        img.save(&ext_img).unwrap();
+
+        let spec = TransformSpec {
+            format: TransformFormat::Webp,
+            max_edge: Some(50),
+            ..Default::default()
+        };
+
+        let paths = vec![ext_img.to_string_lossy().to_string()];
+        let imported =
+            import_files_to_managed_vault_inner(&db, &paths, Some(folder.id), None, Some(&spec))
+                .unwrap();
+
+        assert_eq!(imported.len(), 1);
+        let file_id = imported[0];
+        let file = db.get_file_by_id(file_id).unwrap().unwrap();
+        assert_eq!(file.container, omera_domain::Container::WebP);
+        assert!(file.path.ends_with(".webp"));
+        let dest_img = std::path::Path::new(&file.path);
+        assert!(dest_img.exists());
+        // Verify source file still exists intact
+        assert!(ext_img.exists());
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

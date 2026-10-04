@@ -32,7 +32,7 @@ pub use container::detect_container;
 pub fn extract_metadata(container: Container, path: &Path) -> Option<ExtractedMetadata> {
     let embedded = match container {
         Container::Png => extract_png_metadata(path),
-        Container::Jpeg | Container::WebP => extract_exif_metadata(path),
+        Container::Jpeg | Container::WebP | Container::Avif => extract_exif_metadata(path),
         Container::Mp4 => video::extract_mp4_metadata(path),
         Container::Webm => video::extract_webm_metadata(path),
         Container::Txt => None,

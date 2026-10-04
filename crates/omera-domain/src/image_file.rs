@@ -15,6 +15,8 @@ pub enum Container {
     Jpeg,
     /// WebP (`.webp`).
     WebP,
+    /// AVIF (`.avif`).
+    Avif,
     /// MP4 (`.mp4`).
     Mp4,
     /// WebM (`.webm`).
@@ -26,7 +28,7 @@ pub enum Container {
 impl Container {
     /// Whether this container holds an image (rather than a video or text).
     pub const fn is_image(self) -> bool {
-        matches!(self, Self::Png | Self::Jpeg | Self::WebP)
+        matches!(self, Self::Png | Self::Jpeg | Self::WebP | Self::Avif)
     }
 
     /// Whether this container holds a video.
@@ -40,6 +42,7 @@ impl Container {
             Self::Png => "png",
             Self::Jpeg => "jpg",
             Self::WebP => "webp",
+            Self::Avif => "avif",
             Self::Mp4 => "mp4",
             Self::Webm => "webm",
             Self::Txt => "txt",
@@ -55,8 +58,9 @@ impl Container {
     pub fn from_id(id: &str) -> Option<Container> {
         match id {
             "png" => Some(Self::Png),
-            "jpg" => Some(Self::Jpeg),
+            "jpg" | "jpeg" => Some(Self::Jpeg),
             "webp" => Some(Self::WebP),
+            "avif" => Some(Self::Avif),
             "mp4" => Some(Self::Mp4),
             "webm" => Some(Self::Webm),
             "txt" => Some(Self::Txt),
@@ -163,6 +167,7 @@ mod tests {
             Container::Png,
             Container::Jpeg,
             Container::WebP,
+            Container::Avif,
             Container::Mp4,
             Container::Webm,
             Container::Txt,

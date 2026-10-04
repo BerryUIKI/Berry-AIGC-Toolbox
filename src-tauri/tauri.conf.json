@@ -43,7 +43,8 @@
     },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "startMenuFolder": "Omera"
       }
     },
     "icon": [

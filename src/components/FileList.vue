@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
-import type { ImageFile } from "../types";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import type { FileSortField, ImageFile, SortDirection } from "../types";
 import {
   assetUrl,
   formatBytes,
@@ -19,6 +19,7 @@ import {
   invalidateThumbnail,
 } from "../utils/thumbnail";
 import { t } from "../i18n";
+import { hasActiveDialog, isEditableTarget } from "../utils/dialog";
 import { useGalleryNavigation } from "../utils/gallery-navigation";
 
 const props = defineProps<{
@@ -32,6 +33,8 @@ const props = defineProps<{
   fileRevision?: number;
   emptyMessage?: string;
   emptyActionText?: string;
+  sortField?: FileSortField;
+  sortDirection?: SortDirection;
 }>();
 
 const emit = defineEmits<{
@@ -41,6 +44,8 @@ const emit = defineEmits<{
   (e: "toggleAll"): void;
   (e: "loadMore"): void;
   (e: "recover"): void;
+  (e: "update:sortField", value: FileSortField): void;
+  (e: "update:sortDirection", value: SortDirection): void;
 }>();
 
 const ROW_HEIGHT = 46;
@@ -209,16 +214,6 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-onUnmounted(() => {
-  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
-  if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-    resizeObserver = null;
-  }
-  cancelThumbnailRequests();
-});
-
 function snippet(text: string | null | undefined, max = 48): string {
   if (!text) return "—";
   return text.length > max ? `${text.slice(0, max)}…` : text;
@@ -228,6 +223,81 @@ function size(meta: ImageFile["metadata"]): string {
   if (!meta?.width || !meta?.height) return "—";
   return `${meta.width} × ${meta.height}`;
 }
+
+function onHeaderSort(field: FileSortField) {
+  if (props.sortField === field) {
+    const nextDir = props.sortDirection === "desc" ? "asc" : "desc";
+    emit("update:sortDirection", nextDir);
+  } else {
+    emit("update:sortField", field);
+    emit("update:sortDirection", "desc");
+  }
+}
+
+function scrollToIndex(index: number) {
+  if (!containerRef.value) return;
+  const targetTop = index * ROW_HEIGHT;
+  const targetBottom = targetTop + ROW_HEIGHT;
+  const currentScrollTop = containerRef.value.scrollTop;
+  const viewportHeight = containerRef.value.clientHeight;
+
+  if (targetTop < currentScrollTop) {
+    containerRef.value.scrollTop = targetTop;
+  } else if (targetBottom > currentScrollTop + viewportHeight) {
+    containerRef.value.scrollTop = targetBottom - viewportHeight;
+  }
+}
+
+function handleKeyDown(e: KeyboardEvent) {
+  if (
+    e.defaultPrevented ||
+    hasActiveDialog() ||
+    isEditableTarget(e.target) ||
+    isEditableTarget(document.activeElement)
+  ) {
+    return;
+  }
+
+  if (!props.files.length) return;
+
+  const currentIndex = props.selectedFile
+    ? props.files.findIndex((f) => f.path === props.selectedFile?.path)
+    : -1;
+
+  let nextIndex = currentIndex;
+
+  switch (e.key) {
+    case "ArrowDown":
+      nextIndex = currentIndex < props.files.length - 1 ? currentIndex + 1 : 0;
+      break;
+    case "ArrowUp":
+      nextIndex = currentIndex > 0 ? currentIndex - 1 : props.files.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  if (nextIndex >= 0 && nextIndex < props.files.length && nextIndex !== currentIndex) {
+    e.preventDefault();
+    emit("select", props.files[nextIndex]);
+    scrollToIndex(nextIndex);
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeyDown);
+  if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+  if (resizeFrame !== null) cancelAnimationFrame(resizeFrame);
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+  cancelThumbnailRequests();
+});
 </script>
 
 <template>
@@ -245,10 +315,10 @@ function size(meta: ImageFile["metadata"]): string {
     </div>
 
     <div v-else ref="containerRef" class="scroll" @scroll.passive="onScroll">
-      <table class="table" role="table" :aria-label="t.review.gallery">
+      <table class="table" role="grid" :aria-label="t.review.gallery">
         <thead class="sticky-header">
-          <tr>
-            <th class="th-checkbox">
+          <tr role="row">
+            <th class="th-checkbox" role="columnheader">
               <input
                 type="checkbox"
                 :checked="files.length > 0 && selectedFilePaths?.size === files.length"
@@ -256,15 +326,48 @@ function size(meta: ImageFile["metadata"]): string {
                 @click.stop="emit('toggleAll')"
               />
             </th>
-            <th class="th-preview">{{ t.preview.preview }}</th>
-            <th>{{ t.sort.name }}</th>
-            <th>{{ t.preview.container }}</th>
-            <th>{{ t.sort.size }}</th>
-            <th>{{ t.sort.modified }}</th>
-            <th>{{ t.preview.platform }}</th>
-            <th>{{ t.preview.prompt }}</th>
-            <th>{{ t.preview.dimensions }}</th>
-            <th>{{ t.preview.modelName }}</th>
+            <th class="th-preview" role="columnheader">{{ t.preview.preview }}</th>
+            <th
+              class="th-sortable"
+              role="columnheader"
+              :aria-sort="sortField === 'path' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
+              tabindex="0"
+              @click="onHeaderSort('path')"
+              @keydown.enter.prevent="onHeaderSort('path')"
+              @keydown.space.prevent="onHeaderSort('path')"
+            >
+              <span>{{ t.sort.name }}</span>
+              <span v-if="sortField === 'path'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
+            </th>
+            <th role="columnheader">{{ t.preview.container }}</th>
+            <th
+              class="th-sortable"
+              role="columnheader"
+              :aria-sort="sortField === 'size_bytes' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
+              tabindex="0"
+              @click="onHeaderSort('size_bytes')"
+              @keydown.enter.prevent="onHeaderSort('size_bytes')"
+              @keydown.space.prevent="onHeaderSort('size_bytes')"
+            >
+              <span>{{ t.sort.size }}</span>
+              <span v-if="sortField === 'size_bytes'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
+            </th>
+            <th
+              class="th-sortable"
+              role="columnheader"
+              :aria-sort="sortField === 'modified_at' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
+              tabindex="0"
+              @click="onHeaderSort('modified_at')"
+              @keydown.enter.prevent="onHeaderSort('modified_at')"
+              @keydown.space.prevent="onHeaderSort('modified_at')"
+            >
+              <span>{{ t.sort.modified }}</span>
+              <span v-if="sortField === 'modified_at'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
+            </th>
+            <th role="columnheader">{{ t.preview.platform }}</th>
+            <th role="columnheader">{{ t.preview.prompt }}</th>
+            <th role="columnheader">{{ t.preview.dimensions }}</th>
+            <th role="columnheader">{{ t.preview.modelName }}</th>
           </tr>
         </thead>
         <tbody>
@@ -275,8 +378,11 @@ function size(meta: ImageFile["metadata"]): string {
 
           <!-- Visible Rows -->
           <tr
-            v-for="file in visibleFiles"
+            v-for="(file, offset) in visibleFiles"
             :key="file.id ?? file.path"
+            role="row"
+            :aria-rowindex="startRow + offset + 1"
+            :aria-selected="selectedFile?.path === file.path || selectedFilePaths?.has(file.path)"
             class="data-row"
             :class="{
               'row-selected': selectedFile?.path === file.path,
@@ -450,6 +556,28 @@ function size(meta: ImageFile["metadata"]): string {
   font-size: 0.8em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  user-select: none;
+}
+
+.th-sortable {
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.th-sortable:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.th-sortable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.sort-indicator {
+  margin-left: 4px;
+  color: var(--color-primary);
+  font-weight: 700;
 }
 
 .spacer-row {

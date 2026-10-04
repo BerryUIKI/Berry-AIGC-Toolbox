@@ -34,6 +34,8 @@ pub struct AppState {
     pub clip_cancel: Arc<AtomicBool>,
     /// Cooperative cancellation flag for WD14 model download.
     pub tagger_cancel: Arc<AtomicBool>,
+    /// Cooperative cancellation flag for WD14 batch auto-tagging.
+    pub batch_tagger_cancel: Arc<AtomicBool>,
     /// Coordinator for legacy Berry data discovery, migration and cleanup.
     pub migration_coordinator: Arc<Mutex<legacy_migration::MigrationCoordinator>>,
 }
@@ -96,6 +98,7 @@ pub fn run() {
                 clip_failures: Arc::new(Mutex::new(HashMap::new())),
                 clip_cancel: Arc::new(AtomicBool::new(false)),
                 tagger_cancel: Arc::new(AtomicBool::new(false)),
+                batch_tagger_cancel: Arc::new(AtomicBool::new(false)),
                 migration_coordinator: migration_coordinator.clone(),
             });
             let app_handle = app.handle().clone();
@@ -236,6 +239,7 @@ pub fn run() {
             commands::cancel_tagger_download,
             commands::auto_tag_file,
             commands::batch_auto_tag_files,
+            commands::cancel_batch_auto_tag,
             commands::list_clip_models,
             commands::load_clip_model,
             commands::get_loaded_clip_model,

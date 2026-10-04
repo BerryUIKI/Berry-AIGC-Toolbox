@@ -2685,66 +2685,160 @@ pub async fn auto_tag_file(
     .map_err(|e| e.to_string())?
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchTagProgress {
+    pub current: usize,
+    pub total: usize,
+    pub percent: f64,
+    pub current_file: String,
+    pub processed_files: usize,
+    pub failed_files: usize,
+    pub tags_added: usize,
+    pub is_complete: bool,
+    pub is_canceled: bool,
+}
+
+/// Cooperatively cancel ongoing WD14 batch auto-tagging between images.
+#[tauri::command]
+pub fn cancel_batch_auto_tag(state: State<'_, AppState>) -> Result<(), String> {
+    state.batch_tagger_cancel.store(true, Ordering::SeqCst);
+    Ok(())
+}
+
 /// Batch run tag prediction across multiple image files and attach recognized tags.
 #[tauri::command]
 pub async fn batch_auto_tag_files(
     file_ids: Vec<i64>,
     config: TaggerConfig,
     state: State<'_, AppState>,
+    app: AppHandle,
 ) -> Result<BatchTagResult, String> {
-    let mut processed_files = 0;
-    let mut tags_added = 0;
+    state.batch_tagger_cancel.store(false, Ordering::SeqCst);
+    let cancel_flag = state.batch_tagger_cancel.clone();
 
-    for fid in file_ids {
+    let mut processed_files = 0;
+    let mut failed_files = 0;
+    let mut tags_added = 0;
+    let total = file_ids.len();
+
+    let app_handle = app.clone();
+
+    for (index, fid) in file_ids.into_iter().enumerate() {
+        if cancel_flag.load(Ordering::Relaxed) {
+            let _ = app_handle.emit(
+                "tagger-batch-progress",
+                BatchTagProgress {
+                    current: index,
+                    total,
+                    percent: if total > 0 { (index as f64 / total as f64) * 100.0 } else { 100.0 },
+                    current_file: String::new(),
+                    processed_files,
+                    failed_files,
+                    tags_added,
+                    is_complete: false,
+                    is_canceled: true,
+                },
+            );
+            break;
+        }
+
         let file = {
             let database = db(&state)?;
             database.get_file_by_id(fid).map_err(|e| e.to_string())?
         };
 
+        let file_path_str = file.as_ref().map(|f| f.path.clone()).unwrap_or_default();
+        let file_name_display = Path::new(&file_path_str)
+            .file_name()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| format!("file-{fid}"));
+
+        let _ = app_handle.emit(
+            "tagger-batch-progress",
+            BatchTagProgress {
+                current: index + 1,
+                total,
+                percent: if total > 0 {
+                    ((index as f64) / total as f64) * 100.0
+                } else {
+                    100.0
+                },
+                current_file: file_name_display,
+                processed_files,
+                failed_files,
+                tags_added,
+                is_complete: false,
+                is_canceled: false,
+            },
+        );
+
         if let Some(file) = file {
-            let predictions = {
+            let predictions_res = {
                 let guard = tagger_guard(&state)?;
                 if let Some(tagger) = guard.as_ref() {
-                    tagger.predict_file(Path::new(&file.path), &config).ok()
+                    tagger.predict_file(Path::new(&file.path), &config)
                 } else {
                     return Err(
-                        "No WD14 tagger model loaded. Please load a model first.".to_string()
+                        "No WD14 tagger model loaded. Please load a model first.".to_string(),
                     );
                 }
             };
 
-            if let Some(predictions) = predictions {
-                let database = db(&state)?;
-                for pred in &predictions {
-                    if let Ok(tag) = database.get_or_create_tag(&pred.name, None) {
-                        if database.tag_file(fid, tag.id).is_ok() {
-                            tags_added += 1;
+            match predictions_res {
+                Ok(predictions) => {
+                    let database = db(&state)?;
+                    for pred in &predictions {
+                        if let Ok(tag) = database.get_or_create_tag(&pred.name, None) {
+                            if database.tag_file(fid, tag.id).is_ok() {
+                                tags_added += 1;
+                            }
                         }
                     }
-                }
 
-                if config.write_to_prompt && !predictions.is_empty() {
-                    let prompt_text = predictions
-                        .iter()
-                        .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
-                        .map(|p| p.name.as_str())
-                        .collect::<Vec<_>>()
-                        .join(", ");
+                    if config.write_to_prompt && !predictions.is_empty() {
+                        let prompt_text = predictions
+                            .iter()
+                            .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
+                            .map(|p| p.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ");
 
-                    if !prompt_text.is_empty() {
-                        let _ = database.update_file_prompt(
-                            fid,
-                            &prompt_text,
-                            config.append_prompt,
-                            config.allow_override_existing_prompt,
-                        );
+                        if !prompt_text.is_empty() {
+                            let _ = database.update_file_prompt(
+                                fid,
+                                &prompt_text,
+                                config.append_prompt,
+                                config.allow_override_existing_prompt,
+                            );
+                        }
                     }
-                }
 
-                processed_files += 1;
+                    processed_files += 1;
+                }
+                Err(_) => {
+                    failed_files += 1;
+                }
             }
+        } else {
+            failed_files += 1;
         }
     }
+
+    let is_canceled = cancel_flag.load(Ordering::Relaxed);
+    let _ = app_handle.emit(
+        "tagger-batch-progress",
+        BatchTagProgress {
+            current: total,
+            total,
+            percent: 100.0,
+            current_file: String::new(),
+            processed_files,
+            failed_files,
+            tags_added,
+            is_complete: !is_canceled,
+            is_canceled,
+        },
+    );
 
     Ok(BatchTagResult {
         processed_files,

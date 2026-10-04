@@ -249,6 +249,11 @@ export const ja: typeof en = {
     downloadFinishing: "ダウンロード完了、モデルを検証・読み込み中...",
     writeToPrompt: "認識されたタグをプロンプトに書き込む",
     appendPrompt: "既存のプロンプトに追加する",
+    batchProgressTitle: "一括タグ付けの進捗",
+    batchProgressRatio: "{current} / {total} 件処理済み ({percent}%)",
+    cancelBatch: "キャンセル",
+    batchCompleted: "一括タグ付けが完了しました（成功 {processed} 件、失敗 {failed} 件、タグ追加 {tags} 個）。",
+    batchCanceled: "一括タグ付けがキャンセルされました。",
   },
   clipModal: {
     title: "CLIP / SigLIP AI テキストセマンティック検索エンジン",

@@ -249,6 +249,11 @@ export const de: typeof en = {
     downloadFinishing: "Download abgeschlossen, Modell wird geladen...",
     writeToPrompt: "Erkannte Tags in den Prompt schreiben",
     appendPrompt: "An bestehenden Prompt anhängen",
+    batchProgressTitle: "Stapel-Tagging-Fortschritt",
+    batchProgressRatio: "{current} / {total} verarbeitet ({percent}%)",
+    cancelBatch: "Abbrechen",
+    batchCompleted: "Stapel-Tagging abgeschlossen ({processed} verarbeitet, {failed} fehlgeschlagen, {tags} Tags hinzugefügt).",
+    batchCanceled: "Stapel-Tagging abgebrochen.",
   },
   clipModal: {
     title: "CLIP / SigLIP KI-Semantiksuchmaschine",

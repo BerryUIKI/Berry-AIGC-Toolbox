@@ -249,6 +249,11 @@ export const zhTW: typeof en = {
     downloadFinishing: "下載完成，正在驗證並載入模型...",
     writeToPrompt: "將識別標籤寫入圖片正向提示詞",
     appendPrompt: "追加到已有提示詞後",
+    batchProgressTitle: "批次標記進度",
+    batchProgressRatio: "已處理 {current} / {total} 張 ({percent}%)",
+    cancelBatch: "取消處理",
+    batchCompleted: "批次標記完成（成功 {processed} 張，失敗 {failed} 張，累計新增 {tags} 個標籤）。",
+    batchCanceled: "批次標記已取消。",
   },
   clipModal: {
     title: "CLIP / SigLIP AI 文字語意搜圖引擎",

@@ -13,6 +13,7 @@ import {
   sendWorkflowToComfyUI,
 } from "../utils/generation";
 import { loadAppConfig } from "../utils/config";
+import { useNotification } from "../utils/notification";
 
 const props = defineProps<{
   file: ImageFile | null;
@@ -111,6 +112,8 @@ async function loadTags() {
   }
 }
 
+const notification = useNotification();
+
 async function removeTag(tagId: number) {
   if (!props.file?.id) return;
   try {
@@ -118,6 +121,7 @@ async function removeTag(tagId: number) {
     await loadTags();
   } catch (e) {
     console.error("Failed to remove tag:", e);
+    notification.showError(String(e), "Failed to remove tag");
   }
 }
 
@@ -129,6 +133,7 @@ async function setRating(rating: number) {
     emit("updateFile", { ...props.file, rating: newRating });
   } catch (e) {
     console.error("Failed to update rating:", e);
+    notification.showError(String(e), "Failed to update rating");
   }
 }
 
@@ -140,6 +145,7 @@ async function toggleFavorite() {
     emit("updateFile", { ...props.file, is_favorite: isFavorite });
   } catch (e) {
     console.error("Failed to toggle favorite:", e);
+    notification.showError(String(e), "Failed to update favorite");
   }
 }
 
@@ -151,6 +157,7 @@ async function toggleNsfw() {
     emit("updateFile", { ...props.file, is_nsfw: isNsfw });
   } catch (e) {
     console.error("Failed to toggle nsfw:", e);
+    notification.showError(String(e), "Failed to update NSFW status");
   }
 }
 

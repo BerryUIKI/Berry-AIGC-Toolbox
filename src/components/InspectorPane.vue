@@ -708,7 +708,7 @@ function onWorkflowDragStart(e: DragEvent) {
   flex-shrink: 0;
   height: 100%;
   background: var(--color-bg-primary);
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   user-select: none;
@@ -722,7 +722,7 @@ function onWorkflowDragStart(e: DragEvent) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header-left {
@@ -734,7 +734,7 @@ function onWorkflowDragStart(e: DragEvent) {
 .inspector-title {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .multi-badge {
@@ -760,8 +760,8 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #f8fafc;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .empty-inspector {
@@ -806,7 +806,7 @@ function onWorkflowDragStart(e: DragEvent) {
   width: 4px;
 }
 .inspector-scrollable::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
@@ -871,7 +871,7 @@ function onWorkflowDragStart(e: DragEvent) {
   border-radius: 4px;
   font-size: 0.68rem;
   color: #e2e8f0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-color);
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -891,7 +891,7 @@ function onWorkflowDragStart(e: DragEvent) {
   margin: 0;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -907,8 +907,8 @@ function onWorkflowDragStart(e: DragEvent) {
   font-size: 0.66rem;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #94a3b8;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
 }
 
 .meta-tag.uppercase {
@@ -955,8 +955,8 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   width: 26px;
   height: 26px;
@@ -969,7 +969,7 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .action-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-active);
 }
 
 .action-btn.active {
@@ -1002,19 +1002,19 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .copy-btn {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.66rem;
-  color: #cbd5e1;
+  color: var(--color-text-secondary);
   padding: 2px 6px;
   cursor: pointer;
   transition: all 0.12s;
 }
 
 .copy-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .prompt-box {
@@ -1140,9 +1140,9 @@ function onWorkflowDragStart(e: DragEvent) {
   font-size: 0.7rem;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-bg-hover);
   border: 1px solid;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
 }
 
 .tag-dot {
@@ -1273,7 +1273,7 @@ function onWorkflowDragStart(e: DragEvent) {
 .detected-name {
   font-weight: 600;
   font-size: 0.8rem;
-  color: #f1f5f9;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1376,11 +1376,11 @@ function onWorkflowDragStart(e: DragEvent) {
 }
 
 .interop-section {
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--color-bg-hover);
   border-radius: 6px;
   padding: 8px 10px;
   margin-bottom: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
 }
 
 .interop-button-group {
@@ -1444,17 +1444,17 @@ function onWorkflowDragStart(e: DragEvent) {
   padding: 5px 8px;
   font-size: 0.7rem;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: #cbd5e1;
+  background: var(--color-bg-hover);
+  border: 1px dashed var(--border-color-strong);
+  color: var(--color-text-secondary);
   cursor: grab;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .workflow-drag-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.35);
+  background: var(--color-bg-active);
+  border-color: var(--color-accent);
 }
 
 .workflow-drag-pill:active {

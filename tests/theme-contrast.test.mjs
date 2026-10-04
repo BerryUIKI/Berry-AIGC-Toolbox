@@ -146,3 +146,14 @@ test("Modal dialogs and dropdowns use semantic text tokens without illegible lig
     assert.doesNotMatch(content, /var\(--text-secondary,\s*#[0-9a-fA-F]+\)/, `${file} should not have hardcoded dark text-secondary fallback`);
   }
 });
+
+test("InspectorPane.vue uses semantic theme tokens for title, tags, and container borders", () => {
+  const vue = fs.readFileSync(path.join(rootDir, "src", "components", "InspectorPane.vue"), "utf-8");
+  assert.match(vue, /\.inspector-title\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(vue, /\.tag-pill\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(vue, /\.file-name\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.match(vue, /\.detected-name\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
+  assert.doesNotMatch(vue, /\.inspector-title\s*\{[^}]*color:\s*#f1f5f9/);
+  assert.doesNotMatch(vue, /\.tag-pill\s*\{[^}]*color:\s*#f1f5f9/);
+});
+

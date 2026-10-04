@@ -159,8 +159,18 @@ export interface TransformSpec {
   format: TransformFormat;
   quality?: number | null;
   max_edge?: number | null;
+  scale_percent?: number | null;
+  align_multiple?: number | null;
+  target_size_kb?: number | null;
   metadata_policy: TransformMetadataPolicy;
   collision_policy: TransformCollisionPolicy;
+}
+
+export interface TransformPreset {
+  id: string;
+  name: string;
+  spec: TransformSpec;
+  original_disposition?: OriginalDisposition;
 }
 
 export type OriginalDisposition = "keep" | "archive" | "trash";

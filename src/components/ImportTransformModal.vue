@@ -32,10 +32,51 @@ const managedFolders = computed(() =>
 const targetFolderId = ref<number | null>(null);
 const targetAlbumId = ref<number | null>(null);
 
+const selectedPreset = ref<string>("custom");
 const format = ref<TransformFormat>("original");
 const quality = ref<number>(85);
 const maxEdgePreset = ref<"none" | "1080" | "2048" | "3840" | "custom">("none");
 const customMaxEdge = ref<number>(1920);
+const scalePercent = ref<number>(100);
+const alignMultiple = ref<number>(0);
+const targetSizeKb = ref<number | null>(null);
+
+function applyPreset(presetId: string) {
+  selectedPreset.value = presetId;
+  if (presetId === "web_fast") {
+    format.value = "webp";
+    quality.value = 80;
+    maxEdgePreset.value = "1080";
+    scalePercent.value = 100;
+    alignMultiple.value = 0;
+    targetSizeKb.value = null;
+    metadataPolicy.value = "strip_ai";
+  } else if (presetId === "archive_avif") {
+    format.value = "avif";
+    quality.value = 65;
+    maxEdgePreset.value = "none";
+    scalePercent.value = 100;
+    alignMultiple.value = 8;
+    targetSizeKb.value = null;
+    metadataPolicy.value = "strip_ai";
+  } else if (presetId === "target_1mb") {
+    format.value = "webp";
+    quality.value = 85;
+    maxEdgePreset.value = "none";
+    scalePercent.value = 100;
+    alignMultiple.value = 0;
+    targetSizeKb.value = 1024;
+    metadataPolicy.value = "keep_supported";
+  } else if (presetId === "lossless_webp") {
+    format.value = "webp";
+    quality.value = 85;
+    maxEdgePreset.value = "none";
+    scalePercent.value = 100;
+    alignMultiple.value = 0;
+    targetSizeKb.value = null;
+    metadataPolicy.value = "keep_supported";
+  }
+}
 
 const metadataPolicy = ref<TransformMetadataPolicy>("keep_supported");
 const collisionPolicy = ref<TransformCollisionPolicy>("rename");
@@ -100,6 +141,9 @@ async function handleStartImport() {
     format: format.value,
     quality: format.value === "jpeg" || format.value === "avif" ? quality.value : null,
     max_edge,
+    scale_percent: scalePercent.value !== 100 ? scalePercent.value : null,
+    align_multiple: alignMultiple.value > 1 ? alignMultiple.value : null,
+    target_size_kb: targetSizeKb.value && targetSizeKb.value > 0 ? targetSizeKb.value : null,
     metadata_policy: metadataPolicy.value,
     collision_policy: collisionPolicy.value,
   };
@@ -152,6 +196,25 @@ async function handleStartImport() {
 
       <!-- Modal Body -->
       <div class="modal-body">
+        <!-- 0. Quick Preset Selector (T4) -->
+        <div class="section-card">
+          <h4 class="section-title">⚡ {{ t.importModal.presetsTitle }}</h4>
+          <div class="form-group">
+            <select
+              :value="selectedPreset"
+              @change="applyPreset(($event.target as HTMLSelectElement).value)"
+              class="form-select"
+              :disabled="importing || successCount !== null"
+            >
+              <option value="custom">{{ t.importModal.presetCustom }}</option>
+              <option value="web_fast">{{ t.importModal.presetWebFast }}</option>
+              <option value="archive_avif">{{ t.importModal.presetArchiveAvif }}</option>
+              <option value="target_1mb">{{ t.importModal.presetTarget1mb }}</option>
+              <option value="lossless_webp">{{ t.importModal.presetLosslessWebp }}</option>
+            </select>
+          </div>
+        </div>
+
         <!-- 1. Destination Managed Vault & Album -->
         <div class="section-card">
           <h4 class="section-title">📦 {{ t.importModal.targetVault }}</h4>
@@ -219,7 +282,7 @@ async function handleStartImport() {
           </div>
         </div>
 
-        <!-- 3. Resolution Constraint Preset -->
+        <!-- 3. Resolution Constraint & Scaling (T4) -->
         <div class="section-card">
           <h4 class="section-title">📐 {{ t.importModal.dimensionSection }}</h4>
           <div class="grid-2-cols">
@@ -246,6 +309,56 @@ async function handleStartImport() {
                 :disabled="importing || successCount !== null"
               />
             </div>
+          </div>
+
+          <!-- Percentage scaling & pixel alignment (T4) -->
+          <div class="grid-2-cols" style="margin-top: 10px;">
+            <div class="form-group">
+              <label class="form-label">{{ t.importModal.scalePercent }}</label>
+              <select
+                v-model.number="scalePercent"
+                class="form-select"
+                :disabled="importing || successCount !== null"
+              >
+                <option :value="100">{{ t.importModal.scale100 }}</option>
+                <option :value="75">{{ t.importModal.scale75 }}</option>
+                <option :value="50">{{ t.importModal.scale50 }}</option>
+                <option :value="25">{{ t.importModal.scale25 }}</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">{{ t.importModal.alignMultiple }}</label>
+              <select
+                v-model.number="alignMultiple"
+                class="form-select"
+                :disabled="importing || successCount !== null"
+              >
+                <option :value="0">{{ t.importModal.alignNone }}</option>
+                <option :value="8">{{ t.importModal.align8 }}</option>
+                <option :value="16">{{ t.importModal.align16 }}</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Target File Size Limit (T4) -->
+        <div class="section-card">
+          <h4 class="section-title">🎯 {{ t.importModal.targetSize }}</h4>
+          <div class="form-group">
+            <input
+              v-model.number="targetSizeKb"
+              type="number"
+              min="50"
+              max="50000"
+              step="50"
+              class="form-input"
+              :placeholder="t.importModal.targetSizePlaceholder"
+              :disabled="importing || successCount !== null"
+            />
+            <p class="form-hint" style="margin-top: 6px; font-size: 0.8rem; color: var(--color-text-secondary);">
+              ℹ️ {{ t.importModal.targetSizeHint }}
+            </p>
           </div>
         </div>
 

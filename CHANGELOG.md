@@ -5,6 +5,38 @@ All notable changes to the Omera project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-10-04
+
+### Phase 6: Native Image Transcoding, Managed Import Presets & Safe Gallery Optimization
+
+Version 0.4.2 delivers Phase 6 of the Omera roadmap (#118, #182), introducing pure-Rust image transcoding and compression engines, instant export size estimation, configurable vault import optimization presets, non-destructive gallery batch transformation with safe original disposition, and full internationalization across 7 languages:
+
+#### ⚡ Native Image Transcoding & Compression Engines (#118)
+- **Pure-Rust AVIF & Lossless WebP**: Built-in support for AVIF encoding (`ravif`) and fast lossless WebP transcoding (`image` / `webp`) in `crates/omera-scan` with tuneable quality and speed tradeoffs.
+- **Format Fallback & Reliability**: Graceful fallback strategies during transcoding to ensure zero image corruption and verifiable file outputs.
+
+#### 📊 Export Estimation & Live Preview (#118)
+- **Instant Size Estimation (`estimate_export_file`)**: Added fast single-file simulation command calculating exact estimated byte sizes, space delta, and compression percentage before running full batch exports.
+- **Export Modal Comparison Card (`ExportModal.vue`)**: Interactive visual before/after comparison showing source size, projected output size, and space savings percentage.
+
+#### 📥 Managed Vault Import Presets & OS Drop Handling (#118)
+- **Import Optimization Modal (`ImportTransformModal.vue`)**: Configurable import workflow for managed vaults with resolution downscaling constraints (e.g. max width/height while preserving aspect ratio), target format conversion (WebP, AVIF, JPEG, PNG, Original), AI metadata stripping or preservation, and filename collision handling.
+- **Direct Sidebar Import & Drop Routing**: One-click import button on the sidebar and native OS drag-and-drop routing directly to managed vault folders with automatic preset transformation.
+
+#### 🔄 Gallery Batch Transformation with Safe Disposition (#160, #182)
+- **Batch Transform Workflow (`BatchTransformModal.vue`)**: Gallery multi-select action to transcode and optimize existing library images in bulk with real-time progress tracking, cancelability, and aggregated savings summaries.
+- **Non-Destructive Original Disposition**: Supports three user-chosen policies:
+  - `Keep`: Retains the original file alongside the transcoded file.
+  - `Archive`: Moves the original into a hidden `.omera_archive/` subfolder preserving relative file structure.
+  - `Trash`: Safely relocates the original to the OS system Recycle Bin / Trash without permanent deletion.
+- **Linked Folder Read-Only Protection**: External linked library folders are strictly safeguarded against destructive original disposition (`trash` / `archive` disabled, forcing non-destructive output).
+- **Metadata & DB Seamless Sync**: Automatically preserves AI generation parameters and updates SQLite database records and thumbnail caches without losing favorites, ratings, or tags.
+
+#### 🌐 Complete 7-Language Internationalization
+- **Multi-Language Coverage**: Added localized strings across English (`en`), Simplified Chinese (`zh-CN`), Traditional Chinese (`zh-TW`), Japanese (`ja`), German (`de`), French (`fr`), and Spanish (`es`) for all import, export, and batch transformation dialogs.
+
+---
+
 ## [0.4.1] - 2026-10-04
 
 ### Theme Contrast & Design Tokens Unification, Aggregated Facet Counts & High-Load Performance Caching

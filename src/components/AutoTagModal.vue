@@ -139,6 +139,21 @@ async function onSelectModel(modelSummary: TaggerModelSummary) {
   }
 }
 
+async function unloadModel() {
+  try {
+    message.value = null;
+    isDetecting.value = true;
+    await invoke("unload_tagger_model");
+    loadedModel.value = null;
+    models.value = await invoke<TaggerModelSummary[]>("list_tagger_models");
+    message.value = { type: "info", text: t.value.autoTagModal.modelUnloaded || "Model unloaded" };
+  } catch (err: any) {
+    message.value = { type: "error", text: String(err) };
+  } finally {
+    isDetecting.value = false;
+  }
+}
+
 async function browseModelFolder() {
   try {
     const selected = await openDialog({
@@ -545,6 +560,15 @@ onUnmounted(() => {
               </option>
             </select>
             <button
+              v-if="loadedModel"
+              type="button"
+              class="unload-btn"
+              :title="t.autoTagModal.unloadModel"
+              @click="unloadModel"
+            >
+              ⏏ {{ t.autoTagModal.unloadModel }}
+            </button>
+            <button
               type="button"
               class="browse-btn"
               :title="t.autoTagModal.browseFolder"
@@ -918,6 +942,24 @@ onUnmounted(() => {
 
 .model-dropdown:focus {
   border-color: #6366f1;
+}
+
+.unload-btn {
+  background: var(--color-bg-primary);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.unload-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
 }
 
 .browse-btn {

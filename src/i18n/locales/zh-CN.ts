@@ -35,6 +35,7 @@ export const zhCN: typeof en = {
     rebuild: "重建",
     rebuilding: "重建中…",
     remove: "移除",
+    removeFolderConfirm: '确定要从 Omera 中移除文件夹“{name}”吗？磁盘上的文件不会被删除。',
     harvest: "收获新图片",
     albums: "相册",
     newAlbum: "+ 新建",

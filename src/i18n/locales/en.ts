@@ -33,6 +33,7 @@ export const en = {
     rebuild: "Rebuild",
     rebuilding: "Rebuilding…",
     remove: "Remove",
+    removeFolderConfirm: 'Remove folder "{name}" from Omera? Files on disk will not be deleted.',
     harvest: "Harvest New Images",
     albums: "Albums",
     newAlbum: "+ New",

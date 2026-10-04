@@ -35,6 +35,7 @@ export const de: typeof en = {
     rebuild: "Neu aufbauen",
     rebuilding: "Baut neu auf…",
     remove: "Entfernen",
+    removeFolderConfirm: 'Ordner "{name}" aus Omera entfernen? Dateien auf der Festplatte werden nicht gelöscht.',
     harvest: "Neue Bilder erfassen",
     albums: "Alben",
     newAlbum: "+ Neu",

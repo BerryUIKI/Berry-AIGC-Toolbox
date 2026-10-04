@@ -125,3 +125,24 @@ test("Core components and modals use semantic theme variables instead of hardcod
   assert.match(autoTagModal, /\.source-label\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
   assert.match(autoTagModal, /\.no-tags-prompt\s*\{[^}]*color:\s*var\(--color-text-primary\)/);
 });
+
+test("Modal dialogs and dropdowns use semantic text tokens without illegible light-mode fallbacks", () => {
+  const css = fs.readFileSync(path.join(rootDir, "src", "style.css"), "utf-8");
+  assert.match(css, /--text-primary:\s*var\(--color-text-primary\);/);
+  assert.match(css, /--text-secondary:\s*var\(--color-text-secondary\);/);
+
+  const targets = [
+    "DatabaseManagerModal.vue",
+    "FileOperationModal.vue",
+    "LoraManagerModal.vue",
+    "ModelManagerModal.vue",
+    "ShortcutsHelpModal.vue",
+    "LanguageSelector.vue",
+  ];
+
+  for (const file of targets) {
+    const content = fs.readFileSync(path.join(rootDir, "src", "components", file), "utf-8");
+    assert.doesNotMatch(content, /var\(--text-primary,\s*#[0-9a-fA-F]+\)/, `${file} should not have hardcoded dark text-primary fallback`);
+    assert.doesNotMatch(content, /var\(--text-secondary,\s*#[0-9a-fA-F]+\)/, `${file} should not have hardcoded dark text-secondary fallback`);
+  }
+});

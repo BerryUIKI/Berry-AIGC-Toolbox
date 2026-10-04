@@ -99,7 +99,7 @@ function select(locale: LocaleSetting) {
   padding: 8px 14px;
   background: transparent;
   border: none;
-  color: #ddd;
+  color: var(--color-text-primary);
   font-size: 0.85rem;
   text-align: left;
   cursor: pointer;
@@ -107,8 +107,8 @@ function select(locale: LocaleSetting) {
 }
 
 .lang-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .lang-item.active {

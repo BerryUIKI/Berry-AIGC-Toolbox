@@ -2323,19 +2323,19 @@ async function saveSettings() {
 
 .ping-message {
   font-size: 0.8rem;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--color-text-secondary);
 }
 
 .settings-subsection {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-color);
 }
 
 .subsection-title {
   font-size: 0.92rem;
   font-weight: 600;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--color-text-primary);
   margin: 0 0 4px 0;
 }
 
@@ -2351,8 +2351,8 @@ async function saveSettings() {
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.82rem;
 }
@@ -2364,13 +2364,13 @@ async function saveSettings() {
 }
 
 .mapping-arrow {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--color-text-muted);
 }
 
 .mapping-path {
   flex: 1;
   font-family: monospace;
-  color: var(--text-secondary, #cbd5e1);
+  color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2400,28 +2400,28 @@ async function saveSettings() {
 .mapping-input-uuid {
   width: 140px;
   padding: 7px 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--color-text-primary);
   font-size: 0.82rem;
 }
 
 .mapping-input-path {
   flex: 1;
   padding: 7px 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--color-text-primary);
   font-size: 0.82rem;
 }
 
 .btn-browse-mapping {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  color: var(--text-primary, #f1f5f9);
+  color: var(--color-text-primary);
   padding: 7px 12px;
   font-size: 0.8rem;
   cursor: pointer;

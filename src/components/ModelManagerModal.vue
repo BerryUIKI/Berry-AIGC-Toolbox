@@ -233,7 +233,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
-  color: var(--text-primary, #eee);
+  color: var(--color-text-primary);
 }
 
 .modal-header {
@@ -265,7 +265,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -273,8 +273,8 @@ onMounted(() => {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -297,7 +297,7 @@ onMounted(() => {
 
 .import-label {
   font-size: 0.85rem;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary);
 }
 
 .import-input-row {
@@ -309,7 +309,7 @@ onMounted(() => {
   flex: 1;
   background: var(--bg-input, #16161a);
   border: 1px solid var(--border-color, #3a3a46);
-  color: var(--text-primary, #fff);
+  color: var(--color-text-primary);
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -365,7 +365,7 @@ onMounted(() => {
   flex: 1;
   background: var(--bg-input, #16161a);
   border: 1px solid var(--border-color, #3a3a46);
-  color: var(--text-primary, #fff);
+  color: var(--color-text-primary);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -378,7 +378,7 @@ onMounted(() => {
 
 .model-count-tag {
   font-size: 0.85rem;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -386,7 +386,7 @@ onMounted(() => {
 .empty-state {
   text-align: center;
   padding: 36px 0;
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
 }
 
@@ -427,7 +427,7 @@ onMounted(() => {
 .model-name {
   font-weight: 500;
   font-size: 0.95rem;
-  color: #fff;
+  color: var(--color-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -435,10 +435,10 @@ onMounted(() => {
 
 .badge-count {
   font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-bg-hover);
   padding: 2px 6px;
   border-radius: 4px;
-  color: #aaa;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 
@@ -472,13 +472,13 @@ onMounted(() => {
 
 .no-hash-badge {
   font-size: 0.75rem;
-  color: #777;
+  color: var(--color-text-muted);
 }
 
 .action-btn {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-hover);
   border: 1px solid var(--border-color, #444);
-  color: var(--text-primary, #ddd);
+  color: var(--color-text-primary);
   padding: 6px 12px;
   border-radius: 6px;
   font-size: 0.85rem;

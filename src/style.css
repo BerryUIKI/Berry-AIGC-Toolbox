@@ -46,6 +46,11 @@
   --bg-surface: var(--color-bg-primary);
   --bg-card: var(--color-bg-secondary);
   --color-border: var(--border-color);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --text-main: var(--color-text-primary);
+  --bg-input: var(--color-bg-secondary);
 
   /* Cyan & Accent Badges */
   --badge-cyan-bg: rgba(18, 181, 203, 0.15);

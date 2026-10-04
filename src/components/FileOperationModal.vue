@@ -196,7 +196,7 @@ async function handleConfirm() {
   display: flex;
   flex-direction: column;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
-  color: var(--text-primary, #eee);
+  color: var(--color-text-primary);
 }
 
 .modal-header {
@@ -226,7 +226,7 @@ async function handleConfirm() {
 .close-btn {
   background: none;
   border: none;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -234,8 +234,8 @@ async function handleConfirm() {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -273,7 +273,7 @@ async function handleConfirm() {
 
 .trash-subtext {
   font-size: 0.82rem;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary);
 }
 
 .folder-select-section {
@@ -284,7 +284,7 @@ async function handleConfirm() {
 
 .section-label {
   font-size: 0.85rem;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary);
   font-weight: 500;
 }
 
@@ -343,12 +343,12 @@ async function handleConfirm() {
 .folder-name {
   font-weight: 500;
   font-size: 0.9rem;
-  color: #fff;
+  color: var(--color-text-primary);
 }
 
 .folder-path {
   font-size: 0.75rem;
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -362,7 +362,7 @@ async function handleConfirm() {
 
 .preview-header {
   font-size: 0.8rem;
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary);
 }
 
 .file-chips {
@@ -375,10 +375,10 @@ async function handleConfirm() {
 
 .file-chip {
   font-size: 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-bg-hover);
   padding: 3px 7px;
   border-radius: 4px;
-  color: #ccc;
+  color: var(--color-text-secondary);
   white-space: nowrap;
   max-width: 160px;
   overflow: hidden;
@@ -409,13 +409,13 @@ async function handleConfirm() {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ccc;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .btn-primary {

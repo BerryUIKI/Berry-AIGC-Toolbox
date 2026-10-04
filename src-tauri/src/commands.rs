@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, MutexGuard, RwLock};
 
 static MODEL_CACHE_FACETS: RwLock<Option<Vec<String>>> = RwLock::new(None);
@@ -2220,6 +2220,28 @@ pub fn list_tagger_models(
         }
     }
 
+    // Also check root wd14 directory directly
+    let root_model = wd14_dir.join("model.onnx");
+    let root_tags = wd14_dir.join("selected_tags.csv");
+    if root_model.exists() && root_tags.exists() {
+        let is_loaded = loaded_model_path
+            .as_ref()
+            .map(|p| p == &root_model)
+            .unwrap_or(false);
+        if !models
+            .iter()
+            .any(|m| m.model_path == root_model.to_string_lossy().to_string())
+        {
+            models.push(TaggerModelSummary {
+                name: "WD14 (Default)".to_string(),
+                dir_path: wd14_dir.to_string_lossy().to_string(),
+                model_path: root_model.to_string_lossy().to_string(),
+                tags_path: root_tags.to_string_lossy().to_string(),
+                is_loaded,
+            });
+        }
+    }
+
     // If currently loaded model is outside app data models dir, make sure it is also included
     if let Some(guard) = tagger_guard(&state)?.as_ref() {
         let loaded_path_str = guard.model_info.model_path.to_string_lossy().to_string();
@@ -2240,6 +2262,303 @@ pub fn list_tagger_models(
     }
 
     Ok(models)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaggerDownloadProgress {
+    pub phase: String,
+    pub current_file: String,
+    pub downloaded_bytes: u64,
+    pub total_bytes: u64,
+    pub percent: f64,
+    pub speed_bytes_per_sec: u64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadTaggerOptions {
+    pub model_id: Option<String>,
+    pub mirror: Option<String>,
+}
+
+fn stream_download_tagger_file(
+    app: &AppHandle,
+    cancel_flag: &Arc<AtomicBool>,
+    urls: &[String],
+    dest_path: &Path,
+    filename: &str,
+    phase_label: &str,
+    base_downloaded: u64,
+    estimated_total: u64,
+) -> Result<u64, String> {
+    use std::io::{Read, Write};
+    let agent = ureq::builder()
+        .redirects(10)
+        .timeout(std::time::Duration::from_secs(600))
+        .build();
+
+    let mut last_err = String::new();
+    for url in urls {
+        if cancel_flag.load(Ordering::Relaxed) {
+            return Err("Download canceled by user".into());
+        }
+
+        let resp = match agent
+            .get(url)
+            .set("User-Agent", "Omera-Tagger/0.4.2")
+            .call()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                last_err = format!("Failed requesting {url}: {e}");
+                continue;
+            }
+        };
+
+        let file_total = resp
+            .header("content-length")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+
+        let tmp_path = dest_path.with_extension("download_tmp");
+        let mut file = match std::fs::File::create(&tmp_path) {
+            Ok(f) => f,
+            Err(e) => return Err(format!("Failed creating temporary file: {e}")),
+        };
+
+        let mut reader = resp.into_reader();
+        let mut buffer = [0u8; 64 * 1024];
+        let mut downloaded_bytes = 0u64;
+        let mut last_progress_time = std::time::Instant::now();
+        let mut bytes_since_last = 0u64;
+        let mut speed = 0u64;
+        let mut failed = false;
+
+        loop {
+            if cancel_flag.load(Ordering::Relaxed) {
+                drop(file);
+                let _ = std::fs::remove_file(&tmp_path);
+                let _ = app.emit(
+                    "tagger-download-progress",
+                    TaggerDownloadProgress {
+                        phase: "canceled".into(),
+                        current_file: filename.into(),
+                        downloaded_bytes: base_downloaded + downloaded_bytes,
+                        total_bytes: estimated_total,
+                        percent: 0.0,
+                        speed_bytes_per_sec: 0,
+                        error: None,
+                    },
+                );
+                return Err("Download canceled by user".into());
+            }
+
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if let Err(e) = file.write_all(&buffer[..n]) {
+                        last_err = format!("Failed writing file: {e}");
+                        failed = true;
+                        break;
+                    }
+                    downloaded_bytes += n as u64;
+                    bytes_since_last += n as u64;
+
+                    let elapsed = last_progress_time.elapsed();
+                    if elapsed >= std::time::Duration::from_millis(200) {
+                        let secs = elapsed.as_secs_f64();
+                        if secs > 0.0 {
+                            speed = (bytes_since_last as f64 / secs) as u64;
+                        }
+                        last_progress_time = std::time::Instant::now();
+                        bytes_since_last = 0;
+
+                        let total_for_calc = if estimated_total > 0 {
+                            estimated_total
+                        } else if file_total > 0 {
+                            base_downloaded + file_total
+                        } else {
+                            0
+                        };
+
+                        let current_total_bytes = base_downloaded + downloaded_bytes;
+                        let percent = if total_for_calc > 0 {
+                            (current_total_bytes as f64 / total_for_calc as f64 * 100.0).min(99.9)
+                        } else {
+                            0.0
+                        };
+
+                        let _ = app.emit(
+                            "tagger-download-progress",
+                            TaggerDownloadProgress {
+                                phase: phase_label.into(),
+                                current_file: filename.into(),
+                                downloaded_bytes: current_total_bytes,
+                                total_bytes: total_for_calc,
+                                percent,
+                                speed_bytes_per_sec: speed,
+                                error: None,
+                            },
+                        );
+                    }
+                }
+                Err(e) => {
+                    last_err = format!("Failed reading stream from {url}: {e}");
+                    failed = true;
+                    break;
+                }
+            }
+        }
+
+        if failed {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_path);
+            continue;
+        }
+
+        if let Err(e) = file.flush() {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_path);
+            last_err = format!("Failed flushing file: {e}");
+            continue;
+        }
+        drop(file);
+
+        if dest_path.exists() {
+            let _ = std::fs::remove_file(dest_path);
+        }
+        if let Err(e) = std::fs::rename(&tmp_path, dest_path) {
+            let _ = std::fs::remove_file(&tmp_path);
+            last_err = format!("Failed renaming file: {e}");
+            continue;
+        }
+
+        return Ok(downloaded_bytes);
+    }
+
+    Err(if last_err.is_empty() {
+        "Failed downloading file from all available endpoints".into()
+    } else {
+        last_err
+    })
+}
+
+/// Download a WD14 Tagger model (model.onnx and selected_tags.csv) with real-time progress events.
+#[tauri::command]
+pub async fn download_tagger_model(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    options: Option<DownloadTaggerOptions>,
+) -> Result<TaggerModelSummary, String> {
+    let cancel_flag = state.tagger_cancel.clone();
+    cancel_flag.store(false, Ordering::Relaxed);
+
+    let model_id = options
+        .as_ref()
+        .and_then(|o| o.model_id.clone())
+        .unwrap_or_else(|| "wd-v1-4-convnext-tagger-v2".to_string());
+    let mirror_mode = options
+        .as_ref()
+        .and_then(|o| o.mirror.clone())
+        .unwrap_or_else(|| "auto".to_string());
+
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let model_dir = data_dir.join("models").join("wd14").join(&model_id);
+    std::fs::create_dir_all(&model_dir).map_err(|e| e.to_string())?;
+
+    let tags_dest = model_dir.join("selected_tags.csv");
+    let model_dest = model_dir.join("model.onnx");
+
+    let hf_tags =
+        format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/selected_tags.csv");
+    let mirror_tags =
+        format!("https://hf-mirror.com/SmilingWolf/{model_id}/resolve/main/selected_tags.csv");
+
+    let hf_model = format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/model.onnx");
+    let mirror_model =
+        format!("https://hf-mirror.com/SmilingWolf/{model_id}/resolve/main/model.onnx");
+
+    let (tags_urls, model_urls) = if mirror_mode == "hf-mirror" {
+        (vec![mirror_tags, hf_tags], vec![mirror_model, hf_model])
+    } else {
+        (vec![hf_tags, mirror_tags], vec![hf_model, mirror_model])
+    };
+
+    let app_clone = app.clone();
+    let tags_dest_clone = tags_dest.clone();
+    let model_dest_clone = model_dest.clone();
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let approx_total = 254_000 + 110_000_000;
+
+        // 1. Download selected_tags.csv
+        let tags_len = stream_download_tagger_file(
+            &app_clone,
+            &cancel_flag,
+            &tags_urls,
+            &tags_dest_clone,
+            "selected_tags.csv",
+            "downloading_tags",
+            0,
+            approx_total,
+        )?;
+
+        // 2. Download model.onnx
+        let model_len = stream_download_tagger_file(
+            &app_clone,
+            &cancel_flag,
+            &model_urls,
+            &model_dest_clone,
+            "model.onnx",
+            "downloading_model",
+            tags_len,
+            tags_len + 110_000_000,
+        )?;
+
+        let final_total = tags_len + model_len;
+        let _ = app_clone.emit(
+            "tagger-download-progress",
+            TaggerDownloadProgress {
+                phase: "complete".into(),
+                current_file: "model.onnx".into(),
+                downloaded_bytes: final_total,
+                total_bytes: final_total,
+                percent: 100.0,
+                speed_bytes_per_sec: 0,
+                error: None,
+            },
+        );
+
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Download task panicked: {e}"))??;
+
+    if !tags_dest.exists() || !model_dest.exists() {
+        return Err("Downloaded files missing after download completed".into());
+    }
+
+    // Attempt to automatically load model
+    if let Ok(tagger) = omera_tagger::Wd14Tagger::load(&model_dest, &tags_dest) {
+        if let Ok(mut guard) = tagger_guard(&state) {
+            *guard = Some(tagger);
+        }
+    }
+
+    Ok(TaggerModelSummary {
+        name: model_id,
+        dir_path: model_dir.to_string_lossy().to_string(),
+        model_path: model_dest.to_string_lossy().to_string(),
+        tags_path: tags_dest.to_string_lossy().to_string(),
+        is_loaded: true,
+    })
+}
+
+/// Cancel an ongoing WD14 Tagger model download.
+#[tauri::command]
+pub fn cancel_tagger_download(state: State<'_, AppState>) -> Result<(), String> {
+    state.tagger_cancel.store(true, Ordering::Relaxed);
+    Ok(())
 }
 
 /// Load a WD14 Tagger ONNX model and its selected_tags.csv.

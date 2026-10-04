@@ -551,6 +551,16 @@ export interface BatchTagResult {
   tags_added: number;
 }
 
+export interface TaggerDownloadProgress {
+  phase: string;
+  current_file: string;
+  downloaded_bytes: number;
+  total_bytes: number;
+  percent: number;
+  speed_bytes_per_sec: number;
+  error?: string | null;
+}
+
 export interface ClipModelSummary {
   name: string;
   dir_path: string;

@@ -276,7 +276,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  color: var(--text-primary, #eee);
+  color: var(--color-text-primary);
 }
 
 .modal-header {
@@ -306,7 +306,7 @@ onMounted(() => {
 .close-btn {
   background: none;
   border: none;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -314,8 +314,8 @@ onMounted(() => {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -354,13 +354,13 @@ onMounted(() => {
 .section-title {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .loading-state {
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   padding: 12px 0;
 }
@@ -391,13 +391,13 @@ onMounted(() => {
 .stat-value {
   font-size: 1.15rem;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 2px;
 }
 
 .stat-label {
   font-size: 0.75rem;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
 }
 
 .action-cards {
@@ -424,13 +424,13 @@ onMounted(() => {
 .action-name {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--color-text-primary);
   margin-bottom: 4px;
 }
 
 .action-desc {
   font-size: 0.8rem;
-  color: var(--text-secondary, #aaa);
+  color: var(--color-text-secondary);
   line-height: 1.35;
 }
 
@@ -453,13 +453,13 @@ onMounted(() => {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ccc;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .btn-primary {

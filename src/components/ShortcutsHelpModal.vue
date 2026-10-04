@@ -85,7 +85,7 @@ const shortcuts = [
   display: flex;
   flex-direction: column;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  color: var(--text-primary, #eee);
+  color: var(--color-text-primary);
 }
 
 .modal-header {
@@ -115,7 +115,7 @@ const shortcuts = [
 .close-btn {
   background: none;
   border: none;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -123,8 +123,8 @@ const shortcuts = [
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {
@@ -141,7 +141,7 @@ const shortcuts = [
   text-align: left;
   padding: 8px 12px;
   font-size: 0.8rem;
-  color: var(--text-secondary, #888);
+  color: var(--color-text-secondary);
   border-bottom: 1px solid var(--border-color, #333);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -149,7 +149,7 @@ const shortcuts = [
 
 .shortcuts-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.05));
   font-size: 0.88rem;
 }
 
@@ -160,8 +160,8 @@ const shortcuts = [
 
 .key-badge {
   display: inline-block;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 2px 8px;
   font-family: inherit;
@@ -172,7 +172,7 @@ const shortcuts = [
 }
 
 .desc-cell {
-  color: #ccc;
+  color: var(--color-text-secondary);
 }
 
 .modal-footer {
@@ -193,12 +193,12 @@ const shortcuts = [
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ccc;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 </style>

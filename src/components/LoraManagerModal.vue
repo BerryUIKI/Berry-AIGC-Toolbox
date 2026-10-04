@@ -474,7 +474,7 @@ function injectPrompt(lora: LoraModel) {
   display: flex;
   flex-direction: column;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
-  color: var(--text-primary, #eee);
+  color: var(--color-text-primary);
 }
 
 .modal-header {
@@ -526,7 +526,7 @@ function injectPrompt(lora: LoraModel) {
 .close-btn {
   background: none;
   border: none;
-  color: var(--text-secondary, #999);
+  color: var(--color-text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 4px 8px;
@@ -534,8 +534,8 @@ function injectPrompt(lora: LoraModel) {
 }
 
 .close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .modal-body {

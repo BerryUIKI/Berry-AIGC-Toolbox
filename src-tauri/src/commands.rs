@@ -1470,16 +1470,37 @@ pub fn reveal_in_file_manager(path: String) -> Result<(), String> {
 
 /// Run SQLite VACUUM and optimize to compact database and reclaim unused disk pages.
 #[tauri::command]
-pub fn vacuum_database(state: State<'_, AppState>) -> Result<(), String> {
-    db(&state)?.vacuum_database().map_err(|e| e.to_string())
+pub async fn vacuum_database(app_handle: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let res = {
+            let db_guard = db(&state)?;
+            db_guard.vacuum_database().map_err(|e| e.to_string())
+        };
+        res
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Backup the current database to a designated file destination via VACUUM INTO.
 #[tauri::command]
-pub fn backup_database(destination_path: String, state: State<'_, AppState>) -> Result<(), String> {
-    db(&state)?
-        .backup_database(&destination_path)
-        .map_err(|e| e.to_string())
+pub async fn backup_database(
+    destination_path: String,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let res = {
+            let db_guard = db(&state)?;
+            db_guard
+                .backup_database(&destination_path)
+                .map_err(|e| e.to_string())
+        };
+        res
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Retrieve database storage and table statistics.
@@ -4299,29 +4320,42 @@ pub fn process_pipeline_cleanups(state: State<'_, AppState>) -> Result<u64, Stri
         .unwrap_or_default()
         .as_secs() as i64;
 
-    let db = db(&state)?;
-    let due_items = db.list_due_cleanups(now).map_err(|e| e.to_string())?;
+    let due_items = {
+        let db = db(&state)?;
+        db.list_due_cleanups(now).map_err(|e| e.to_string())?
+    };
     let mut deleted_count = 0;
 
+    let mut results = Vec::new();
     for item in due_items {
         let p = Path::new(&item.source_file_path);
+        let mut success = true;
         if p.exists() {
             if let Err(e) = trash::delete(p) {
                 eprintln!(
                     "Failed to trash expired pipeline file {}: {e}",
                     item.source_file_path
                 );
-                let _ = db.update_cleanup_status(item.id, "failed");
-                continue;
+                success = false;
             }
         }
-        let txt = p.with_extension("txt");
-        if txt.exists() {
-            let _ = trash::delete(&txt);
+        if success {
+            let txt = p.with_extension("txt");
+            if txt.exists() {
+                let _ = trash::delete(&txt);
+            }
+            results.push((item.id, "deleted"));
+            deleted_count += 1;
+        } else {
+            results.push((item.id, "failed"));
         }
+    }
 
-        let _ = db.update_cleanup_status(item.id, "deleted");
-        deleted_count += 1;
+    {
+        let db = db(&state)?;
+        for (id, status) in results {
+            let _ = db.update_cleanup_status(id, status);
+        }
     }
 
     Ok(deleted_count)
@@ -4418,22 +4452,38 @@ pub fn cull_stack_drafts(
     min_rating: u8,
     state: State<'_, AppState>,
 ) -> Result<u64, String> {
-    let db = db(&state)?;
-    let cull_ids = db
-        .get_stack_cull_candidate_ids(&stack_id, min_rating)
-        .map_err(|e| e.to_string())?;
+    let files_to_cull: Vec<(i64, PathBuf)> = {
+        let db = db(&state)?;
+        let cull_ids = db
+            .get_stack_cull_candidate_ids(&stack_id, min_rating)
+            .map_err(|e| e.to_string())?;
+
+        let mut list = Vec::new();
+        for id in cull_ids {
+            if let Ok(Some(file)) = db.get_file_by_id(id) {
+                list.push((id, PathBuf::from(file.path)));
+            }
+        }
+        list
+    };
 
     let mut trashed = 0;
-    for id in cull_ids {
-        if let Ok(Some(file)) = db.get_file_by_id(id) {
-            let p = Path::new(&file.path);
-            if p.exists() {
-                let _ = trash::delete(p);
-            }
-            let txt = p.with_extension("txt");
-            if txt.exists() {
-                let _ = trash::delete(&txt);
-            }
+    let mut successfully_trashed_ids = Vec::new();
+
+    for (id, p) in files_to_cull {
+        if p.exists() {
+            let _ = trash::delete(&p);
+        }
+        let txt = p.with_extension("txt");
+        if txt.exists() {
+            let _ = trash::delete(&txt);
+        }
+        successfully_trashed_ids.push(id);
+    }
+
+    {
+        let db = db(&state)?;
+        for id in successfully_trashed_ids {
             let _ = db.delete_file_by_id(id);
             trashed += 1;
         }

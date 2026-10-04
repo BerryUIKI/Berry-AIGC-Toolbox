@@ -178,6 +178,29 @@ const importModalAlbumId = ref<number | null>(null);
 const batchTransformModalOpen = ref(false);
 const batchTransformFilesList = ref<ImageFile[]>([]);
 
+const isAnyModalOpen = computed(() =>
+  updateModalOpen.value ||
+  settingsModalOpen.value ||
+  promptStatsModalOpen.value ||
+  modelManagerModalOpen.value ||
+  dbManagerModalOpen.value ||
+  shortcutsHelpModalOpen.value ||
+  fileOpModalOpen.value ||
+  albumModalOpen.value ||
+  tagModalOpen.value ||
+  autoTagModalOpen.value ||
+  clipModalOpen.value ||
+  loraModalOpen.value ||
+  addFolderModalOpen.value ||
+  onboardingModalOpen.value ||
+  compareModalOpen.value ||
+  cullModalOpen.value ||
+  exportModalOpen.value ||
+  importModalOpen.value ||
+  batchTransformModalOpen.value ||
+  stackMergeWarningOpen.value
+);
+
 interface StackMergePlan {
   targetStackId: string;
   sourceStackIds: string[];
@@ -2337,6 +2360,7 @@ function onResetZoom() {
 
           <!-- Floating Batch Action Bar -->
           <BatchActionBar
+            v-if="selectedFilesList.length > 0 && !isAnyModalOpen"
             :selected-count="selectedFilesList.length"
             :total-count="files.length"
             :selected-files="selectedFilesList"

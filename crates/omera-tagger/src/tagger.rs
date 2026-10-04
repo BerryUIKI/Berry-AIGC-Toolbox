@@ -57,11 +57,21 @@ impl Wd14Tagger {
         let input_size = 448u32;
         let is_nchw = false;
 
-        let model_name = model_path
+        let stem = model_path
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("wd14-model")
-            .to_string();
+            .unwrap_or("wd14-model");
+
+        let model_name = if stem.eq_ignore_ascii_case("model") {
+            model_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or(stem)
+                .to_string()
+        } else {
+            stem.to_string()
+        };
 
         let model_info = ModelInfo {
             name: model_name,

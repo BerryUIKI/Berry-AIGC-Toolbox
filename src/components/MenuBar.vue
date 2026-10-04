@@ -23,6 +23,7 @@ const emit = defineEmits<{
   clearSelection: [];
   batchAlbum: [];
   batchTag: [];
+  batchAutoTag: [];
   batchTrash: [];
   batchMove: [];
   batchCopy: [];
@@ -35,6 +36,7 @@ const emit = defineEmits<{
   zoomIn: [];
   zoomOut: [];
   resetZoom: [];
+  openAutoTagger: [];
   openPromptStats: [];
   openModelManager: [];
   openClipManager: [];
@@ -183,6 +185,10 @@ onUnmounted(() => {
           <span class="item-icon">🏷️</span>
           <span class="item-title">{{ t.menu.batchTag }}</span>
         </button>
+        <button type="button" class="dropdown-item" @click="handleAction(() => emit('batchAutoTag'))">
+          <span class="item-icon">🤖</span>
+          <span class="item-title">{{ t.menu.batchAutoTag }}</span>
+        </button>
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('batchAlbum'))">
           <span class="item-icon">📚</span>
           <span class="item-title">{{ t.menu.batchAlbum }}</span>
@@ -306,6 +312,10 @@ onUnmounted(() => {
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('openPromptStats'))">
           <span class="item-icon">📊</span>
           <span class="item-title">{{ t.menu.promptStats }}</span>
+        </button>
+        <button type="button" class="dropdown-item" @click="handleAction(() => emit('openAutoTagger'))">
+          <span class="item-icon">🤖</span>
+          <span class="item-title">{{ t.menu.autoTagger }}</span>
         </button>
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('openModelManager'))">
           <span class="item-icon">🧠</span>

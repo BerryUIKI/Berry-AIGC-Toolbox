@@ -113,6 +113,20 @@ async function onBrowseFolder() {
   }
 }
 
+async function onUnloadModel() {
+  try {
+    message.value = null;
+    controller.reset(true);
+    isIndexing.value = false;
+    await invoke("unload_clip_model");
+    loadedModel.value = null;
+    await loadModelsAndStatus();
+    message.value = { type: "info", text: t.value.clipModal.modelUnloaded || "Model unloaded" };
+  } catch (err: any) {
+    message.value = { type: "error", text: String(err) };
+  }
+}
+
 async function runBatchIndexingLoop(retryFailed = false) {
   if (!loadedModel.value) return;
   isIndexing.value = true;
@@ -212,6 +226,14 @@ onUnmounted(() => {
                 {{ m.name }} {{ m.is_loaded ? `(${t.clipModal.modelLoaded})` : '' }}
               </option>
             </select>
+            <button
+              v-if="loadedModel"
+              class="action-btn danger-outline"
+              :title="t.clipModal.unloadModel"
+              @click="onUnloadModel"
+            >
+              ⏏ {{ t.clipModal.unloadModel }}
+            </button>
             <button class="action-btn secondary" @click="onBrowseFolder">
               📂 {{ t.clipModal.browseFolder }}
             </button>
@@ -544,6 +566,17 @@ onUnmounted(() => {
 
 .action-btn.danger:hover {
   background: #dc2626;
+}
+
+.action-btn.danger-outline {
+  background: transparent;
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.action-btn.danger-outline:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
 }
 
 .indexing-indicator {

@@ -2621,6 +2621,14 @@ pub fn get_loaded_tagger_model(state: State<'_, AppState>) -> Result<Option<Mode
     Ok(guard.as_ref().map(|t| t.model_info.clone()))
 }
 
+/// Unload the currently active WD14 Tagger model, releasing ONNX runtime sessions and memory buffers.
+#[tauri::command]
+pub fn unload_tagger_model(state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = tagger_guard(&state)?;
+    *guard = None;
+    Ok(())
+}
+
 /// Run tag prediction on a single image file.
 /// If `apply_tags` is true, newly recognized tags will be created in the database and linked to the image.
 #[tauri::command]
@@ -2981,6 +2989,14 @@ pub fn load_clip_model(
 pub fn get_loaded_clip_model(state: State<'_, AppState>) -> Result<Option<ClipModelInfo>, String> {
     let guard = clip_guard(&state)?;
     Ok(guard.as_ref().map(|c| c.info.clone()))
+}
+
+/// Unload the currently active CLIP / SigLIP model, releasing ONNX runtime sessions and memory buffers.
+#[tauri::command]
+pub fn unload_clip_model(state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = clip_guard(&state)?;
+    *guard = None;
+    Ok(())
 }
 
 /// Get embedding index progress statistics for the currently loaded model or a specified model_id.

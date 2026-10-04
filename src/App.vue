@@ -177,6 +177,7 @@ const importModalFolderId = ref<number | null>(null);
 const importModalAlbumId = ref<number | null>(null);
 const batchTransformModalOpen = ref(false);
 const batchTransformFilesList = ref<ImageFile[]>([]);
+const allowOverrideExistingPrompt = ref(false);
 
 const isAnyModalOpen = computed(() =>
   updateModalOpen.value ||
@@ -326,12 +327,16 @@ function onSettingsSaved(settings: {
   theme?: AppTheme;
   autoCheckUpdate?: boolean;
   allowMultipleStacksOpen?: boolean;
+  allowOverrideExistingPrompt?: boolean;
 }) {
   blurNsfw.value = settings.blurNsfw;
   showCardBadges.value = settings.showCardBadges;
   if (settings.theme) {
     appTheme.value = settings.theme;
     applyTheme(settings.theme);
+  }
+  if (settings.allowOverrideExistingPrompt !== undefined) {
+    allowOverrideExistingPrompt.value = settings.allowOverrideExistingPrompt;
   }
   if (settings.allowMultipleStacksOpen !== undefined) {
     allowMultipleStacksOpen.value = settings.allowMultipleStacksOpen;
@@ -634,6 +639,7 @@ onMounted(async () => {
     appTheme.value = normalizeTheme(cfg.theme);
     applyTheme(appTheme.value);
     allowMultipleStacksOpen.value = cfg.allow_multiple_open_stacks ?? false;
+    allowOverrideExistingPrompt.value = cfg.allow_override_existing_prompt ?? false;
 
     await reloadFolders();
     const initialFilesPromise = loadFiles();
@@ -2503,6 +2509,7 @@ function onResetZoom() {
       :selected-file="autoTagTargetFile"
       :selected-file-count="selectedFilesList.length"
       :selected-file-ids="selectedFilesList.map((f) => f.id).filter((id): id is number => typeof id === 'number')"
+      :allow-override-prompt="allowOverrideExistingPrompt"
       @close="autoTagModalOpen = false"
       @tags-applied="onAutoTagsApplied"
     />

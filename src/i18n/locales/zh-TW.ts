@@ -604,6 +604,12 @@ export const zhTW: typeof en = {
     createDesktopShortcut: "建立桌面捷徑",
     desktopShortcutCreated: "已成功建立桌面捷徑",
     desktopShortcutExists: "桌面捷徑已存在",
+    developer: "開發者選項",
+    developerOptions: "開發者進階選項",
+    developerDesc: "為進階使用者、資料集標註與自動化工作流程開發者提供的高級設定與保護原則。",
+    allowOverrideExistingPrompt: "允許修改與覆蓋已有 Prompt",
+    allowOverrideExistingPromptDesc: "啟用後，反推工具與編輯功能可覆蓋或追加已有非空原始提示詞。",
+    promptProtected: "原始 Prompt 已受保護。請於設定「開發者選項」中啟用修改功能以覆蓋。",
   },
   addFolder: {
     title: "新增資料夾至媒體庫",

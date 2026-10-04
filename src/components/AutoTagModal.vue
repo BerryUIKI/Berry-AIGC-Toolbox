@@ -18,6 +18,7 @@ const props = defineProps<{
   selectedFile: ImageFile | null;
   selectedFileCount: number;
   selectedFileIds: number[];
+  allowOverridePrompt?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,6 +37,15 @@ const maxTags = ref<number>(50);
 const writeToPrompt = ref(false);
 const appendPrompt = ref(false);
 
+const hasExistingPrompt = computed(() => {
+  const p = props.selectedFile?.metadata?.prompt;
+  return Boolean(p && p.trim().length > 0);
+});
+
+const isPromptWriteLocked = computed(() => {
+  return hasExistingPrompt.value && !props.allowOverridePrompt;
+});
+
 const isDetecting = ref(false);
 const isApplyingCurrent = ref(false);
 const isApplyingBatch = ref(false);
@@ -52,8 +62,9 @@ const taggerConfig = computed<TaggerConfig>(() => ({
   character_threshold: characterThreshold.value / 100,
   include_rating: includeRating.value,
   max_tags: maxTags.value,
-  write_to_prompt: writeToPrompt.value,
+  write_to_prompt: writeToPrompt.value && !isPromptWriteLocked.value,
   append_prompt: appendPrompt.value,
+  allow_override_existing_prompt: Boolean(props.allowOverridePrompt),
 }));
 
 async function loadModelList() {
@@ -530,14 +541,21 @@ onUnmounted(() => {
 
             <!-- Prompt Metadata Options -->
             <div class="control-item-row prompt-opts-row">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="writeToPrompt" />
+              <label class="checkbox-label" :class="{ disabled: isPromptWriteLocked }">
+                <input
+                  type="checkbox"
+                  v-model="writeToPrompt"
+                  :disabled="isPromptWriteLocked"
+                />
                 <span>{{ t.autoTagModal.writeToPrompt }}</span>
               </label>
-              <label v-if="writeToPrompt" class="checkbox-label append-label">
+              <label v-if="writeToPrompt && !isPromptWriteLocked" class="checkbox-label append-label">
                 <input type="checkbox" v-model="appendPrompt" />
                 <span>{{ t.autoTagModal.appendPrompt }}</span>
               </label>
+              <span v-if="isPromptWriteLocked" class="locked-hint" :title="t.settings.promptProtected">
+                🔒 {{ t.settings.promptProtected }}
+              </span>
             </div>
           </div>
         </div>

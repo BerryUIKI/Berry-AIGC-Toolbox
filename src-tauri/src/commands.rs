@@ -3360,6 +3360,8 @@ pub struct AppConfig {
     pub root_mappings: HashMap<String, String>,
     #[serde(default)]
     pub cloud_backup: omera_domain::CloudBackupConfig,
+    #[serde(default)]
+    pub allow_override_existing_prompt: bool,
 }
 
 fn default_comfyui_url() -> String {
@@ -3436,6 +3438,7 @@ impl Default for AppConfig {
             client_identifier: default_client_identifier(),
             root_mappings: HashMap::new(),
             cloud_backup: omera_domain::CloudBackupConfig::default(),
+            allow_override_existing_prompt: false,
         }
     }
 }

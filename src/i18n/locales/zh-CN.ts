@@ -604,6 +604,12 @@ export const zhCN: typeof en = {
     createDesktopShortcut: "创建桌面快捷方式",
     desktopShortcutCreated: "已成功创建桌面快捷方式",
     desktopShortcutExists: "桌面快捷方式已存在",
+    developer: "开发者选项",
+    developerOptions: "开发者高级选项",
+    developerDesc: "为高级用户、数据集标注和自动化工作流开发者提供的高级设置与保护策略。",
+    allowOverrideExistingPrompt: "允许修改和覆盖已有 Prompt",
+    allowOverrideExistingPromptDesc: "启用后，反推工具和编辑功能可覆盖或追加已有非空原始提示词。",
+    promptProtected: "原始 Prompt 已受保护。请在设置「开发者选项」中启用修改功能以覆盖。",
   },
   addFolder: {
     title: "添加文件夹至媒体库",

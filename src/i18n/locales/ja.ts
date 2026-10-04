@@ -604,6 +604,12 @@ export const ja: typeof en = {
     createDesktopShortcut: "ショートカットを作成",
     desktopShortcutCreated: "デスクトップショートカットを作成しました",
     desktopShortcutExists: "デスクトップショートカットは既に存在します",
+    developer: "開発者",
+    developerOptions: "開発者向けオプション",
+    developerDesc: "パワーユーザー、データセット作成者、ワークフロー開発者向けの詳細設定と保護機能。",
+    allowOverrideExistingPrompt: "既存プロンプトの変更・上書きを許可する",
+    allowOverrideExistingPromptDesc: "有効にすると、自動反推ツールやエディタで既存のオリジナルプロンプトを上書きまたは追加できるようになります。",
+    promptProtected: "元のプロンプトは保護されています。上書きするには開発者設定で有効にしてください。",
   },
   addFolder: {
     title: "フォルダをライブラリに追加",

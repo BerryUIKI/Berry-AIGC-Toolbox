@@ -604,6 +604,12 @@ export const es: typeof en = {
     createDesktopShortcut: "Crear acceso directo",
     desktopShortcutCreated: "Acceso directo en el escritorio creado con éxito",
     desktopShortcutExists: "El acceso directo en el escritorio ya existe",
+    developer: "Desarrollador",
+    developerOptions: "Opciones de desarrollador",
+    developerDesc: "Preferencias avanzadas, salvaguardas y anulaciones para desarrolladores y curadores de conjuntos de datos.",
+    allowOverrideExistingPrompt: "Permitir modificar y sobrescribir prompts existentes",
+    allowOverrideExistingPromptDesc: "Permite que las herramientas de interrogación y los editores sobrescriban prompts originales que no estén vacíos.",
+    promptProtected: "El prompt original está protegido. Habilítelo en Opciones de desarrollador para sobrescribir.",
   },
   addFolder: {
     title: "Añadir carpeta a la biblioteca",

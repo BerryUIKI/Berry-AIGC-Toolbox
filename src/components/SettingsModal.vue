@@ -69,10 +69,12 @@ const emit = defineEmits<{
     thumbnailCacheBudgetMb: number;
     autoCheckUpdate: boolean;
     allowMultipleStacksOpen: boolean;
+    allowOverrideExistingPrompt?: boolean;
   }): void;
 }>();
 
-const activeTab = ref<"general" | "display" | "stacking" | "interop" | "collaboration" | "cloudBackup" | "parsers" | "about">("general");
+const activeTab = ref<"general" | "display" | "stacking" | "interop" | "collaboration" | "cloudBackup" | "parsers" | "developer" | "about">("general");
+const allowOverrideExistingPrompt = ref(false);
 
 // Settings state (backed by persistent config.json)
 const selectedLocale = ref<LocaleSetting>(currentLocaleSetting.value);
@@ -431,6 +433,8 @@ async function loadSettingsAndPaths() {
       cloudAutoIntervalDays.value = cb.auto_backup_interval_days ?? 7;
     }
 
+    allowOverrideExistingPrompt.value = config.allow_override_existing_prompt ?? false;
+
     storagePaths.value = await getStoragePaths();
     void checkDesktopShortcut();
   } catch (e) {
@@ -582,6 +586,7 @@ async function saveSettings() {
       client_identifier: clientIdentifier.value,
       root_mappings: rootMappings.value,
       cloud_backup: getCurrentCloudConfig(),
+      allow_override_existing_prompt: allowOverrideExistingPrompt.value,
     });
   } catch (e) {
     console.error("Failed to save config.json:", e);
@@ -600,6 +605,7 @@ async function saveSettings() {
     thumbnailCacheBudgetMb: thumbnailCacheBudgetMb.value,
     autoCheckUpdate: autoCheckUpdate.value,
     allowMultipleStacksOpen: allowMultipleStacksOpen.value,
+    allowOverrideExistingPrompt: allowOverrideExistingPrompt.value,
   });
   emit("close");
 }
@@ -689,6 +695,16 @@ async function saveSettings() {
             @click="activeTab = 'parsers'"
           >
             <span aria-hidden="true">⌘</span><span>{{ t.settings.tabs.parsers }}</span>
+          </button>
+          <button
+            type="button"
+            class="tab-btn"
+            :class="{ active: activeTab === 'developer' }"
+            role="tab"
+            :aria-selected="activeTab === 'developer'"
+            @click="activeTab = 'developer'"
+          >
+            <span aria-hidden="true">🛠️</span><span>{{ t.settings.developer }}</span>
           </button>
           <button
             type="button"
@@ -1636,6 +1652,25 @@ async function saveSettings() {
                 <span class="parser-name">InvokeAI & EasyDiffusion</span>
                 <span class="parser-desc">Invoke Metadata & JSON Sidecar</span>
               </div>
+            </div>
+          </div>
+
+          <!-- Tab: Developer Options -->
+          <div v-if="activeTab === 'developer'" class="settings-panel">
+            <div class="panel-heading">
+              <h4 class="panel-title">{{ t.settings.developerOptions }}</h4>
+              <p class="panel-subtitle">{{ t.settings.developerDesc }}</p>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="row-label">{{ t.settings.allowOverrideExistingPrompt }}</span>
+                <span class="row-desc">{{ t.settings.allowOverrideExistingPromptDesc }}</span>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="allowOverrideExistingPrompt" />
+                <span class="toggle-slider"></span>
+              </label>
             </div>
           </div>
 

@@ -35,6 +35,7 @@ export const zhTW: typeof en = {
     rebuild: "重建",
     rebuilding: "重建中…",
     remove: "移除",
+    removeFolderConfirm: '確定要從 Omera 中移除資料夾「{name}」嗎？磁碟上的檔案不會被刪除。',
     harvest: "收穫新圖片",
     albums: "相簿",
     newAlbum: "+ 新增",

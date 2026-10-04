@@ -99,6 +99,12 @@ async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
 
 async function removeFolder(folder: Folder, e: MouseEvent) {
   e.stopPropagation();
+  const folderName = getFolderName(folder.path);
+  const template = t.value.nav.removeFolderConfirm || 'Remove folder "{name}" from Omera? Files on disk will not be deleted.';
+  const confirmMsg = template.replace("{name}", folderName);
+  if (!window.confirm(confirmMsg)) {
+    return;
+  }
   error.value = "";
   try {
     await invoke("remove_folder", { folderId: folder.id });

@@ -35,6 +35,7 @@ export const ja: typeof en = {
     rebuild: "再構築",
     rebuilding: "再構築中…",
     remove: "削除",
+    removeFolderConfirm: "フォルダ「{name}」をOmeraから削除しますか？ディスク上のファイルは削除されません。",
     harvest: "新規画像の取り込み",
     albums: "アルバム",
     newAlbum: "+ 新規",

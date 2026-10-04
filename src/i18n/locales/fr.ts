@@ -35,6 +35,7 @@ export const fr: typeof en = {
     rebuild: "Reconstruire",
     rebuilding: "Reconstruction…",
     remove: "Supprimer",
+    removeFolderConfirm: "Supprimer le dossier \"{name}\" d'Omera ? Les fichiers sur le disque ne seront pas supprimés.",
     harvest: "Récolter les images",
     albums: "Albums",
     newAlbum: "+ Nouveau",

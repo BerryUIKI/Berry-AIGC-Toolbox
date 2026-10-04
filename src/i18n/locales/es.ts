@@ -35,6 +35,7 @@ export const es: typeof en = {
     rebuild: "Reconstruir",
     rebuilding: "Reconstruyendo…",
     remove: "Eliminar",
+    removeFolderConfirm: '¿Eliminar la carpeta "{name}" de Omera? Los archivos en el disco no se eliminarán.',
     harvest: "Recolectar imágenes",
     albums: "Álbumes",
     newAlbum: "+ Nuevo",

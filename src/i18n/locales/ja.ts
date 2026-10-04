@@ -89,7 +89,7 @@ export const ja: typeof en = {
     copyPrompts: "💬 プロンプトをコピー",
     promptsCopied: "✓ プロンプトをコピーしました！",
     move: "📂 移動",
-    batchAutoTag: "🏷️ 自動タグ",
+    batchAutoTag: "🤖 自動タグ",
     copy: "📄 コピー",
     trash: "🗑 ゴミ箱へ移動",
     export: "📤 一括エクスポート...",

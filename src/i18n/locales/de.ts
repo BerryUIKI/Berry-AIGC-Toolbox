@@ -89,7 +89,7 @@ export const de: typeof en = {
     copyPrompts: "💬 Prompts kopieren",
     promptsCopied: "✓ Prompts kopiert!",
     move: "📂 Verschieben",
-    batchAutoTag: "🏷️ Auto-Tag",
+    batchAutoTag: "🤖 Auto-Tag",
     copy: "📄 Kopieren",
     trash: "🗑 Papierkorb",
     export: "📤 Exportieren...",

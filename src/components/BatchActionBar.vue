@@ -73,7 +73,7 @@ onMounted(() => {
     resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const width = entry.contentRect.width;
-        isCompact.value = width < 920;
+        isCompact.value = width < 1200;
       }
     });
     resizeObserver.observe(barContainerRef.value.parentElement);
@@ -246,7 +246,7 @@ function onTrash() {
             title="Auto-tag selected images with WD14"
             @click="emit('autoTagSelected')"
           >
-            🤖 {{ t.batch.batchAutoTag }}
+            {{ t.batch.batchAutoTag }}
           </button>
 
           <!-- NSFW -->
@@ -348,7 +348,7 @@ function onTrash() {
               📁 {{ t.batch.album }}
             </button>
             <button type="button" class="more-opt" @click="emit('autoTagSelected'); moreMenuOpen = false">
-              🤖 {{ t.batch.batchAutoTag }}
+              {{ t.batch.batchAutoTag }}
             </button>
             <button type="button" class="more-opt" @click="emit('toggleNsfw', !allNsfw); moreMenuOpen = false">
               {{ allNsfw ? t.batch.nsfw : t.batch.sfw }}
@@ -466,7 +466,7 @@ function onTrash() {
   display: block;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1200px) {
   .secondary-actions-inline {
     display: none !important;
   }

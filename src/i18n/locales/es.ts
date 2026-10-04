@@ -236,6 +236,7 @@ export const es: typeof en = {
     downloadShort: "Descargar modelo",
     downloadSource: "Nodo de descarga",
     sourceAuto: "Automático (Más rápido)",
+    sourceModelScope: "ModelScope (Espejo de alta velocidad)",
     sourceOfficial: "Oficial (HuggingFace)",
     sourceMirror: "Espejo acelerado (HF-Mirror)",
     cancelDownload: "Cancelar",

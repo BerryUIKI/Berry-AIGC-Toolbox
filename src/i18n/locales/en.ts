@@ -234,6 +234,7 @@ export const en = {
     downloadShort: "Download Model",
     downloadSource: "Download Mirror",
     sourceAuto: "Auto (Fastest)",
+    sourceModelScope: "ModelScope (High-Speed Mirror)",
     sourceOfficial: "Official (HuggingFace)",
     sourceMirror: "Mirror (HF-Mirror)",
     cancelDownload: "Cancel Download",

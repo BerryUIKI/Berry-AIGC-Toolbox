@@ -38,7 +38,7 @@ const isDetecting = ref(false);
 const isApplying = ref(false);
 const isDownloading = ref(false);
 const downloadProgress = ref<TaggerDownloadProgress | null>(null);
-const downloadSource = ref<"auto" | "huggingface" | "hf-mirror">("auto");
+const downloadSource = ref<"auto" | "modelscope" | "hf-mirror" | "huggingface">("auto");
 let unlistenDownload: UnlistenFn | null = null;
 const predictions = ref<TagPrediction[]>([]);
 const message = ref<{ type: "success" | "error"; text: string } | null>(null);
@@ -228,6 +228,10 @@ async function startDownloadModel() {
 
   try {
     const summary = await invoke<TaggerModelSummary>("download_tagger_model", {
+      options: {
+        model_id: "wd-v1-4-convnext-tagger-v2",
+        mirror: downloadSource.value,
+      },
       source: downloadSource.value,
     });
     message.value = {
@@ -392,8 +396,9 @@ onUnmounted(() => {
               <label class="source-label">{{ t.autoTagModal.downloadSource }}:</label>
               <select v-model="downloadSource" class="source-select">
                 <option value="auto">{{ t.autoTagModal.sourceAuto }}</option>
-                <option value="huggingface">{{ t.autoTagModal.sourceOfficial }}</option>
+                <option value="modelscope">{{ t.autoTagModal.sourceModelScope }}</option>
                 <option value="hf-mirror">{{ t.autoTagModal.sourceMirror }}</option>
+                <option value="huggingface">{{ t.autoTagModal.sourceOfficial }}</option>
               </select>
             </div>
 

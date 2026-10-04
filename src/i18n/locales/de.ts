@@ -236,6 +236,7 @@ export const de: typeof en = {
     downloadShort: "Modell herunterladen",
     downloadSource: "Download-Quelle",
     sourceAuto: "Automatisch (Schnellste)",
+    sourceModelScope: "ModelScope (Highspeed-Mirror)",
     sourceOfficial: "Offiziell (HuggingFace)",
     sourceMirror: "Spiegelserver (HF-Mirror)",
     cancelDownload: "Abbrechen",

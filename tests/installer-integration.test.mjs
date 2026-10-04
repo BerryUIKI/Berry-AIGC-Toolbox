@@ -30,7 +30,7 @@ test('tauri.conf.json: NSIS installer is configured with Start Menu folder, lang
   }
 });
 
-test('i18n locales: all 7 locale files define desktop shortcut keys', async () => {
+test('i18n locales: all 7 locale files define desktop shortcut keys and sourceModelScope', async () => {
   const locales = ['zh-CN', 'zh-TW', 'en', 'ja', 'de', 'fr', 'es'];
   for (const locale of locales) {
     const localeFile = path.join(projectRoot, 'src', 'i18n', 'locales', `${locale}.ts`);
@@ -38,5 +38,16 @@ test('i18n locales: all 7 locale files define desktop shortcut keys', async () =
     assert.ok(content.includes('desktopShortcut:'), `${locale}.ts must define desktopShortcut`);
     assert.ok(content.includes('createDesktopShortcut:'), `${locale}.ts must define createDesktopShortcut`);
     assert.ok(content.includes('desktopShortcutCreated:'), `${locale}.ts must define desktopShortcutCreated`);
+    assert.ok(content.includes('sourceModelScope:'), `${locale}.ts must define sourceModelScope`);
   }
 });
+
+test('commands.rs: contains ModelScope repository URL for BerryUIKI tagger', () => {
+  const commandsFile = path.join(projectRoot, 'src-tauri', 'src', 'commands.rs');
+  const content = fs.readFileSync(commandsFile, 'utf8');
+  assert.ok(
+    content.includes('https://modelscope.cn/models/BerryUIKI/'),
+    'commands.rs must contain ModelScope repository URLs for BerryUIKI'
+  );
+});
+

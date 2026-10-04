@@ -236,6 +236,7 @@ export const ja: typeof en = {
     downloadShort: "モデルをダウンロード",
     downloadSource: "ダウンロード拠点",
     sourceAuto: "自動 (最速選択)",
+    sourceModelScope: "ModelScope (高速ミラー)",
     sourceOfficial: "公式 (HuggingFace)",
     sourceMirror: "ミラー高速化 (HF-Mirror)",
     cancelDownload: "ダウンロード中止",

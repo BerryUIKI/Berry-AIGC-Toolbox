@@ -236,6 +236,7 @@ export const zhCN: typeof en = {
     downloadShort: "下载推荐模型",
     downloadSource: "下载节点",
     sourceAuto: "自动 (智能优选)",
+    sourceModelScope: "ModelScope 魔搭社区 (国内极速)",
     sourceOfficial: "官方源 (HuggingFace)",
     sourceMirror: "镜像加速 (HF-Mirror)",
     cancelDownload: "取消下载",

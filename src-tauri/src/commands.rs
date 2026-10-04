@@ -2278,6 +2278,7 @@ pub struct TaggerDownloadProgress {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadTaggerOptions {
     pub model_id: Option<String>,
+    #[serde(alias = "source")]
     pub mirror: Option<String>,
 }
 
@@ -2456,6 +2457,7 @@ pub async fn download_tagger_model(
     app: AppHandle,
     state: State<'_, AppState>,
     options: Option<DownloadTaggerOptions>,
+    source: Option<String>,
 ) -> Result<TaggerModelSummary, String> {
     let cancel_flag = state.tagger_cancel.clone();
     cancel_flag.store(false, Ordering::Relaxed);
@@ -2467,6 +2469,7 @@ pub async fn download_tagger_model(
     let mirror_mode = options
         .as_ref()
         .and_then(|o| o.mirror.clone())
+        .or(source)
         .unwrap_or_else(|| "auto".to_string());
 
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -2476,19 +2479,42 @@ pub async fn download_tagger_model(
     let tags_dest = model_dir.join("selected_tags.csv");
     let model_dest = model_dir.join("model.onnx");
 
-    let hf_tags =
-        format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/selected_tags.csv");
+    // ModelScope repository: https://modelscope.cn/models/BerryUIKI/wd-v1-4-convnext-tagger-v2
+    let ms_tags = format!(
+        "https://modelscope.cn/models/BerryUIKI/{model_id}/resolve/master/selected_tags.csv"
+    );
+    let ms_model =
+        format!("https://modelscope.cn/models/BerryUIKI/{model_id}/resolve/master/model.onnx");
+
     let mirror_tags =
         format!("https://hf-mirror.com/SmilingWolf/{model_id}/resolve/main/selected_tags.csv");
-
-    let hf_model = format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/model.onnx");
     let mirror_model =
         format!("https://hf-mirror.com/SmilingWolf/{model_id}/resolve/main/model.onnx");
 
-    let (tags_urls, model_urls) = if mirror_mode == "hf-mirror" {
-        (vec![mirror_tags, hf_tags], vec![mirror_model, hf_model])
-    } else {
-        (vec![hf_tags, mirror_tags], vec![hf_model, mirror_model])
+    let hf_tags =
+        format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/selected_tags.csv");
+    let hf_model = format!("https://huggingface.co/SmilingWolf/{model_id}/resolve/main/model.onnx");
+
+    let (tags_urls, model_urls) = match mirror_mode.as_str() {
+        "modelscope" => (
+            vec![ms_tags, mirror_tags, hf_tags],
+            vec![ms_model, mirror_model, hf_model],
+        ),
+        "hf-mirror" => (
+            vec![mirror_tags, ms_tags, hf_tags],
+            vec![mirror_model, ms_model, hf_model],
+        ),
+        "huggingface" => (
+            vec![hf_tags, ms_tags, mirror_tags],
+            vec![hf_model, ms_model, mirror_model],
+        ),
+        _ => {
+            // "auto" mode: prioritize ModelScope for high-speed CDN delivery and zero blockage
+            (
+                vec![ms_tags, mirror_tags, hf_tags],
+                vec![ms_model, mirror_model, hf_model],
+            )
+        }
     };
 
     let app_clone = app.clone();

@@ -320,6 +320,8 @@ export const de: typeof en = {
     copyBtn: "Kopieren",
     trashBtn: "In Papierkorb verschieben",
     cancel: "Abbrechen",
+    linkedReadOnlyWarning: "Ausgewählte Dateien enthalten Elemente aus einem schreibgeschützten externen Ordner. Diese können nicht verschoben werden (bitte Kopieren verwenden).",
+    linkedFolderDisabled: "(Schreibgeschützter externer Ordner)",
   },
   dbModal: {
     title: "Datenbank- & Speicherwartung",

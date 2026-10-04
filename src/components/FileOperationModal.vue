@@ -16,9 +16,26 @@ const emit = defineEmits<{
   (e: "completed"): void;
 }>();
 
-const selectedFolderId = ref<number | null>(props.folders[0]?.id ?? null);
+// Eligible destination folders exclude external read-only linked folders
+const eligibleFolders = computed(() =>
+  props.folders.filter((f) => f.folder_type !== "link")
+);
+
+const selectedFolderId = ref<number | null>(eligibleFolders.value[0]?.id ?? null);
 const isProcessing = ref(false);
 const errorMessage = ref<string | null>(null);
+
+// Detect if any selected source file belongs to a read-only linked folder
+const hasLinkedSourceFiles = computed(() =>
+  props.files.some((file) => {
+    const f = props.folders.find((folder) => folder.id === file.folder_id);
+    return f && f.folder_type === "link";
+  })
+);
+
+const isMoveBlocked = computed(
+  () => props.mode === "move" && hasLinkedSourceFiles.value
+);
 
 const modalTitle = computed(() => {
   switch (props.mode) {
@@ -32,6 +49,7 @@ const modalTitle = computed(() => {
 });
 
 async function handleConfirm() {
+  if (isMoveBlocked.value) return;
   isProcessing.value = true;
   errorMessage.value = null;
 
@@ -80,6 +98,10 @@ async function handleConfirm() {
           {{ errorMessage }}
         </div>
 
+        <div v-if="isMoveBlocked" class="warning-banner">
+          ⚠️ {{ t.fileOpModal.linkedReadOnlyWarning }}
+        </div>
+
         <div v-if="mode === 'trash'" class="trash-warning">
           <p>{{ t.fileOpModal.trashWarning }}</p>
           <p class="trash-subtext">{{ t.fileOpModal.trashSubtext }}</p>
@@ -92,19 +114,28 @@ async function handleConfirm() {
               v-for="folder in folders"
               :key="folder.id"
               class="folder-option"
-              :class="{ selected: selectedFolderId === folder.id }"
-              @click="selectedFolderId = folder.id"
+              :class="{
+                selected: selectedFolderId === folder.id,
+                disabled: folder.folder_type === 'link',
+              }"
+              @click="folder.folder_type !== 'link' && (selectedFolderId = folder.id)"
             >
               <div class="folder-radio">
                 <input
                   type="radio"
                   :value="folder.id"
                   :checked="selectedFolderId === folder.id"
+                  :disabled="folder.folder_type === 'link'"
                   name="destination-folder"
                 />
               </div>
               <div class="folder-text">
-                <div class="folder-name">{{ folder.path.split(/[\\/]/).pop() || folder.path }}</div>
+                <div class="folder-name">
+                  {{ folder.path.split(/[\\/]/).pop() || folder.path }}
+                  <span v-if="folder.folder_type === 'link'" class="folder-badge-link">
+                    {{ t.fileOpModal.linkedFolderDisabled }}
+                  </span>
+                </div>
                 <div class="folder-path" :title="folder.path">{{ folder.path }}</div>
               </div>
             </div>
@@ -133,7 +164,7 @@ async function handleConfirm() {
           type="button"
           class="btn"
           :class="mode === 'trash' ? 'btn-danger' : 'btn-primary'"
-          :disabled="isProcessing || (mode !== 'trash' && selectedFolderId === null)"
+          :disabled="isProcessing || (mode !== 'trash' && selectedFolderId === null) || isMoveBlocked"
           @click="handleConfirm"
         >
           {{ isProcessing ? t.fileOpModal.processing : mode === 'trash' ? t.fileOpModal.trashBtn : mode === 'move' ? t.fileOpModal.moveBtn : t.fileOpModal.copyBtn }}
@@ -224,6 +255,16 @@ async function handleConfirm() {
   font-size: 0.85rem;
 }
 
+.warning-banner {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
 .trash-warning p {
   margin: 0 0 6px 0;
   font-size: 0.95rem;
@@ -274,6 +315,24 @@ async function handleConfirm() {
 .folder-option.selected {
   background: rgba(59, 130, 246, 0.15);
   border-color: #3b82f6;
+}
+
+.folder-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.folder-option.disabled:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.folder-badge-link {
+  font-size: 0.72rem;
+  color: #f59e0b;
+  margin-left: 6px;
+  font-weight: normal;
 }
 
 .folder-text {

@@ -826,4 +826,65 @@ mod tests {
         drop(db);
         fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn test_thumbnail_batch_high_volume_and_cancellation() {
+        let dir = test_dir("batch-cancellation");
+        let db_path = dir.join("omera.db");
+        Database::connect(&db_path).unwrap();
+
+        // Prepare 50 mock files
+        let mut items = Vec::new();
+        for i in 1..=50 {
+            let img_path = dir.join(format!("mock_{i}.png"));
+            let img = image::RgbaImage::new(16, 16);
+            img.save(&img_path).unwrap();
+            items.push((
+                i as i64,
+                img_path.to_string_lossy().to_string(),
+                1000 + i as i64,
+            ));
+        }
+
+        // Run batch with cancellation triggered when counter reaches 15
+        let processed_counter = std::sync::atomic::AtomicUsize::new(0);
+        let res = batch_generate_thumbnails(
+            &dir,
+            &db_path,
+            items,
+            256,
+            1024 * 1024,
+            Some(|current, _total| {
+                processed_counter.store(current, Ordering::Relaxed);
+            }),
+            || processed_counter.load(Ordering::Relaxed) < 15,
+        )
+        .unwrap();
+
+        // Assert that the batch gracefully stopped and reported generated + canceled
+        assert!(res.canceled > 0, "Must have canceled items");
+        assert!(
+            res.generated > 0,
+            "Must have generated some items before cancellation"
+        );
+        assert_eq!(
+            res.generated + res.canceled,
+            50,
+            "Total must equal initial items count"
+        );
+
+        let db = Database::connect(&db_path).unwrap();
+        let (usage_bytes, manifest_count) = db.thumbnail_cache_usage().unwrap();
+        assert_eq!(
+            manifest_count, res.generated,
+            "Manifest entries must match successfully generated items"
+        );
+        assert!(
+            usage_bytes > 0,
+            "Cache usage bytes must be greater than zero"
+        );
+
+        drop(db);
+        fs::remove_dir_all(dir).unwrap();
+    }
 }

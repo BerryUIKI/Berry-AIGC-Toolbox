@@ -694,7 +694,8 @@ onUnmounted(() => {
 .section-title {
   font-size: 0.8rem;
   font-weight: 700;
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  opacity: 0.92;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -818,8 +819,9 @@ onUnmounted(() => {
 }
 
 .empty-model-desc {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  color: var(--color-text-primary);
+  opacity: 0.88;
   line-height: 1.5;
   max-width: 480px;
   margin: 0 0 14px 0;
@@ -841,7 +843,8 @@ onUnmounted(() => {
 }
 
 .source-label {
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  opacity: 0.92;
   font-weight: 600;
 }
 
@@ -942,8 +945,9 @@ onUnmounted(() => {
 }
 
 .download-metrics {
-  font-size: 0.75rem;
-  color: var(--color-text-secondary);
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  opacity: 0.88;
   display: flex;
   gap: 6px;
 }
@@ -958,10 +962,12 @@ onUnmounted(() => {
 }
 
 .cancel-download-btn {
-  background: transparent;
+  background: var(--color-bg-primary);
   border: 1px solid var(--border-color);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+  opacity: 0.9;
   font-size: 0.75rem;
+  font-weight: 600;
   padding: 3px 10px;
   border-radius: 4px;
   cursor: pointer;
@@ -969,9 +975,10 @@ onUnmounted(() => {
 }
 
 .cancel-download-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
   color: #ef4444;
+  opacity: 1;
 }
 
 .controls-grid {
@@ -1197,10 +1204,18 @@ onUnmounted(() => {
 }
 
 .no-tags-prompt {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  color: var(--color-text-primary);
+  opacity: 0.85;
   text-align: center;
   padding: 14px 0;
+}
+
+.model-dropdown option,
+.source-select option,
+.small-select option {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 .message-banner {

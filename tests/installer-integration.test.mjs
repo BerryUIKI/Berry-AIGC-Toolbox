@@ -51,3 +51,12 @@ test('commands.rs: contains ModelScope repository URL for BerryUIKI tagger', () 
   );
 });
 
+test('hooks.nsh: cleans up desktop shortcuts and terminates active process on install/uninstall', () => {
+  const hooksFile = path.join(projectRoot, 'src-tauri', 'windows', 'hooks.nsh');
+  const content = fs.readFileSync(hooksFile, 'utf8');
+  assert.ok(content.includes('taskkill /IM Omera.exe /F'), 'hooks.nsh must terminate running Omera instance');
+  assert.ok(content.includes('Delete "$DESKTOP\\Omera.lnk"'), 'hooks.nsh must delete Omera desktop shortcut on uninstall');
+  assert.ok(content.includes('RMDir "$SMPROGRAMS\\Omera"'), 'hooks.nsh must clean up Start Menu folder');
+});
+
+

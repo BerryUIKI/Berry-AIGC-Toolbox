@@ -604,6 +604,12 @@ export const de: typeof en = {
     createDesktopShortcut: "Verknüpfung erstellen",
     desktopShortcutCreated: "Desktop-Verknüpfung erfolgreich erstellt",
     desktopShortcutExists: "Desktop-Verknüpfung existiert bereits",
+    developer: "Entwickler",
+    developerOptions: "Entwickleroptionen",
+    developerDesc: "Erweiterte Einstellungen, Schutzmechanismen und Überschreibungen für Entwickler und Datensatz-Kuratoren.",
+    allowOverrideExistingPrompt: "Ändern und Überschreiben vorhandener Prompts erlauben",
+    allowOverrideExistingPromptDesc: "Ermöglicht automatischen Abfragewerkzeugen und Editoren das Überschreiben nicht-leerer Original-Prompts.",
+    promptProtected: "Original-Prompt ist geschützt. In den Entwickleroptionen aktivieren, um zu überschreiben.",
   },
   addFolder: {
     title: "Ordner zur Bibliothek hinzufügen",

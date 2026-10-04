@@ -602,6 +602,12 @@ export const en = {
     createDesktopShortcut: "Create Desktop Shortcut",
     desktopShortcutCreated: "Desktop shortcut created successfully",
     desktopShortcutExists: "Desktop shortcut already exists",
+    developer: "Developer",
+    developerOptions: "Developer Options",
+    developerDesc: "Advanced preferences, safeguards, and overrides for developers and dataset creators.",
+    allowOverrideExistingPrompt: "Allow Modifying and Overwriting Existing Prompts",
+    allowOverrideExistingPromptDesc: "When enabled, automated interrogation tools and prompt editors can overwrite or modify non-empty original prompts.",
+    promptProtected: "Original prompt is protected. Enable in Developer Settings to overwrite.",
   },
   addFolder: {
     title: "Add Folder to Library",

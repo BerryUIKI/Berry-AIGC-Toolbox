@@ -604,6 +604,12 @@ export const fr: typeof en = {
     createDesktopShortcut: "Créer le raccourci",
     desktopShortcutCreated: "Raccourci sur le bureau créé avec succès",
     desktopShortcutExists: "Le raccourci sur le bureau existe déjà",
+    developer: "Développeur",
+    developerOptions: "Options pour développeurs",
+    developerDesc: "Préférences avancées, garde-fous et dérogations pour développeurs et créateurs de jeux de données.",
+    allowOverrideExistingPrompt: "Autoriser la modification et l'écrasement des prompts existants",
+    allowOverrideExistingPromptDesc: "Permet aux outils d'interrogation et aux éditeurs d'écraser les prompts originaux non vides.",
+    promptProtected: "Le prompt original est protégé. Activez l'option dans les paramètres Développeur pour l'écraser.",
   },
   addFolder: {
     title: "Ajouter un dossier à la bibliothèque",

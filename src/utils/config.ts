@@ -30,6 +30,7 @@ export interface AppConfig {
   client_identifier: string;
   root_mappings: Record<string, string>;
   cloud_backup: CloudBackupConfig;
+  allow_override_existing_prompt: boolean;
 }
 
 export const STACK_MERGE_WARNING_ID = "stack_merge";
@@ -85,6 +86,7 @@ const DEFAULT_CONFIG: AppConfig = {
     auto_backup_enabled: false,
     auto_backup_interval_days: 7,
   },
+  allow_override_existing_prompt: false,
 };
 
 /**

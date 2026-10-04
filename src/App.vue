@@ -25,6 +25,7 @@ import type {
   Tag,
   StackSummary,
   ExportSummary,
+  TransformJobReceipt,
 } from "./types";
 import { getFileName } from "./utils/image";
 import TitleBar from "./components/TitleBar.vue";
@@ -87,6 +88,9 @@ const CullDraftsModal = defineAsyncComponent(
 const ExportModal = defineAsyncComponent(() => import("./components/ExportModal.vue"));
 const ImportTransformModal = defineAsyncComponent(
   () => import("./components/ImportTransformModal.vue")
+);
+const BatchTransformModal = defineAsyncComponent(
+  () => import("./components/BatchTransformModal.vue")
 );
 
 const info = ref<AppInfo | null>(null);
@@ -171,6 +175,8 @@ const importModalOpen = ref(false);
 const importModalFiles = ref<string[]>([]);
 const importModalFolderId = ref<number | null>(null);
 const importModalAlbumId = ref<number | null>(null);
+const batchTransformModalOpen = ref(false);
+const batchTransformFilesList = ref<ImageFile[]>([]);
 
 interface StackMergePlan {
   targetStackId: string;
@@ -1333,6 +1339,29 @@ function onExportCompleted(_summary: ExportSummary) {
   // Export completed callback
 }
 
+function handleOpenBatchTransformModal() {
+  if (selectedFilesList.value.length > 0) {
+    batchTransformFilesList.value = selectedFilesList.value;
+  } else if (selectedFile.value) {
+    batchTransformFilesList.value = [selectedFile.value];
+  } else if (files.value.length > 0) {
+    batchTransformFilesList.value = Array.from(files.value);
+  } else {
+    batchTransformFilesList.value = [];
+  }
+  if (batchTransformFilesList.value.length > 0) {
+    batchTransformModalOpen.value = true;
+  }
+}
+
+async function onBatchTransformCompleted(receipt: TransformJobReceipt) {
+  if (receipt && receipt.succeeded > 0) {
+    await loadAlbumsAndTags();
+    await refreshCounts();
+    await loadFiles();
+  }
+}
+
 async function onOnboardingComplete() {
   // Immediately prevent any re-opening — this is the critical guard
   onboardingDismissedThisSession = true;
@@ -2324,6 +2353,7 @@ function onResetZoom() {
             @trash="onBatchTrash"
             @cull-drafts="onBatchCullDrafts"
             @export-selected="handleOpenExportModal()"
+            @transform-selected="handleOpenBatchTransformModal()"
           />
         </div>
       </main>
@@ -2543,6 +2573,16 @@ function onResetZoom() {
       :albums="albums"
       @close="importModalOpen = false"
       @imported="onImportCompleted"
+    />
+
+    <!-- Batch Transform / Compress Images Modal -->
+    <BatchTransformModal
+      v-if="batchTransformModalOpen"
+      :show="batchTransformModalOpen"
+      :files="batchTransformFilesList"
+      :folders="folders"
+      @close="batchTransformModalOpen = false"
+      @completed="onBatchTransformCompleted"
     />
 
     <!-- Help & Feature Guide Drawer -->

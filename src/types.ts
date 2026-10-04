@@ -163,6 +163,41 @@ export interface TransformSpec {
   collision_policy: TransformCollisionPolicy;
 }
 
+export type OriginalDisposition = "keep" | "archive" | "trash";
+
+export interface LibraryTransformRequest {
+  file_ids: number[];
+  spec: TransformSpec;
+  original_disposition: OriginalDisposition;
+}
+
+export type TransformItemStatus = "succeeded" | "failed" | "skipped" | "canceled";
+
+export interface TransformItemReceipt {
+  source_id_or_path: string;
+  output_id_or_path?: string | null;
+  status: TransformItemStatus;
+  error_code?: string | null;
+  original_action?: string | null;
+}
+
+export interface TransformJobReceipt {
+  job_id: string;
+  phase: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  canceled: number;
+  items: TransformItemReceipt[];
+}
+
+export interface TransformProgressEvent {
+  current: number;
+  total: number;
+  current_path: string;
+}
+
 export interface ExportEstimateResult {
   original_bytes: number;
   estimated_bytes: number;

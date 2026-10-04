@@ -26,12 +26,12 @@ use omera_domain::{
     plan_prompt_stacks, Album, ChangeLogEntry, ChangeLogSyncQuery, CheckpointModelStat,
     CleanupQueueItem, CursorFilePage, DatabasePingResult, DatabaseStats, DetectedLora,
     ExportEstimateResult, ExportOptions, ExportSummary, FilePage, FileSortField, Folder, ImageFile,
-    LoraModel, MigrationOptions, MigrationSummary, ModelCacheEntry, MutationResult, NormalizedPath,
-    PathResolver, PipelineDetectedPath, PromptStackCandidate, PromptStat, SearchCriteria,
-    SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag, TransformFormat,
-    TransformMetadataPolicy, TransformSpec,
+    LibraryTransformRequest, LoraModel, MigrationOptions, MigrationSummary, ModelCacheEntry,
+    MutationResult, NormalizedPath, PathResolver, PipelineDetectedPath, PromptStackCandidate,
+    PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
+    TransformFormat, TransformJobReceipt, TransformMetadataPolicy, TransformSpec,
 };
-use omera_scan::{execute_batch_export, ScanStats, Scanner};
+use omera_scan::{execute_batch_export, execute_library_batch_transform, ScanStats, Scanner};
 use omera_storage::Database;
 use omera_tagger::{ModelInfo, TagPrediction, TaggerConfig, Wd14Tagger};
 use serde::{Deserialize, Serialize};
@@ -1754,6 +1754,35 @@ pub fn estimate_export_file(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("File id {file_id} not found"))?;
     omera_scan::estimate_export_single_image(&file, &options)
+}
+
+/// Batch transcode and optimize existing library images in managed vaults (IMAGE_TRANSFORM_PLAN T3).
+#[tauri::command]
+pub async fn transform_library_files_batch(
+    request: LibraryTransformRequest,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TransformJobReceipt, String> {
+    let db_guard = db(&state)?;
+    execute_library_batch_transform(
+        &db_guard,
+        &request,
+        Some(move |current, total, current_path: &str| {
+            #[derive(Serialize, Clone)]
+            struct TransformProgressEvent<'a> {
+                current: usize,
+                total: usize,
+                current_path: &'a str,
+            }
+            let evt = TransformProgressEvent {
+                current,
+                total,
+                current_path,
+            };
+            let _ = app_handle.emit("omera://transform-progress", &evt);
+            let _ = app_handle.emit("berry://transform-progress", &evt);
+        }),
+    )
 }
 
 /// Open an external URL in the system's default browser.
@@ -4414,6 +4443,73 @@ mod tests {
         assert_eq!(nested_entries.len(), 1);
         assert_eq!(nested_entries[0].name, "nested");
         assert_eq!(nested_entries[0].file_count, 1);
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_library_batch_transform_in_managed_vault() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_lib_batch_tx_{}", std::process::id()));
+        let vault_dir = temp_dir.join("vault");
+        std::fs::create_dir_all(&vault_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &vault_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let img_path = vault_dir.join("photo.png");
+        let mut img = image::RgbImage::new(80, 80);
+        for pixel in img.pixels_mut() {
+            *pixel = image::Rgb([40, 50, 60]);
+        }
+        img.save(&img_path).unwrap();
+
+        let file = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: img_path.to_string_lossy().to_string(),
+            size_bytes: 400,
+            modified_at: 1000,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: Some(5),
+            aesthetic_score: None,
+            is_favorite: true,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let file_id = db.upsert_file(&file).unwrap();
+
+        let req = LibraryTransformRequest {
+            file_ids: vec![file_id],
+            spec: TransformSpec {
+                format: TransformFormat::Webp,
+                max_edge: Some(40),
+                ..Default::default()
+            },
+            original_disposition: omera_domain::OriginalDisposition::Keep,
+        };
+
+        let receipt =
+            execute_library_batch_transform(&db, &req, None::<fn(usize, usize, &str)>).unwrap();
+        assert_eq!(receipt.total, 1);
+        assert_eq!(receipt.succeeded, 1);
+
+        let updated = db.get_file_by_id(file_id).unwrap().unwrap();
+        assert_eq!(updated.container, omera_domain::Container::WebP);
+        assert_eq!(updated.rating, Some(5));
+        assert!(updated.is_favorite);
+        assert!(std::path::Path::new(&updated.path).exists());
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

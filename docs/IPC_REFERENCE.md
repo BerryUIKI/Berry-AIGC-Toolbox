@@ -84,6 +84,7 @@ The generator validates command coverage, not Serde field compatibility, safety,
 | `export_sqlite_to_central_migration` | `options: MigrationOptions` | `Result<MigrationSummary, String>` |
 | `export_files_batch` | `options: ExportOptions` | `Result<ExportSummary, String>` |
 | `estimate_export_file` | `fileId: i64`<br>`options: ExportOptions` | `Result<ExportEstimateResult, String>` |
+| `transform_library_files_batch` | `request: LibraryTransformRequest` | `Result<TransformJobReceipt, String>` |
 | `open_external_url` | `url: String` | `Result<(), String>` |
 | `get_or_create_thumbnail` | `request: ThumbnailRequestArgs` | `Result<String, String>` |
 | `save_video_thumbnail` | `fileId: i64`<br>`modifiedAt: i64`<br>`maxEdge: u32`<br>`base64Data: String` | `Result<String, String>` |

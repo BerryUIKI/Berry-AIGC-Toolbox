@@ -130,7 +130,7 @@ Create a one-command version bump using an agreed authoritative source. Update g
 
 ### Image transformation and transcoding (#118)
 
-Follows `IMAGE_TRANSFORM_PLAN.md`. Phase 6 packages T0 (export contract/pure-Rust AVIF/WebP), T1 (instant export size estimation & savings badge) and T2 (managed vault import transcode/resize presets) are implemented and validated on `dev`. Package T3 (gallery batch transformation and retention/archive/trash handling) and T4 (advanced controls) are scheduled next.
+Follows `IMAGE_TRANSFORM_PLAN.md`. Phase 6 packages T0 (export contract/pure-Rust AVIF/WebP), T1 (instant export size estimation & savings badge), T2 (managed vault import transcode/resize presets), and T3 (gallery batch transformation with safe keep/archive/trash disposition, linked folder read-only protection, and metadata preservation) are implemented and validated on `dev`. Package T4 (advanced target-size controls and alignment presets) is scheduled next.
 
 ## In-progress code: known limits
 

@@ -615,13 +615,13 @@ where
 
         let container = Container::from_id(&ext).unwrap_or(file.container);
 
-        let mut updated_file = file.clone();
-        updated_file.path = final_str.clone();
-        updated_file.container = container;
-        updated_file.size_bytes = size_bytes;
-        updated_file.modified_at = modified_at;
-
-        if let Err(e) = db.upsert_file(&updated_file) {
+        if let Err(e) = db.update_file_transformed(
+            file.id.unwrap_or(*file_id),
+            &final_str,
+            container.id(),
+            size_bytes,
+            modified_at,
+        ) {
             failed += 1;
             items.push(TransformItemReceipt {
                 source_id_or_path: file.path.clone(),
@@ -661,6 +661,7 @@ where
 mod tests {
     use super::*;
     use image::{Rgb, RgbImage};
+    use omera_domain::ImageFile;
     use tempfile::tempdir;
 
     fn create_dummy_png(path: &Path, width: u32, height: u32) {
@@ -753,5 +754,167 @@ mod tests {
         let verified_webp = image::open(&staged_webp).unwrap();
         assert_eq!(verified_webp.width(), 60);
         assert_eq!(verified_webp.height(), 60);
+    }
+
+    #[test]
+    fn test_execute_library_batch_transform_managed_and_link() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        let link_dir = dir.path().join("link_folder");
+        fs::create_dir_all(&managed_dir).unwrap();
+        fs::create_dir_all(&link_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let m_folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+        let l_folder = db
+            .add_folder_with_mode(&link_dir.to_string_lossy(), "link", None, None, None, true)
+            .unwrap();
+
+        let m_img = managed_dir.join("photo1.png");
+        create_dummy_png(&m_img, 100, 100);
+        let l_img = link_dir.join("photo2.png");
+        create_dummy_png(&l_img, 100, 100);
+
+        let m_file = ImageFile {
+            id: None,
+            folder_id: m_folder.id,
+            path: m_img.to_string_lossy().to_string(),
+            size_bytes: 500,
+            modified_at: 1000,
+            container: Container::Png,
+            metadata: None,
+            rating: Some(4),
+            aesthetic_score: None,
+            is_favorite: true,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let m_id = db.upsert_file(&m_file).unwrap();
+
+        let l_file = ImageFile {
+            id: None,
+            folder_id: l_folder.id,
+            path: l_img.to_string_lossy().to_string(),
+            size_bytes: 500,
+            modified_at: 1000,
+            container: Container::Png,
+            metadata: None,
+            rating: Some(5),
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let l_id = db.upsert_file(&l_file).unwrap();
+
+        let req = LibraryTransformRequest {
+            file_ids: vec![m_id, l_id],
+            spec: TransformSpec {
+                format: TransformFormat::Webp,
+                max_edge: Some(50),
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Keep,
+        };
+
+        let receipt =
+            execute_library_batch_transform(&db, &req, None::<fn(usize, usize, &str)>).unwrap();
+        assert_eq!(receipt.total, 2);
+        assert_eq!(receipt.succeeded, 1);
+        assert_eq!(receipt.skipped, 1);
+        assert_eq!(receipt.failed, 0);
+
+        // Managed file was transformed and database updated
+        let updated_m = db.get_file_by_id(m_id).unwrap().unwrap();
+        assert_eq!(updated_m.container, Container::WebP);
+        assert!(updated_m.path.ends_with(".webp"));
+        assert_eq!(updated_m.rating, Some(4));
+        assert!(updated_m.is_favorite);
+        // Original was kept
+        assert!(m_img.exists());
+
+        // Link folder file was skipped and preserved untouched
+        assert!(l_img.exists());
+        let unchanged_l = db.get_file_by_id(l_id).unwrap().unwrap();
+        assert_eq!(unchanged_l.container, Container::Png);
+    }
+
+    #[test]
+    fn test_execute_library_batch_transform_archive_disposition() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        fs::create_dir_all(&managed_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let m_folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let m_img = managed_dir.join("original_art.png");
+        create_dummy_png(&m_img, 120, 120);
+
+        let m_file = ImageFile {
+            id: None,
+            folder_id: m_folder.id,
+            path: m_img.to_string_lossy().to_string(),
+            size_bytes: 800,
+            modified_at: 1000,
+            container: Container::Png,
+            metadata: None,
+            rating: Some(5),
+            aesthetic_score: None,
+            is_favorite: true,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let m_id = db.upsert_file(&m_file).unwrap();
+
+        let req = LibraryTransformRequest {
+            file_ids: vec![m_id],
+            spec: TransformSpec {
+                format: TransformFormat::Jpeg,
+                quality: Some(85),
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Archive,
+        };
+
+        let receipt =
+            execute_library_batch_transform(&db, &req, None::<fn(usize, usize, &str)>).unwrap();
+        assert_eq!(receipt.succeeded, 1);
+        assert_eq!(
+            receipt.items[0].original_action.as_deref(),
+            Some("archived")
+        );
+
+        // Original was moved into .omera_archive
+        let archive_dir = managed_dir.join(".omera_archive");
+        let archived_file = archive_dir.join("original_art.png");
+        assert!(archived_file.exists());
+        assert!(!m_img.exists());
+
+        // Transformed JPEG exists
+        let updated_m = db.get_file_by_id(m_id).unwrap().unwrap();
+        assert_eq!(updated_m.container, Container::Jpeg);
+        assert!(Path::new(&updated_m.path).exists());
     }
 }

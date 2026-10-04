@@ -131,3 +131,13 @@ test("responsive collapse separates primary actions and bundles secondary action
   assert.ok(source.includes('e.key === "Escape"'), "Escape key handler must close menus");
 });
 
+test("BatchActionBar dynamic overflow detection triggers compact mode on scrollWidth overflow", async () => {
+  const fs = await import("node:fs/promises");
+  const source = await fs.readFile(new URL("../src/components/BatchActionBar.vue", import.meta.url), "utf8");
+
+  assert.ok(source.includes("barRef"), "BatchActionBar must track barRef for dynamic overflow measurement");
+  assert.ok(source.includes("updateLayout"), "BatchActionBar must define updateLayout logic");
+  assert.ok(source.includes("scrollWidth"), "BatchActionBar must inspect scrollWidth to detect overflow");
+  assert.doesNotMatch(source, /isCompact\.value\s*=\s*width\s*<\s*920/, "Must not use fragile hardcoded 920px threshold alone");
+});
+

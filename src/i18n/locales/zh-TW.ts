@@ -236,7 +236,7 @@ export const zhTW: typeof en = {
     downloadShort: "下載推薦模型",
     downloadSource: "下載節點",
     sourceAuto: "自動 (智能優選)",
-    sourceModelScope: "ModelScope 魔搭社區 (極速節點)",
+    sourceModelScope: "中國大陸鏡像 (ModelScope)",
     sourceOfficial: "官方源 (HuggingFace)",
     sourceMirror: "鏡像加速 (HF-Mirror)",
     cancelDownload: "取消下載",

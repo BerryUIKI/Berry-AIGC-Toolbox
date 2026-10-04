@@ -236,7 +236,7 @@ export const fr: typeof en = {
     downloadShort: "Télécharger le modèle",
     downloadSource: "Source de téléchargement",
     sourceAuto: "Automatique (Optimal)",
-    sourceModelScope: "ModelScope (Miroir haute vitesse)",
+    sourceModelScope: "Miroir Chine continentale (ModelScope)",
     sourceOfficial: "Officiel (HuggingFace)",
     sourceMirror: "Miroir accéléré (HF-Mirror)",
     cancelDownload: "Annuler",

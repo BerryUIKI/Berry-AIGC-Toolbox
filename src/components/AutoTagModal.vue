@@ -35,7 +35,9 @@ const includeRating = ref<boolean>(false);
 const maxTags = ref<number>(50);
 
 const isDetecting = ref(false);
-const isApplying = ref(false);
+const isApplyingCurrent = ref(false);
+const isApplyingBatch = ref(false);
+const isApplying = computed(() => isApplyingCurrent.value || isApplyingBatch.value);
 const isDownloading = ref(false);
 const downloadProgress = ref<TaggerDownloadProgress | null>(null);
 const downloadSource = ref<"auto" | "modelscope" | "hf-mirror" | "huggingface">("auto");
@@ -149,7 +151,7 @@ async function detectTags() {
 
 async function applyToCurrent() {
   if (!props.selectedFile?.id) return;
-  isApplying.value = true;
+  isApplyingCurrent.value = true;
   message.value = null;
   try {
     const results = await invoke<TagPrediction[]>("auto_tag_file", {
@@ -166,13 +168,13 @@ async function applyToCurrent() {
   } catch (err: any) {
     message.value = { type: "error", text: String(err) };
   } finally {
-    isApplying.value = false;
+    isApplyingCurrent.value = false;
   }
 }
 
 async function applyToBatch() {
   if (props.selectedFileIds.length === 0) return;
-  isApplying.value = true;
+  isApplyingBatch.value = true;
   message.value = null;
   try {
     const result = await invoke<BatchTagResult>("batch_auto_tag_files", {
@@ -187,7 +189,7 @@ async function applyToBatch() {
   } catch (err: any) {
     message.value = { type: "error", text: String(err) };
   } finally {
-    isApplying.value = false;
+    isApplyingBatch.value = false;
   }
 }
 
@@ -580,7 +582,7 @@ onUnmounted(() => {
             @click="applyToBatch"
           >
             {{
-              isApplying
+              isApplyingBatch
                 ? t.autoTagModal.tagging
                 : t.autoTagModal.applyToBatch.replace('{count}', String(selectedFileCount))
             }}
@@ -594,7 +596,7 @@ onUnmounted(() => {
             :disabled="isApplying || isDetecting || !loadedModel || isDownloading"
             @click="applyToCurrent"
           >
-            {{ isApplying ? t.autoTagModal.tagging : t.autoTagModal.applyToCurrent }}
+            {{ isApplyingCurrent ? t.autoTagModal.tagging : t.autoTagModal.applyToCurrent }}
           </button>
         </div>
       </div>

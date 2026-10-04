@@ -728,7 +728,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 🔍
               </button>
 
-              <!-- Video actively scrubbing on hover -->
+              <!-- Video actively scrubbing on hover (strictly bounded to single active card) -->
               <video
                 v-if="isVideoContainer(file.container) && hoveredVideoPath === file.path"
                 :src="assetUrl(file.path)"
@@ -737,6 +737,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 muted
                 playsinline
                 preload="auto"
+                @loadeddata="onVideoLoadedData($event, file)"
               />
 
               <!-- Cached WebP thumbnail or image -->
@@ -755,17 +756,14 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 @error="onImageError(file.path)"
               />
 
-              <!-- Video poster when not actively hovered and no cached thumbnail -->
-              <video
+              <!-- Video placeholder when not actively hovered and thumbnail is not ready -->
+              <div
                 v-else-if="isVideoContainer(file.container)"
-                :src="assetUrl(file.path)"
-                class="thumbnail-img thumbnail-video video-poster"
+                class="thumbnail-video-placeholder"
                 :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
-                muted
-                preload="metadata"
-                playsinline
-                @loadeddata="onVideoLoadedData($event, file)"
-              />
+              >
+                <div class="video-placeholder-icon">🎬</div>
+              </div>
 
               <div
                 v-else-if="
@@ -1345,6 +1343,28 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 .thumbnail-video {
   background: #000;
   pointer-events: none;
+}
+
+.thumbnail-video-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85), rgba(30, 41, 59, 0.75));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.video-placeholder-icon {
+  font-size: 2rem;
+  opacity: 0.6;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.grid-card:hover .video-placeholder-icon {
+  opacity: 0.9;
+  transform: scale(1.1);
 }
 
 .video-active {

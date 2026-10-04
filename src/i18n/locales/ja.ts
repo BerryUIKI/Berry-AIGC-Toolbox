@@ -320,6 +320,8 @@ export const ja: typeof en = {
     copyBtn: "コピーする",
     trashBtn: "ゴミ箱へ移動",
     cancel: "キャンセル",
+    linkedReadOnlyWarning: "選択した項目に読み取り専用の外部リンクフォルダ内のファイルが含まれています。外部リンクフォルダは移動できません（コピーをご利用ください）。",
+    linkedFolderDisabled: "（読み取り専用外部フォルダ）",
   },
   dbModal: {
     title: "データベース＆ストレージ管理",

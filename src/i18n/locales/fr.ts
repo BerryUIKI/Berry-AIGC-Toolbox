@@ -320,6 +320,8 @@ export const fr: typeof en = {
     copyBtn: "Copier",
     trashBtn: "Mettre à la corbeille",
     cancel: "Annuler",
+    linkedReadOnlyWarning: "Les fichiers sélectionnés contiennent des éléments d'un dossier externe lié en lecture seule. Ils ne peuvent pas être déplacés (utilisez Copier).",
+    linkedFolderDisabled: "(Dossier externe en lecture seule)",
   },
   dbModal: {
     title: "Maintenance de la base de données",

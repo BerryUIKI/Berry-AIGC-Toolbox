@@ -320,6 +320,8 @@ export const es: typeof en = {
     copyBtn: "Copiar",
     trashBtn: "Mover a la papelera",
     cancel: "Cancelar",
+    linkedReadOnlyWarning: "Los archivos seleccionados contienen elementos de una carpeta vinculada de solo lectura. No se pueden mover (utilice Copiar).",
+    linkedFolderDisabled: "(Carpeta externa de solo lectura)",
   },
   dbModal: {
     title: "Mantenimiento de base de datos",

@@ -320,6 +320,8 @@ export const zhCN: typeof en = {
     copyBtn: "复制文件",
     trashBtn: "移至废纸篓",
     cancel: "取消",
+    linkedReadOnlyWarning: "选中的项目中包含只读外部链接目录的文件。外部链接目录受只读保护，无法移动（请使用复制操作）。",
+    linkedFolderDisabled: "（只读外部目录）",
   },
   dbModal: {
     title: "数据库与存储维护",

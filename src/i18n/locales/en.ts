@@ -318,6 +318,8 @@ export const en = {
     copyBtn: "Copy Files",
     trashBtn: "Move to Trash",
     cancel: "Cancel",
+    linkedReadOnlyWarning: "Selected files include items from a read-only external linked folder. Linked folders are protected against movement (please use Copy instead).",
+    linkedFolderDisabled: "(Read-only external folder)",
   },
   dbModal: {
     title: "Database & Storage Maintenance",

@@ -320,6 +320,8 @@ export const zhTW: typeof en = {
     copyBtn: "複製檔案",
     trashBtn: "移至垃圾桶",
     cancel: "取消",
+    linkedReadOnlyWarning: "選取的項目中包含唯讀外部連結目錄的檔案。外部連結目錄受唯讀保護，無法移動（請使用複製操作）。",
+    linkedFolderDisabled: "（唯讀外部目錄）",
   },
   dbModal: {
     title: "資料庫與儲存維護",

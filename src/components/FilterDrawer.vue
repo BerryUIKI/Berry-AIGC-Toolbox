@@ -84,6 +84,7 @@ function handleBackdrop(e: MouseEvent) {
 
 function apply() {
   const criteria: SearchCriteria = {
+    text: props.initialCriteria?.text || null,
     prompt: prompt.value.trim() || null,
     negative_prompt: negativePrompt.value.trim() || null,
     model_name: selectedModel.value || null,

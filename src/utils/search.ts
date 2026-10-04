@@ -150,3 +150,204 @@ export function countActiveFilters(c: SearchCriteria): number {
   if (c.min_fps != null || c.max_fps != null) count++;
   return count;
 }
+
+/**
+ * Tokenize input respecting single and double quotes.
+ */
+function tokenizeQuery(input: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let quoteChar = '"';
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inQuotes) {
+      if (ch === quoteChar) {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else if (ch === '"' || ch === "'") {
+      inQuotes = true;
+      quoteChar = ch;
+    } else if (/\s/.test(ch)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
+function parseRange(val: string): [number | null, number | null] {
+  if (val.includes("..")) {
+    const [start, end] = val.split("..", 2);
+    const min = start ? Number(start.trim()) : null;
+    const max = end ? Number(end.trim()) : null;
+    return [Number.isNaN(min) ? null : min, Number.isNaN(max) ? null : max];
+  }
+  if (val.includes("-") && !val.startsWith("-")) {
+    const parts = val.split("-");
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      const min = Number(parts[0].trim());
+      const max = Number(parts[1].trim());
+      return [Number.isNaN(min) ? null : min, Number.isNaN(max) ? null : max];
+    }
+  }
+  if (val.startsWith(">=")) {
+    const num = Number(val.slice(2).trim());
+    return [Number.isNaN(num) ? null : num, null];
+  }
+  if (val.startsWith(">")) {
+    const num = Number(val.slice(1).trim());
+    return [Number.isNaN(num) ? null : num, null];
+  }
+  if (val.startsWith("<=")) {
+    const num = Number(val.slice(2).trim());
+    return [null, Number.isNaN(num) ? null : num];
+  }
+  if (val.startsWith("<")) {
+    const num = Number(val.slice(1).trim());
+    return [null, Number.isNaN(num) ? null : num];
+  }
+  if (val.startsWith("=")) {
+    const num = Number(val.slice(1).trim());
+    return [Number.isNaN(num) ? null : num, Number.isNaN(num) ? null : num];
+  }
+  const exact = Number(val.trim());
+  return [Number.isNaN(exact) ? null : exact, Number.isNaN(exact) ? null : exact];
+}
+
+/**
+ * Parse a user query string into structured SearchCriteria and bare text terms.
+ */
+export function parseSearchQuery(query: string): SearchCriteria {
+  const criteria: SearchCriteria = {};
+  if (!query || !query.trim()) return criteria;
+
+  const rawTokens = tokenizeQuery(query);
+  const tokens: string[] = [];
+  let idx = 0;
+  while (idx < rawTokens.length) {
+    const tok = rawTokens[idx];
+    if (tok.endsWith(":") && idx + 1 < rawTokens.length) {
+      tokens.push(tok + rawTokens[idx + 1]);
+      idx += 2;
+    } else {
+      tokens.push(tok);
+      idx += 1;
+    }
+  }
+
+  const bareTerms: string[] = [];
+
+  for (const token of tokens) {
+    const colonIdx = token.indexOf(":");
+    if (colonIdx > 0) {
+      const key = token.slice(0, colonIdx).trim().toLowerCase();
+      const val = token.slice(colonIdx + 1).trim();
+      if (!val) continue;
+
+      switch (key) {
+        case "prompt":
+          criteria.prompt = val;
+          break;
+        case "neg":
+        case "negative":
+        case "negative_prompt":
+          criteria.negative_prompt = val;
+          break;
+        case "model":
+        case "model_name":
+          criteria.model_name = val;
+          break;
+        case "hash":
+        case "model_hash":
+          criteria.model_hash = val;
+          break;
+        case "sampler":
+          criteria.sampler = val;
+          break;
+        case "steps": {
+          const [min, max] = parseRange(val);
+          criteria.min_steps = min;
+          criteria.max_steps = max;
+          break;
+        }
+        case "cfg":
+        case "cfg_scale": {
+          const [min, max] = parseRange(val);
+          criteria.min_cfg = min;
+          criteria.max_cfg = max;
+          break;
+        }
+        case "rating": {
+          const [min, max] = parseRange(val);
+          criteria.min_rating = min;
+          criteria.max_rating = max;
+          break;
+        }
+        case "aesthetic":
+        case "aesthetic_score": {
+          const [min, max] = parseRange(val);
+          criteria.min_aesthetic = min;
+          criteria.max_aesthetic = max;
+          break;
+        }
+        case "fav":
+        case "favorite": {
+          const lower = val.toLowerCase();
+          if (["true", "yes", "1"].includes(lower)) criteria.is_favorite = true;
+          else if (["false", "no", "0"].includes(lower)) criteria.is_favorite = false;
+          break;
+        }
+        case "nsfw": {
+          const lower = val.toLowerCase();
+          if (["true", "yes", "1"].includes(lower)) criteria.is_nsfw = true;
+          else if (["false", "no", "0"].includes(lower)) criteria.is_nsfw = false;
+          break;
+        }
+        case "is": {
+          const lower = val.toLowerCase();
+          if (["fav", "favorite"].includes(lower)) criteria.is_favorite = true;
+          else if (lower === "nsfw") criteria.is_nsfw = true;
+          else if (lower === "sfw") criteria.is_nsfw = false;
+          break;
+        }
+        case "type":
+          criteria.media_type = val;
+          break;
+        case "duration": {
+          const [min, max] = parseRange(val);
+          criteria.min_duration = min;
+          criteria.max_duration = max;
+          break;
+        }
+        case "fps": {
+          const [min, max] = parseRange(val);
+          criteria.min_fps = min;
+          criteria.max_fps = max;
+          break;
+        }
+        default:
+          bareTerms.push(token);
+          break;
+      }
+    } else {
+      bareTerms.push(token);
+    }
+  }
+
+  if (bareTerms.length > 0) {
+    criteria.text = bareTerms.join(" ");
+  }
+
+  return criteria;
+}

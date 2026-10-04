@@ -46,7 +46,7 @@ import InspectorPane from "./components/InspectorPane.vue";
 import StatusBar from "./components/StatusBar.vue";
 import BatchActionBar from "./components/BatchActionBar.vue";
 import { t } from "./i18n";
-import { countActiveFilters, criteriaToQuery } from "./utils/search";
+import { countActiveFilters, criteriaToQuery, parseSearchQuery } from "./utils/search";
 import {
   getStorageItem,
   setStorageItem,
@@ -1822,6 +1822,9 @@ function exitSimilaritySearch() {
 
 function onSearch(query: string) {
   searchQuery.value = query;
+  if (!isSemanticSearch.value) {
+    activeCriteria.value = parseSearchQuery(query);
+  }
   void loadFiles();
 }
 
@@ -1846,7 +1849,7 @@ function onResetFilters() {
 
 function onApplyStatsSearch(query: string) {
   searchQuery.value = query;
-  activeCriteria.value = {};
+  activeCriteria.value = parseSearchQuery(query);
   void loadFiles();
 }
 
@@ -2187,6 +2190,8 @@ function onResetZoom() {
               v-model:is-semantic="isSemanticSearch"
               :loading="filesLoading"
               :result-count="searchQuery.trim() ? galleryTotal : null"
+              :models="distinctModels"
+              :tags="tags.map((t) => t.name)"
               @search="onSearch"
               @clear="onClearSearch"
               @open-clip-manager="clipModalOpen = true"

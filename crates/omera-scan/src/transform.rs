@@ -10,9 +10,9 @@
 
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, GenericImageView};
 use omera_domain::{
-    Container, ImportTransformRequest, LibraryTransformRequest, OriginalDisposition,
+    Container, Folder, ImportTransformRequest, LibraryTransformRequest, OriginalDisposition,
     TransformCollisionPolicy, TransformFormat, TransformItemReceipt, TransformItemStatus,
-    TransformJobReceipt, TransformSpec,
+    TransformJobReceipt, TransformMetadataPolicy, TransformSpec,
 };
 use omera_storage::Database;
 use std::{
@@ -282,6 +282,404 @@ pub fn resolve_publication_path(
     }
 }
 
+/// Validate destination folder exists and has folder_type == "managed".
+pub fn validate_managed_destination_folder(
+    db: &Database,
+    folder_id: i64,
+) -> Result<Folder, String> {
+    let folders = db.list_folders().map_err(|e| e.to_string())?;
+    let folder = folders
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| format!("Target managed folder {folder_id} not found"))?;
+
+    if folder.folder_type != "managed" {
+        return Err(format!(
+            "Target folder {} is not a managed vault folder",
+            folder_id
+        ));
+    }
+
+    let dest_dir = Path::new(&folder.path);
+    if !dest_dir.is_dir() {
+        return Err(format!(
+            "Managed destination directory does not exist: {}",
+            folder.path
+        ));
+    }
+
+    Ok(folder)
+}
+
+/// Normalize path string to remove Windows verbatim `\\?\` prefix and canonicalize if possible.
+fn normalize_path_string(path: &Path) -> String {
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let text = canonical.to_string_lossy();
+    text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
+}
+
+/// Internal publication result for a single imported file.
+pub struct PublishedImportItem {
+    pub receipt: TransformItemReceipt,
+    pub file_id: Option<i64>,
+}
+
+/// Publish a single file into a managed vault folder with metadata policy,
+/// sidecar preservation, and interruption compensation.
+pub fn publish_managed_import_item(
+    db: &Database,
+    src_path_str: &str,
+    dest_dir: &Path,
+    staging_dir: &Path,
+    folder_id: i64,
+    transform_spec: Option<&TransformSpec>,
+) -> PublishedImportItem {
+    let src_path = Path::new(src_path_str);
+    if !src_path.is_file() {
+        return PublishedImportItem {
+            receipt: TransformItemReceipt {
+                source_id_or_path: src_path_str.to_string(),
+                output_id_or_path: None,
+                status: TransformItemStatus::Failed,
+                error_code: Some("Source file does not exist or is not a file".to_string()),
+                original_action: Some("kept_intact".to_string()),
+            },
+            file_id: None,
+        };
+    }
+
+    let supported_exts = ["png", "jpg", "jpeg", "webp", "avif", "mp4", "webm"];
+    let raw_ext = src_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if !supported_exts.contains(&raw_ext.as_str()) {
+        return PublishedImportItem {
+            receipt: TransformItemReceipt {
+                source_id_or_path: src_path_str.to_string(),
+                output_id_or_path: None,
+                status: TransformItemStatus::Failed,
+                error_code: Some(format!("Unsupported media format: {raw_ext}")),
+                original_action: Some("kept_intact".to_string()),
+            },
+            file_id: None,
+        };
+    }
+
+    let meta = match src_path.metadata() {
+        Ok(m) => m,
+        Err(e) => {
+            return PublishedImportItem {
+                receipt: TransformItemReceipt {
+                    source_id_or_path: src_path_str.to_string(),
+                    output_id_or_path: None,
+                    status: TransformItemStatus::Failed,
+                    error_code: Some(format!("Failed to read source metadata: {e}")),
+                    original_action: Some("kept_intact".to_string()),
+                },
+                file_id: None,
+            };
+        }
+    };
+
+    if meta.len() == 0 {
+        return PublishedImportItem {
+            receipt: TransformItemReceipt {
+                source_id_or_path: src_path_str.to_string(),
+                output_id_or_path: None,
+                status: TransformItemStatus::Failed,
+                error_code: Some("Source file is empty (0 bytes)".to_string()),
+                original_action: Some("kept_intact".to_string()),
+            },
+            file_id: None,
+        };
+    }
+
+    let now_ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    let file_mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(now_ts);
+
+    let is_video = raw_ext == "mp4" || raw_ext == "webm";
+    let should_transform = match transform_spec {
+        Some(spec) => {
+            !is_video
+                && (spec.format != TransformFormat::Original
+                    || spec.max_edge.is_some()
+                    || spec.quality.is_some()
+                    || spec.scale_percent.is_some()
+                    || spec.align_multiple.is_some()
+                    || spec.target_size_kb.is_some())
+        }
+        None => false,
+    };
+
+    let file_stem = src_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("image");
+
+    let final_ext: String;
+    let published_path: PathBuf;
+    let mut copied_sidecars = Vec::new();
+
+    if should_transform {
+        let spec = transform_spec.unwrap();
+        let target_ext = resolve_extension(src_path, spec.format);
+        let staged_res = transform_file_staged(src_path, staging_dir, spec);
+        let staged_path = match staged_res {
+            Ok(p) => p,
+            Err(e) => {
+                return PublishedImportItem {
+                    receipt: TransformItemReceipt {
+                        source_id_or_path: src_path_str.to_string(),
+                        output_id_or_path: None,
+                        status: TransformItemStatus::Failed,
+                        error_code: Some(e.to_string()),
+                        original_action: Some("kept_intact".to_string()),
+                    },
+                    file_id: None,
+                };
+            }
+        };
+
+        let pub_res =
+            resolve_publication_path(dest_dir, file_stem, &target_ext, spec.collision_policy);
+        let pub_path = match pub_res {
+            Ok(p) => p,
+            Err(TransformError::DestinationExistsSkipped) => {
+                let _ = fs::remove_file(&staged_path);
+                return PublishedImportItem {
+                    receipt: TransformItemReceipt {
+                        source_id_or_path: src_path_str.to_string(),
+                        output_id_or_path: None,
+                        status: TransformItemStatus::Skipped,
+                        error_code: Some("destination_exists_skipped".to_string()),
+                        original_action: Some("kept_intact".to_string()),
+                    },
+                    file_id: None,
+                };
+            }
+            Err(e) => {
+                let _ = fs::remove_file(&staged_path);
+                return PublishedImportItem {
+                    receipt: TransformItemReceipt {
+                        source_id_or_path: src_path_str.to_string(),
+                        output_id_or_path: None,
+                        status: TransformItemStatus::Failed,
+                        error_code: Some(e.to_string()),
+                        original_action: Some("kept_intact".to_string()),
+                    },
+                    file_id: None,
+                };
+            }
+        };
+
+        if let Err(e) = fs::rename(&staged_path, &pub_path) {
+            let _ = fs::remove_file(&staged_path);
+            return PublishedImportItem {
+                receipt: TransformItemReceipt {
+                    source_id_or_path: src_path_str.to_string(),
+                    output_id_or_path: None,
+                    status: TransformItemStatus::Failed,
+                    error_code: Some(format!("Failed to publish staged file to destination: {e}")),
+                    original_action: Some("kept_intact".to_string()),
+                },
+                file_id: None,
+            };
+        }
+
+        if spec.metadata_policy != TransformMetadataPolicy::StripAll {
+            for sidecar_ext in ["txt", "json"] {
+                let src_sidecar = src_path.with_extension(sidecar_ext);
+                if src_sidecar != src_path && src_sidecar.is_file() {
+                    let dest_sidecar = pub_path.with_extension(sidecar_ext);
+                    if fs::copy(&src_sidecar, &dest_sidecar).is_ok() {
+                        copied_sidecars.push(dest_sidecar);
+                    }
+                }
+            }
+        }
+
+        published_path = pub_path;
+        final_ext = target_ext;
+    } else {
+        let collision_policy = transform_spec
+            .map(|s| s.collision_policy)
+            .unwrap_or(TransformCollisionPolicy::Rename);
+
+        let initial_candidate = dest_dir.join(format!("{file_stem}.{raw_ext}"));
+        let (pub_path, needs_copy) = if initial_candidate.exists() {
+            let is_same_size = initial_candidate
+                .metadata()
+                .map(|m| m.len() == meta.len())
+                .unwrap_or(false);
+            if is_same_size {
+                (initial_candidate, false)
+            } else {
+                match resolve_publication_path(dest_dir, file_stem, &raw_ext, collision_policy) {
+                    Ok(p) => (p, true),
+                    Err(TransformError::DestinationExistsSkipped) => {
+                        return PublishedImportItem {
+                            receipt: TransformItemReceipt {
+                                source_id_or_path: src_path_str.to_string(),
+                                output_id_or_path: None,
+                                status: TransformItemStatus::Skipped,
+                                error_code: Some("destination_exists_skipped".to_string()),
+                                original_action: Some("kept_intact".to_string()),
+                            },
+                            file_id: None,
+                        };
+                    }
+                    Err(e) => {
+                        return PublishedImportItem {
+                            receipt: TransformItemReceipt {
+                                source_id_or_path: src_path_str.to_string(),
+                                output_id_or_path: None,
+                                status: TransformItemStatus::Failed,
+                                error_code: Some(e.to_string()),
+                                original_action: Some("kept_intact".to_string()),
+                            },
+                            file_id: None,
+                        };
+                    }
+                }
+            }
+        } else {
+            (initial_candidate, true)
+        };
+
+        if needs_copy {
+            if let Err(e) = fs::copy(src_path, &pub_path) {
+                return PublishedImportItem {
+                    receipt: TransformItemReceipt {
+                        source_id_or_path: src_path_str.to_string(),
+                        output_id_or_path: None,
+                        status: TransformItemStatus::Failed,
+                        error_code: Some(format!("Failed to copy file to destination: {e}")),
+                        original_action: Some("kept_intact".to_string()),
+                    },
+                    file_id: None,
+                };
+            }
+
+            let allow_sidecars = transform_spec
+                .map(|s| s.metadata_policy != TransformMetadataPolicy::StripAll)
+                .unwrap_or(true);
+
+            if allow_sidecars {
+                for sidecar_ext in ["txt", "json"] {
+                    let src_sidecar = src_path.with_extension(sidecar_ext);
+                    if src_sidecar != src_path && src_sidecar.is_file() {
+                        let dest_sidecar = pub_path.with_extension(sidecar_ext);
+                        if fs::copy(&src_sidecar, &dest_sidecar).is_ok() {
+                            copied_sidecars.push(dest_sidecar);
+                        }
+                    }
+                }
+            }
+        }
+
+        published_path = pub_path;
+        final_ext = raw_ext;
+    }
+
+    let container = match final_ext.as_str() {
+        "png" => Container::Png,
+        "jpg" | "jpeg" => Container::Jpeg,
+        "webp" => Container::WebP,
+        "avif" => Container::Avif,
+        "mp4" => Container::Mp4,
+        "webm" => Container::Webm,
+        _ => Container::Png,
+    };
+
+    let mut metadata = omera_metadata::extract_metadata(container, &published_path)
+        .or_else(|| omera_metadata::extract_metadata(container, src_path));
+
+    if let Some(spec) = transform_spec {
+        match spec.metadata_policy {
+            TransformMetadataPolicy::StripAll => {
+                metadata = None;
+            }
+            TransformMetadataPolicy::StripAi => {
+                if let Some(m) = metadata.as_mut() {
+                    m.prompt = None;
+                    m.negative_prompt = None;
+                    m.parameters = None;
+                    m.raw = None;
+                }
+            }
+            TransformMetadataPolicy::KeepSupported => {}
+        }
+    }
+
+    let is_nsfw = metadata
+        .as_ref()
+        .map(omera_metadata::detect_nsfw_from_metadata)
+        .unwrap_or(false);
+
+    let tgt_str = normalize_path_string(&published_path);
+    let final_meta = published_path.metadata().unwrap_or(meta);
+
+    let image_file = omera_domain::ImageFile {
+        id: None,
+        folder_id,
+        path: tgt_str.clone(),
+        size_bytes: final_meta.len(),
+        modified_at: file_mtime,
+        container,
+        metadata,
+        rating: None,
+        aesthetic_score: None,
+        is_favorite: false,
+        is_nsfw,
+        stack_id: None,
+        stack_order: 0,
+    };
+
+    let file_id = match db.upsert_file(&image_file) {
+        Ok(id) => id,
+        Err(e) => {
+            // Compensation / rollback: clean up newly published file and copied sidecars
+            let _ = fs::remove_file(&published_path);
+            for sidecar in copied_sidecars {
+                let _ = fs::remove_file(sidecar);
+            }
+
+            return PublishedImportItem {
+                receipt: TransformItemReceipt {
+                    source_id_or_path: src_path_str.to_string(),
+                    output_id_or_path: Some(tgt_str),
+                    status: TransformItemStatus::Failed,
+                    error_code: Some(format!("Database indexing failed: {e}")),
+                    original_action: Some("kept_intact".to_string()),
+                },
+                file_id: None,
+            };
+        }
+    };
+
+    PublishedImportItem {
+        receipt: TransformItemReceipt {
+            source_id_or_path: src_path_str.to_string(),
+            output_id_or_path: Some(tgt_str),
+            status: TransformItemStatus::Succeeded,
+            error_code: None,
+            original_action: Some("kept_intact".to_string()),
+        },
+        file_id: Some(file_id),
+    }
+}
+
 /// Execute managed import transformation (Image Transform Plan T2).
 pub fn execute_managed_import_transform<F>(
     db: &Database,
@@ -291,25 +689,8 @@ pub fn execute_managed_import_transform<F>(
 where
     F: Fn(usize, usize, &str) + Send + Sync,
 {
-    let target_folder = db
-        .list_folders()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .find(|f| f.id == request.managed_destination_id)
-        .ok_or_else(|| {
-            format!(
-                "Target managed folder {} not found",
-                request.managed_destination_id
-            )
-        })?;
-
+    let target_folder = validate_managed_destination_folder(db, request.managed_destination_id)?;
     let dest_dir = PathBuf::from(&target_folder.path);
-    if !dest_dir.is_dir() {
-        return Err(format!(
-            "Managed destination directory does not exist: {}",
-            target_folder.path
-        ));
-    }
 
     let staging_dir = dest_dir.join(".omera_staging");
     let _ = fs::create_dir_all(&staging_dir);
@@ -338,132 +719,23 @@ where
             cb(index + 1, total, src_name);
         }
 
-        let file_stem = src_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("image");
-        let ext = resolve_extension(src_path, request.spec.format);
+        let outcome = publish_managed_import_item(
+            db,
+            src_str,
+            &dest_dir,
+            &staging_dir,
+            target_folder.id,
+            Some(&request.spec),
+        );
 
-        // Stage and verify
-        let staged_res = transform_file_staged(src_path, &staging_dir, &request.spec);
-        let staged_path = match staged_res {
-            Ok(p) => p,
-            Err(e) => {
-                failed += 1;
-                items.push(TransformItemReceipt {
-                    source_id_or_path: src_str.clone(),
-                    output_id_or_path: None,
-                    status: TransformItemStatus::Failed,
-                    error_code: Some(e.to_string()),
-                    original_action: Some("kept_intact".to_string()),
-                });
-                continue;
-            }
-        };
-
-        // Resolve publication path
-        let final_path_res =
-            resolve_publication_path(&dest_dir, file_stem, &ext, request.spec.collision_policy);
-        let final_path = match final_path_res {
-            Ok(p) => p,
-            Err(TransformError::DestinationExistsSkipped) => {
-                let _ = fs::remove_file(&staged_path);
-                skipped += 1;
-                items.push(TransformItemReceipt {
-                    source_id_or_path: src_str.clone(),
-                    output_id_or_path: None,
-                    status: TransformItemStatus::Skipped,
-                    error_code: Some("destination_exists_skipped".to_string()),
-                    original_action: Some("kept_intact".to_string()),
-                });
-                continue;
-            }
-            Err(e) => {
-                let _ = fs::remove_file(&staged_path);
-                failed += 1;
-                items.push(TransformItemReceipt {
-                    source_id_or_path: src_str.clone(),
-                    output_id_or_path: None,
-                    status: TransformItemStatus::Failed,
-                    error_code: Some(e.to_string()),
-                    original_action: Some("kept_intact".to_string()),
-                });
-                continue;
-            }
-        };
-
-        // Atomically publish
-        if let Err(e) = fs::rename(&staged_path, &final_path) {
-            let _ = fs::remove_file(&staged_path);
-            failed += 1;
-            items.push(TransformItemReceipt {
-                source_id_or_path: src_str.clone(),
-                output_id_or_path: None,
-                status: TransformItemStatus::Failed,
-                error_code: Some(format!("Failed to publish staged file: {e}")),
-                original_action: Some("kept_intact".to_string()),
-            });
-            continue;
+        match outcome.receipt.status {
+            TransformItemStatus::Succeeded => succeeded += 1,
+            TransformItemStatus::Failed => failed += 1,
+            TransformItemStatus::Skipped => skipped += 1,
+            TransformItemStatus::Canceled => {}
         }
 
-        // Register published file in database
-        let final_str = final_path.to_string_lossy().into_owned();
-        let final_meta = fs::metadata(&final_path);
-        let size_bytes = final_meta.as_ref().map(|m| m.len()).unwrap_or(0);
-        let modified_at = final_meta
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-
-        let container = Container::from_id(&ext).unwrap_or(Container::Png);
-
-        // Try extracting metadata from final path or source path
-        let extracted = omera_metadata::extract_metadata(container, &final_path)
-            .or_else(|| omera_metadata::extract_metadata(container, src_path));
-
-        let is_nsfw = extracted
-            .as_ref()
-            .map(omera_metadata::detect_nsfw_from_metadata)
-            .unwrap_or(false);
-
-        let image_file = omera_domain::ImageFile {
-            id: None,
-            folder_id: target_folder.id,
-            path: final_str.clone(),
-            size_bytes,
-            modified_at,
-            container,
-            metadata: extracted,
-            rating: None,
-            aesthetic_score: None,
-            is_favorite: false,
-            is_nsfw,
-            stack_id: None,
-            stack_order: 0,
-        };
-
-        if let Err(e) = db.upsert_file(&image_file) {
-            failed += 1;
-            items.push(TransformItemReceipt {
-                source_id_or_path: src_str.clone(),
-                output_id_or_path: Some(final_str),
-                status: TransformItemStatus::Failed,
-                error_code: Some(format!("Database indexing failed: {e}")),
-                original_action: Some("kept_intact".to_string()),
-            });
-            continue;
-        }
-
-        succeeded += 1;
-        items.push(TransformItemReceipt {
-            source_id_or_path: src_str.clone(),
-            output_id_or_path: Some(final_str),
-            status: TransformItemStatus::Succeeded,
-            error_code: None,
-            original_action: Some("kept_intact".to_string()),
-        });
+        items.push(outcome.receipt);
     }
 
     // Clean up empty staging dir
@@ -479,6 +751,69 @@ where
         canceled: 0,
         items,
     })
+}
+
+/// Batch import external files into a managed folder using the unified publication service.
+pub fn import_files_to_managed_folder(
+    db: &Database,
+    file_paths: &[String],
+    target_folder_id: i64,
+    transform_spec: Option<&TransformSpec>,
+) -> Result<Vec<i64>, String> {
+    if file_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let target_folder = validate_managed_destination_folder(db, target_folder_id)?;
+    let dest_dir = PathBuf::from(&target_folder.path);
+
+    let should_transform = match transform_spec {
+        Some(spec) => {
+            spec.format != TransformFormat::Original
+                || spec.max_edge.is_some()
+                || spec.quality.is_some()
+                || spec.scale_percent.is_some()
+                || spec.align_multiple.is_some()
+                || spec.target_size_kb.is_some()
+        }
+        None => false,
+    };
+
+    let staging_dir = dest_dir.join(".omera_staging");
+    if should_transform {
+        let _ = fs::create_dir_all(&staging_dir);
+    }
+
+    let mut imported_ids = Vec::new();
+
+    for src_path_str in file_paths {
+        let outcome = publish_managed_import_item(
+            db,
+            src_path_str,
+            &dest_dir,
+            &staging_dir,
+            target_folder.id,
+            transform_spec,
+        );
+
+        if let Some(file_id) = outcome.file_id {
+            imported_ids.push(file_id);
+        } else if outcome.receipt.status == TransformItemStatus::Failed {
+            if should_transform {
+                let _ = fs::remove_dir(&staging_dir);
+            }
+            return Err(outcome
+                .receipt
+                .error_code
+                .unwrap_or_else(|| format!("Failed to import {src_path_str}")));
+        }
+    }
+
+    if should_transform {
+        let _ = fs::remove_dir(&staging_dir);
+    }
+
+    Ok(imported_ids)
 }
 
 /// Execute batch library transformation on existing managed assets (Image Transform Plan T3).
@@ -1020,5 +1355,246 @@ mod tests {
         assert!(staged.exists());
         let meta = fs::metadata(&staged).unwrap();
         assert!(meta.len() > 0);
+    }
+
+    #[test]
+    fn test_managed_import_rejects_linked_folder_with_zero_side_effects() {
+        let dir = tempdir().unwrap();
+        let link_dir = dir.path().join("link_folder");
+        let external_dir = dir.path().join("external");
+        fs::create_dir_all(&link_dir).unwrap();
+        fs::create_dir_all(&external_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let link_folder = db
+            .add_folder_with_mode(&link_dir.to_string_lossy(), "link", None, None, None, true)
+            .unwrap();
+
+        let src_img = external_dir.join("photo.png");
+        create_dummy_png(&src_img, 64, 64);
+
+        // 1. Test execute_managed_import_transform rejects linked folder
+        let req = ImportTransformRequest {
+            managed_destination_id: link_folder.id,
+            source_paths: vec![src_img.to_string_lossy().to_string()],
+            spec: TransformSpec::default(),
+            source_disposition: omera_domain::transform::ImportSourceDisposition::Keep,
+        };
+
+        let err = execute_managed_import_transform(&db, &req, None::<fn(usize, usize, &str)>)
+            .unwrap_err();
+        assert!(
+            err.contains("not a managed vault folder"),
+            "Error was: {err}"
+        );
+
+        // Verify zero filesystem side effects in link folder
+        let link_entries: Vec<_> = fs::read_dir(&link_dir).unwrap().collect();
+        assert_eq!(
+            link_entries.len(),
+            0,
+            "Linked folder must have no created files"
+        );
+
+        // 2. Test import_files_to_managed_folder rejects linked folder
+        let err2 = import_files_to_managed_folder(
+            &db,
+            &[src_img.to_string_lossy().to_string()],
+            link_folder.id,
+            None,
+        )
+        .unwrap_err();
+        assert!(
+            err2.contains("not a managed vault folder"),
+            "Error was: {err2}"
+        );
+
+        // Verify zero files in database
+        let files = db.list_files(link_folder.id).unwrap();
+        assert_eq!(files.len(), 0);
+    }
+
+    #[test]
+    fn test_managed_import_collision_rename_and_skip() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        let external_dir = dir.path().join("external");
+        fs::create_dir_all(&managed_dir).unwrap();
+        fs::create_dir_all(&external_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let src1 = external_dir.join("pic.png");
+        create_dummy_png(&src1, 50, 50);
+
+        // First import creates pic.png
+        let ids1 = import_files_to_managed_folder(
+            &db,
+            &[src1.to_string_lossy().to_string()],
+            folder.id,
+            None,
+        )
+        .unwrap();
+        assert_eq!(ids1.len(), 1);
+        assert!(managed_dir.join("pic.png").exists());
+
+        // Create different file with same name
+        let src2 = external_dir.join("pic2.png");
+        create_dummy_png(&src2, 80, 80);
+        let src2_renamed = external_dir.join("sub").join("pic.png");
+        fs::create_dir_all(src2_renamed.parent().unwrap()).unwrap();
+        fs::copy(&src2, &src2_renamed).unwrap();
+
+        // Second import with collision Rename -> pic_1.png
+        let rename_spec = TransformSpec {
+            collision_policy: TransformCollisionPolicy::Rename,
+            ..Default::default()
+        };
+        let ids2 = import_files_to_managed_folder(
+            &db,
+            &[src2_renamed.to_string_lossy().to_string()],
+            folder.id,
+            Some(&rename_spec),
+        )
+        .unwrap();
+        assert_eq!(ids2.len(), 1);
+        assert!(managed_dir.join("pic_1.png").exists());
+
+        // Third import with collision Skip -> skips and returns ok without adding new record
+        let skip_spec = TransformSpec {
+            collision_policy: TransformCollisionPolicy::Skip,
+            ..Default::default()
+        };
+        let ids3 = import_files_to_managed_folder(
+            &db,
+            &[src2_renamed.to_string_lossy().to_string()],
+            folder.id,
+            Some(&skip_spec),
+        )
+        .unwrap();
+        assert_eq!(ids3.len(), 0);
+
+        // Source remains kept intact
+        assert!(src1.exists());
+        assert!(src2_renamed.exists());
+    }
+
+    #[test]
+    fn test_managed_import_sidecars_and_metadata_policy() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        let external_dir = dir.path().join("external");
+        fs::create_dir_all(&managed_dir).unwrap();
+        fs::create_dir_all(&external_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let src_img = external_dir.join("art.png");
+        create_dummy_png(&src_img, 60, 60);
+        let sidecar_txt = external_dir.join("art.txt");
+        fs::write(&sidecar_txt, "prompt: magical forest, rating: safe").unwrap();
+        let sidecar_json = external_dir.join("art.json");
+        fs::write(&sidecar_json, r#"{"prompt":"magical forest"}"#).unwrap();
+
+        // Test StripAll drops sidecars
+        let strip_all_spec = TransformSpec {
+            metadata_policy: TransformMetadataPolicy::StripAll,
+            ..Default::default()
+        };
+        let ids = import_files_to_managed_folder(
+            &db,
+            &[src_img.to_string_lossy().to_string()],
+            folder.id,
+            Some(&strip_all_spec),
+        )
+        .unwrap();
+        assert_eq!(ids.len(), 1);
+
+        let file = db.get_file_by_id(ids[0]).unwrap().unwrap();
+        assert!(file.metadata.is_none());
+        assert!(!managed_dir.join("art.txt").exists());
+        assert!(!managed_dir.join("art.json").exists());
+    }
+
+    #[test]
+    fn test_managed_import_db_failure_compensation() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        let external_dir = dir.path().join("external");
+        fs::create_dir_all(&managed_dir).unwrap();
+        fs::create_dir_all(&external_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let _folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        let src_img = external_dir.join("test_comp.png");
+        create_dummy_png(&src_img, 60, 60);
+        let sidecar = external_dir.join("test_comp.txt");
+        fs::write(&sidecar, "sidecar text").unwrap();
+
+        let staging = managed_dir.join(".omera_staging");
+        fs::create_dir_all(&staging).unwrap();
+
+        // Pass invalid folder_id (e.g. 99999) to publish_managed_import_item so db.upsert_file fails due to foreign key constraint
+        let item = publish_managed_import_item(
+            &db,
+            &src_img.to_string_lossy(),
+            &managed_dir,
+            &staging,
+            99999, // invalid foreign key
+            None,
+        );
+
+        assert_eq!(item.receipt.status, TransformItemStatus::Failed);
+        assert!(item.file_id.is_none());
+        assert!(item
+            .receipt
+            .error_code
+            .as_ref()
+            .unwrap()
+            .contains("Database indexing failed"));
+
+        // Compensation: published file and sidecar must NOT exist in managed_dir
+        assert!(
+            !managed_dir.join("test_comp.png").exists(),
+            "Published image must be rolled back on DB failure"
+        );
+        assert!(
+            !managed_dir.join("test_comp.txt").exists(),
+            "Sidecar must be rolled back on DB failure"
+        );
+
+        // Source file and sidecar remain intact
+        assert!(src_img.exists(), "Source image must remain intact");
+        assert!(sidecar.exists(), "Source sidecar must remain intact");
     }
 }

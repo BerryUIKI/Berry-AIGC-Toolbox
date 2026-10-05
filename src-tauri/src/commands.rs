@@ -29,7 +29,7 @@ use omera_domain::{
     LibraryTransformRequest, LoraModel, MigrationOptions, MigrationSummary, ModelCacheEntry,
     MutationResult, NormalizedPath, PathResolver, PipelineDetectedPath, PromptStackCandidate,
     PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
-    TransformFormat, TransformJobReceipt, TransformMetadataPolicy, TransformSpec,
+    TransformJobReceipt, TransformSpec,
 };
 use omera_scan::{execute_batch_export, execute_library_batch_transform, ScanStats, Scanner};
 use omera_storage::Database;
@@ -755,240 +755,30 @@ pub fn import_files_to_managed_vault_inner(
         return Ok(Vec::new());
     }
 
-    let managed_folder = {
+    let target_id = if let Some(id) = target_folder_id {
+        // Enforce target folder is managed and exists
+        let folder = omera_scan::validate_managed_destination_folder(db, id)?;
+        folder.id
+    } else {
         let folders = db.list_folders().map_err(|e| e.to_string())?;
-
-        if let Some(target_id) = target_folder_id {
-            folders
-                .into_iter()
-                .find(|f| f.id == target_id && f.folder_type == "managed")
-                .ok_or_else(|| format!("Target folder {target_id} is not a managed vault folder"))?
-        } else {
-            folders
-                .into_iter()
-                .find(|f| f.folder_type == "managed")
-                .ok_or_else(|| {
-                    "No managed vault folder found. Please create a managed vault folder first."
-                        .to_string()
-                })?
-        }
+        folders
+            .into_iter()
+            .find(|f| f.folder_type == "managed")
+            .map(|f| f.id)
+            .ok_or_else(|| {
+                "No managed vault folder found. Please create a managed vault folder first."
+                    .to_string()
+            })?
     };
 
-    let dest_dir = Path::new(&managed_folder.path);
-    std::fs::create_dir_all(dest_dir)
-        .map_err(|e| format!("Failed to create destination directory: {e}"))?;
+    let imported_ids =
+        omera_scan::import_files_to_managed_folder(db, file_paths, target_id, transform_spec)?;
 
-    let supported_exts = ["png", "jpg", "jpeg", "webp", "avif", "mp4", "webm"];
-    let now_ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let should_transform = match transform_spec {
-        Some(spec) => {
-            spec.format != TransformFormat::Original
-                || spec.max_edge.is_some()
-                || spec.quality.is_some()
-        }
-        None => false,
-    };
-
-    let staging_dir = dest_dir.join(".omera_staging");
-    if should_transform {
-        let _ = std::fs::create_dir_all(&staging_dir);
-    }
-
-    let mut imported_ids = Vec::new();
-
-    for src_path_str in file_paths {
-        let src_path = Path::new(&src_path_str);
-        if !src_path.is_file() {
-            continue;
-        }
-
-        let mut ext = src_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        if !supported_exts.contains(&ext.as_str()) {
-            continue;
-        }
-
-        let meta = match src_path.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        if meta.len() == 0 {
-            continue;
-        }
-
-        let file_mtime = meta
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(now_ts);
-
-        let dest_path: PathBuf;
-
-        if should_transform && ext != "mp4" && ext != "webm" {
-            let spec = transform_spec.unwrap();
-            let staged_res = omera_scan::transform_file_staged(src_path, &staging_dir, spec);
-            let staged_path = match staged_res {
-                Ok(p) => p,
-                Err(e) => return Err(format!("Failed to transform image {src_path_str}: {e}")),
-            };
-
-            let target_ext = omera_scan::resolve_extension(src_path, spec.format);
-            let stem = src_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("image");
-
-            let pub_path = omera_scan::resolve_publication_path(
-                dest_dir,
-                stem,
-                &target_ext,
-                spec.collision_policy,
-            )
-            .map_err(|e| e.to_string())?;
-
-            if let Err(e) = std::fs::rename(&staged_path, &pub_path) {
-                let _ = std::fs::remove_file(&staged_path);
-                return Err(format!("Failed to publish staged file to destination: {e}"));
-            }
-
-            if spec.metadata_policy != TransformMetadataPolicy::StripAll {
-                for sidecar_ext in ["txt", "json"] {
-                    let src_sidecar = src_path.with_extension(sidecar_ext);
-                    if src_sidecar != src_path && src_sidecar.is_file() {
-                        let dest_sidecar = pub_path.with_extension(sidecar_ext);
-                        let _ = std::fs::copy(&src_sidecar, &dest_sidecar);
-                    }
-                }
-            }
-
-            dest_path = pub_path;
-            ext = target_ext;
-        } else {
-            let file_name = match src_path.file_name() {
-                Some(n) => n.to_string_lossy().to_string(),
-                None => continue,
-            };
-
-            let mut candidate = dest_dir.join(&file_name);
-            if candidate.exists() {
-                let is_same = candidate
-                    .metadata()
-                    .map(|m| m.len() == meta.len())
-                    .unwrap_or(false);
-                if !is_same {
-                    let stem = src_path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("file");
-                    let ext_part = if ext.is_empty() {
-                        String::new()
-                    } else {
-                        format!(".{ext}")
-                    };
-                    let mut counter = 1;
-                    while candidate.exists() {
-                        candidate = dest_dir.join(format!("{stem}_{counter}{ext_part}"));
-                        counter += 1;
-                    }
-                }
-            }
-
-            if !candidate.exists() {
-                std::fs::copy(src_path, &candidate)
-                    .map_err(|e| format!("Failed to copy {src_path_str} to destination: {e}"))?;
-
-                for sidecar_ext in ["txt", "json"] {
-                    let src_sidecar = src_path.with_extension(sidecar_ext);
-                    if src_sidecar != src_path && src_sidecar.is_file() {
-                        let dest_sidecar = candidate.with_extension(sidecar_ext);
-                        let _ = std::fs::copy(&src_sidecar, &dest_sidecar);
-                    }
-                }
-            }
-            dest_path = candidate;
-        }
-
-        let container = match ext.as_str() {
-            "png" => omera_domain::Container::Png,
-            "jpg" | "jpeg" => omera_domain::Container::Jpeg,
-            "webp" => omera_domain::Container::WebP,
-            "avif" => omera_domain::Container::Avif,
-            "mp4" => omera_domain::Container::Mp4,
-            "webm" => omera_domain::Container::Webm,
-            _ => continue,
-        };
-
-        let mut metadata = omera_metadata::extract_metadata(container, &dest_path)
-            .or_else(|| omera_metadata::extract_metadata(container, src_path));
-
-        if let Some(spec) = transform_spec {
-            match spec.metadata_policy {
-                TransformMetadataPolicy::StripAll => {
-                    metadata = None;
-                }
-                TransformMetadataPolicy::StripAi => {
-                    if let Some(m) = metadata.as_mut() {
-                        m.prompt = None;
-                        m.negative_prompt = None;
-                        m.parameters = None;
-                        m.raw = None;
-                    }
-                }
-                TransformMetadataPolicy::KeepSupported => {}
-            }
-        }
-
-        let tgt_str = {
-            let canonical = dest_path
-                .canonicalize()
-                .unwrap_or_else(|_| dest_path.clone());
-            let text = canonical.to_string_lossy();
-            text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
-        };
-
-        let final_meta = dest_path.metadata().unwrap_or(meta);
-
-        let image_file = ImageFile {
-            id: None,
-            folder_id: managed_folder.id,
-            path: tgt_str.clone(),
-            size_bytes: final_meta.len(),
-            modified_at: file_mtime,
-            container,
-            metadata,
-            rating: None,
-            aesthetic_score: None,
-            is_favorite: false,
-            is_nsfw: false,
-            stack_id: None,
-            stack_order: 0,
-        };
-
-        let file_id = match db.get_file_by_path(&tgt_str).map_err(|e| e.to_string())? {
-            Some(existing) if existing.id.is_some() => existing.id.unwrap(),
-            _ => db.upsert_file(&image_file).map_err(|e| e.to_string())?,
-        };
-
-        if let Some(album_id) = target_album_id {
+    if let Some(album_id) = target_album_id {
+        for &file_id in &imported_ids {
             db.add_file_to_album(album_id, file_id)
                 .map_err(|e| e.to_string())?;
         }
-
-        imported_ids.push(file_id);
-    }
-
-    if should_transform {
-        let _ = std::fs::remove_dir(&staging_dir);
     }
 
     Ok(imported_ids)
@@ -4902,6 +4692,7 @@ pub fn defer_legacy_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use omera_domain::TransformFormat;
 
     #[test]
     fn test_prepare_comfyui_prompt_payload() {

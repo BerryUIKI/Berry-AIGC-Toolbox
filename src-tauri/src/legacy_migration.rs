@@ -688,6 +688,9 @@ mod tests {
         let source_dir = tempfile::tempdir().unwrap();
         let dest_dir = tempfile::tempdir().unwrap();
 
+        // Ensure keyring works on headless CI runners (e.g. Linux without Secret Service)
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+
         // 1. Create a minimal valid SQLite source database
         let source_db = source_dir.path().join("berry.db");
         let db = omera_storage::Database::connect(&source_db).unwrap();

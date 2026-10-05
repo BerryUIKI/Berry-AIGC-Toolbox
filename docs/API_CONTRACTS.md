@@ -102,6 +102,14 @@ The lead will stabilize a per-file result DTO before engineers add collision/ret
 
 The storage-only Rust function `recovery::migrate_copy(source, destination)` is **not an IPC command**. It snapshots committed SQLite/WAL content, validates the source, upgrades a staged copy, rejects existing destinations, and preserves the source. It does not migrate config/credentials, discover sources, track receipts, or authorize cleanup. Integrators must implement those steps under the migration contract.
 
+`import_files_to_managed_vault` ingests external files into managed vault folders with optional transcoding and album association. It delegates directly to the unified publication service in `crates/omera-scan::transform`:
+- Destination folders are validated to exist and be managed vaults (`folder_type == "managed"`). Linked (external read-only) folders are strictly rejected with zero destination or database side effects.
+- Collision handling supports configurable `TransformCollisionPolicy` (`rename` or `skip`).
+- Sibling metadata sidecars (`.txt`, `.json`) are preserved unless `metadata_policy` is `StripAll`.
+- Metadata policy (`KeepSupported`, `StripAi`, `StripAll`) is applied consistently.
+- In-flight failure compensation: if file publication succeeds but database record upserting fails, the published file and any copied sidecars are compensated (cleaned up) from the managed vault directory, leaving source files completely intact.
+
+
 ## Updates and long-running operations
 
 `download_update({ url, filename })` resolves a staged installer path after signature verification in the working code. `install_update({ installerPath, silent })` revalidates the local installer and launches installation. Missing embedded trust configuration is an error; engineers must not add a bypass. Platform/architecture asset selection and renamed-repository trust remain lead-owned work.

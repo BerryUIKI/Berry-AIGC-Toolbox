@@ -881,41 +881,34 @@ pub fn restore_cloud_snapshot(
         .read_to_end(&mut restored_db_bytes)
         .map_err(|e| format!("Failed to unpack database from snapshot: {e}"))?;
 
-    // 3. Write to temporary validation database and verify schema integrity
-    let temp_validation_path = active_db_path.with_extension("restore_temp.db");
-    fs::write(&temp_validation_path, &restored_db_bytes)
-        .map_err(|e| format!("Failed to write temporary validation database: {e}"))?;
+    // 3. Write to temporary staging database, validate stats, and stage restore safely
+    let temp_dir = tempfile::tempdir_in(
+        active_db_path
+            .parent()
+            .ok_or_else(|| "Missing active database directory".to_string())?,
+    )
+    .map_err(|e| format!("Failed to create temporary directory for restore: {e}"))?;
+    let temp_unpacked_path = temp_dir.path().join("unpacked.db");
+    fs::write(&temp_unpacked_path, &restored_db_bytes)
+        .map_err(|e| format!("Failed to write unpacked database: {e}"))?;
 
-    let restored_file_count = match Database::connect(&temp_validation_path) {
+    let restored_file_count = match Database::connect(&temp_unpacked_path) {
         Ok(db_check) => match db_check.get_database_stats() {
             Ok(stats) => stats.file_count,
             Err(e) => {
-                let _ = fs::remove_file(&temp_validation_path);
                 return Err(format!("Restored database integrity check failed: {e}"));
             }
         },
         Err(e) => {
-            let _ = fs::remove_file(&temp_validation_path);
             return Err(format!("Cannot open restored SQLite database: {e}"));
         }
     };
 
-    // 4. Create safe rollback backup of current live database
-    let rollback_path = active_db_path.with_extension("pre_restore_bak");
-    if active_db_path.exists() {
-        let _ = fs::copy(active_db_path, &rollback_path);
-    }
-
-    // 5. Atomic rename replacement
-    if let Err(e) = fs::copy(&temp_validation_path, active_db_path) {
-        // Rollback
-        if rollback_path.exists() {
-            let _ = fs::copy(&rollback_path, active_db_path);
-        }
-        let _ = fs::remove_file(&temp_validation_path);
-        return Err(format!("Failed to replace live database: {e}"));
-    }
-    let _ = fs::remove_file(&temp_validation_path);
+    // 4. Route through the safe staged recovery lifecycle.
+    // This validates database integrity, schema version, foreign key constraints,
+    // and creates an atomic pending-restore database without clobbering active connections or WAL.
+    // The pending restore will be safely applied at startup/restart via `apply_pending_restore`.
+    omera_storage::recovery::stage_restore(&temp_unpacked_path, active_db_path)?;
 
     Ok(CloudRestoreResult {
         success: true,
@@ -1006,5 +999,66 @@ mod tests {
         assert!(serialized.contains("omera_version"));
         let deserialized: CloudSnapshotMeta = serde_json::from_str(&serialized).unwrap();
         assert_eq!(deserialized.omera_version.as_deref(), Some("0.3.0"));
+    }
+
+    #[test]
+    fn test_restore_cloud_snapshot_stages_recovery_without_overwriting_active() {
+        let dir = tempfile::tempdir().unwrap();
+        let active_db = dir.path().join("omera.db");
+        let live_db = Database::connect(&active_db).unwrap();
+        live_db
+            .connection()
+            .execute("INSERT INTO tags(name) VALUES ('live_tag')", [])
+            .unwrap();
+
+        // Create a snapshot archive with a restored database containing 'cloud_tag'
+        let backup_db_path = dir.path().join("backup.db");
+        let backup_db = Database::connect(&backup_db_path).unwrap();
+        backup_db
+            .connection()
+            .execute("INSERT INTO tags(name) VALUES ('cloud_tag')", [])
+            .unwrap();
+        drop(backup_db);
+
+        let backup_bytes = fs::read(&backup_db_path).unwrap();
+        let snapshot_filename = "omera_snapshot_test.zip";
+        let snapshot_path = dir.path().join(snapshot_filename);
+
+        let mut zip_buffer = Vec::new();
+        {
+            let mut zip = ZipWriter::new(Cursor::new(&mut zip_buffer));
+            let zip_opts =
+                SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            zip.start_file("omera.db", zip_opts).unwrap();
+            zip.write_all(&backup_bytes).unwrap();
+            zip.finish().unwrap();
+        }
+        fs::write(&snapshot_path, &zip_buffer).unwrap();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::LocalPath,
+            local_path: Some(dir.path().to_string_lossy().to_string()),
+            ..Default::default()
+        };
+
+        // Execute restore_cloud_snapshot
+        let res = restore_cloud_snapshot(&active_db, &config, snapshot_filename).unwrap();
+        assert!(res.success);
+
+        // Crucial verification: live database connection and contents are NOT clobbered!
+        // The active db still contains live_tag because restore is staged.
+        assert_eq!(live_db.list_tags().unwrap()[0].name, "live_tag");
+
+        // The staged pending restore exists:
+        let pending = active_db.with_extension("pending-restore.db");
+        assert!(pending.exists(), "Pending restore database must exist");
+
+        // After closing live connection, apply_pending_restore applies the snapshot safely
+        drop(live_db);
+        omera_storage::recovery::apply_pending_restore(&active_db).unwrap();
+
+        // The active database now has the restored content
+        let reopened = Database::connect(&active_db).unwrap();
+        assert_eq!(reopened.list_tags().unwrap()[0].name, "cloud_tag");
     }
 }

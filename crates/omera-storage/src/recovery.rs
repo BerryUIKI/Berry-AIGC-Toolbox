@@ -221,4 +221,47 @@ mod tests {
         assert!(!destination.exists());
         assert_eq!(std::fs::read(&source_path).unwrap(), before);
     }
+
+    #[test]
+    fn test_stage_and_apply_restore_with_active_wal_connection() {
+        let dir = tempfile::tempdir().unwrap();
+        let active = dir.path().join("active.db");
+        let source = dir.path().join("backup.db");
+
+        // 1. Establish active live database in WAL mode with uncheckpointed commits
+        let live = crate::Database::connect(&active).unwrap();
+        live.connection()
+            .execute("INSERT INTO tags(name) VALUES ('live_active')", [])
+            .unwrap();
+
+        // 2. Establish backup database
+        let backup = crate::Database::connect(&source).unwrap();
+        backup
+            .connection()
+            .execute("INSERT INTO tags(name) VALUES ('cloud_restored')", [])
+            .unwrap();
+        drop(backup);
+
+        // 3. Stage restore while live database has active connections and WAL pages open.
+        // Under Windows mmap or active WAL, this MUST NOT fail with os error 1224 (user-mapped section open).
+        stage_restore(&source, &active).unwrap();
+
+        // Active database remains untouched and queryable
+        assert_eq!(live.list_tags().unwrap()[0].name, "live_active");
+
+        // 4. Quiesce live connections and apply pending restore
+        drop(live);
+        apply_pending_restore(&active).unwrap();
+
+        // 5. Verify restored state and rollback artifact retention
+        let reopened = crate::Database::connect(&active).unwrap();
+        assert_eq!(reopened.list_tags().unwrap()[0].name, "cloud_restored");
+        assert!(std::fs::read_dir(dir.path()).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("active.pre-restore-")
+        }));
+    }
 }

@@ -12,7 +12,7 @@ General implementation engineers own the bounded GUI, localization, parser, test
 
 The integration branch is `dev`; `codex/repository-review-fixes` is an unmerged review branch. The existing code work is preserved at commit `5fabdd8` in [draft PR #138](https://github.com/BerryUIKI/Omera/pull/138), not a release candidate. Documentation PR #136 has merged. The current documentation follow-up starts from `dev` commit `4f57246`. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md) for exact evidence and [TASK_ASSIGNMENT_BOARD.md](TASK_ASSIGNMENT_BOARD.md) for ready versus gated work. Do not silently use the draft snapshot as an approved integration baseline or duplicate changes already present in it.
 
-The GitHub repository has already moved to [BerryUIKI/Omera](https://github.com/BerryUIKI/Omera). Runtime product/identifier, database, crates, and settings have **not** yet completed migration. Existing `berry-*` source paths in this handoff are intentional until the maintainer's coordinated rename lands.
+The GitHub repository is [BerryUIKI/Omera](https://github.com/BerryUIKI/Omera). The repository and runtime identity migration to Omera (`com.berryuiki.omera`, `crates/omera-*`, `omera.db`, and `omera_` settings prefix) is complete. Pre-1.0 discovery, legacy import paths, and safe migration coordinators for historical `com.berryuiki.berryaistudio` installations remain mandatory compatibility obligations under lead ownership.
 
 ## Reserved high-impact work
 
@@ -110,7 +110,7 @@ Files: `TitleBar.vue`, theme CSS, seven locale files, relevant cards/settings.
 
 ### E10 — Metadata parser fixtures (#121, #122)
 
-Files: `crates/berry-metadata/`, parser tests and Inspector display.
+Files: `crates/omera-metadata/`, parser tests and Inspector display.
 
 - Add sanitized real fixtures for ComfyUI Flux/CLIPTextEncodeFlux, supported Easy-Use chains and linked prompt nodes; handle cycles/missing nodes with bounded traversal.
 - Parse WebUI/Liblib footer `Lora N` entries and retain existing LoRA extraction behavior.
@@ -136,7 +136,7 @@ Follows `IMAGE_TRANSFORM_PLAN.md`. Phase 6 packages T0 (export contract/pure-Rus
 
 - The working tree already contains attempts for #98–#117. They are not all complete, and no issue should be closed merely because related code exists.
 - `recovery::migrate_copy` is a tested database-copy primitive, not the complete L1 migration coordinator, receipt, discovery, or cleanup UX.
-- Omera identity activation is pending. Old WebView-origin settings and macOS sandbox access still require explicit migration coverage.
+- Omera runtime identity is active. Old WebView-origin settings and macOS sandbox access still require explicit migration coverage.
 - Signed update verification exists in progress; signing-key provisioning, release signing and real installer tests remain incomplete.
 - Long-running synchronous inference/network handlers remain under #102. Split this work into named commands and document lock ownership; do not mechanically mark handlers async while leaving blocking work on the runtime thread.
 - Thumbnail worker connections now have an explicit release hook. Lifecycle callers must stop submissions before release; the hook alone is not concurrent restore safety.

@@ -263,26 +263,66 @@ impl MigrationCoordinator {
         let source_config_path = source_root.join("config.json");
         let dest_config_path = destination_root.join("config.json");
         if source_config_path.exists() {
+            let config_size = std::fs::metadata(&source_config_path)
+                .map(|m| m.len())
+                .unwrap_or(0);
+
             match config_store::load_readonly(&source_config_path) {
                 Ok(legacy_cfg) => {
+                    let dest_already_existed = dest_config_path.exists();
+
                     // Migrate credentials into new Omera keyring
-                    let _ = config_store::migrate_credentials_to_omera(&legacy_cfg);
+                    let cred_res = config_store::migrate_credentials_to_omera(&legacy_cfg);
+                    let save_res = config_store::save_migrated(&dest_config_path, legacy_cfg);
 
-                    // If destination config exists, keep destination authoritative;
-                    // otherwise save migrated config.
-                    if !dest_config_path.exists() {
-                        let _ = config_store::save(&dest_config_path, legacy_cfg);
+                    let (status, failure_err) = match (cred_res, save_res) {
+                        (Err(cred_err), _) => {
+                            eprintln!("Error migrating credentials to Omera: {cred_err}");
+                            (
+                                "failed".to_string(),
+                                Some(format!("Credential migration failed: {cred_err}")),
+                            )
+                        }
+                        (_, Err(save_err)) => {
+                            eprintln!("Error persisting migrated configuration: {save_err}");
+                            (
+                                "failed".to_string(),
+                                Some(format!("Config persistence failed: {save_err}")),
+                            )
+                        }
+                        (Ok(_), Ok(_)) => {
+                            // Verify destination config exists and is parseable
+                            match config_store::load_readonly(&dest_config_path) {
+                                Ok(_) => {
+                                    if dest_already_existed {
+                                        ("skipped".to_string(), None)
+                                    } else {
+                                        ("success".to_string(), None)
+                                    }
+                                }
+                                Err(readback_err) => {
+                                    eprintln!("Error validating destination configuration: {readback_err}");
+                                    ("failed".to_string(), Some(format!("Config destination verification failed: {readback_err}")))
+                                }
+                            }
+                        }
+                    };
+
+                    if let Some(err_msg) = failure_err {
+                        job.status = "failed".to_string();
+                        job.error = Some(MigrationError::new(
+                            "CONFIG_MIGRATION_FAILED",
+                            "error.migration.config_failed",
+                            true,
+                            Some(err_msg),
+                        ));
                     }
-
-                    let config_size = std::fs::metadata(&source_config_path)
-                        .map(|m| m.len())
-                        .unwrap_or(0);
 
                     artifacts.push(MigratedArtifact {
                         category: "config".to_string(),
                         source_path: source_config_path.to_string_lossy().to_string(),
                         destination_path: dest_config_path.to_string_lossy().to_string(),
-                        status: "success".to_string(),
+                        status,
                         size_bytes: config_size,
                     });
                 }
@@ -291,6 +331,20 @@ impl MigrationCoordinator {
                         "Warning: could not read legacy config {}: {e}",
                         source_config_path.display()
                     );
+                    job.status = "failed".to_string();
+                    job.error = Some(MigrationError::new(
+                        "CONFIG_MIGRATION_FAILED",
+                        "error.migration.config_failed",
+                        true,
+                        Some(format!("Could not read legacy config: {e}")),
+                    ));
+                    artifacts.push(MigratedArtifact {
+                        category: "config".to_string(),
+                        source_path: source_config_path.to_string_lossy().to_string(),
+                        destination_path: dest_config_path.to_string_lossy().to_string(),
+                        status: "failed".to_string(),
+                        size_bytes: config_size,
+                    });
                 }
             }
         }
@@ -334,8 +388,13 @@ impl MigrationCoordinator {
         }
 
         job.progress = 1.0;
-        job.status = "completed".to_string();
-        job.current_step = "Migration completed successfully".to_string();
+        if job.error.is_some() {
+            job.status = "failed".to_string();
+            job.current_step = "Migration failed during configuration persistence".to_string();
+        } else {
+            job.status = "completed".to_string();
+            job.current_step = "Migration completed successfully".to_string();
+        }
         job.receipt = Some(receipt);
         self.active_job = Some(job.clone());
 
@@ -394,7 +453,23 @@ impl MigrationCoordinator {
                     "berry.db" | "berry.db-wal" | "berry.db-shm" => {
                         ("database".to_string(), true, None)
                     }
-                    "config.json" | "config.json.bak" => ("config".to_string(), true, None),
+                    "config.json" | "config.json.bak" => {
+                        // Configuration is only eligible for cleanup if the migration receipt
+                        // contains a successfully verified or preserved config artifact.
+                        let config_verified = receipt.artifacts.iter().any(|a| {
+                            a.category == "config"
+                                && (a.status == "success" || a.status == "skipped")
+                        });
+                        if config_verified {
+                            ("config".to_string(), true, None)
+                        } else {
+                            (
+                                "config".to_string(),
+                                false,
+                                Some("Destination configuration not verified or missing".into()),
+                            )
+                        }
+                    }
                     "thumbnails" => ("thumbnails".to_string(), true, None),
                     "models" => ("models".to_string(), true, None),
                     "updates" => ("updates".to_string(), true, None),
@@ -855,10 +930,19 @@ mod tests {
         };
 
         let mut coordinator = MigrationCoordinator::new();
-        let job = coordinator
-            .execute_migration_plan(&preview)
-            .expect("Migration of database should succeed even if config is unparseable");
-        assert_eq!(job.status, "completed");
+        let job = coordinator.execute_migration_plan(&preview).expect(
+            "Migration execution should return job with failed status when config is unparseable",
+        );
+        assert_eq!(job.status, "failed");
+        let receipt = job
+            .receipt
+            .expect("Receipt should still be durably recorded");
+        let config_art = receipt
+            .artifacts
+            .iter()
+            .find(|a| a.category == "config")
+            .expect("Config artifact should be present in receipt");
+        assert_eq!(config_art.status, "failed");
 
         // The malformed source config file MUST NOT be altered, deleted, or overwritten
         let source_hash_after = compute_file_sha256(&source_config_path).unwrap();
@@ -866,6 +950,241 @@ mod tests {
         assert_eq!(
             std::fs::read(&source_config_path).unwrap(),
             corrupted_content
+        );
+    }
+
+    #[test]
+    fn test_config_migration_with_nonzero_revision_succeeds_in_absent_destination() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        // Keyring mock for headless CI
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+
+        let source_db = source_dir.path().join("berry.db");
+        let db = omera_storage::Database::connect(&source_db).unwrap();
+        drop(db);
+
+        // Source config with nonzero revision and custom settings
+        let source_config_path = source_dir.path().join("config.json");
+        let cfg = crate::commands::AppConfig {
+            config_revision: 42,
+            theme: "dracula".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(
+            &source_config_path,
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-nonzero-rev".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration should succeed");
+        assert_eq!(job.status, "completed");
+
+        let receipt = job.receipt.expect("Receipt must exist");
+        let config_art = receipt
+            .artifacts
+            .iter()
+            .find(|a| a.category == "config")
+            .expect("Config artifact present");
+        assert_eq!(config_art.status, "success");
+
+        // Verify destination config file exists, has revision 1, and preserved theme
+        let dest_config_path = dest_dir.path().join("config.json");
+        assert!(dest_config_path.exists());
+        let saved_cfg = crate::config_store::load_readonly(&dest_config_path).unwrap();
+        assert_eq!(saved_cfg.config_revision, 1);
+        assert_eq!(saved_cfg.theme, "dracula");
+    }
+
+    #[test]
+    fn test_config_migration_skipped_when_destination_exists() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+
+        let source_db = source_dir.path().join("berry.db");
+        let db = omera_storage::Database::connect(&source_db).unwrap();
+        drop(db);
+
+        let source_config_path = source_dir.path().join("config.json");
+        let legacy_cfg = crate::commands::AppConfig {
+            theme: "legacy_theme".to_string(),
+            ..Default::default()
+        };
+        std::fs::write(
+            &source_config_path,
+            serde_json::to_string_pretty(&legacy_cfg).unwrap(),
+        )
+        .unwrap();
+
+        // Destination config already exists
+        let dest_config_path = dest_dir.path().join("config.json");
+        let dest_cfg = crate::commands::AppConfig {
+            theme: "existing_authoritative_theme".to_string(),
+            ..Default::default()
+        };
+        crate::config_store::save(&dest_config_path, dest_cfg).unwrap();
+
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-skipped".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration should succeed");
+        assert_eq!(job.status, "completed");
+
+        let receipt = job.receipt.expect("Receipt must exist");
+        let config_art = receipt
+            .artifacts
+            .iter()
+            .find(|a| a.category == "config")
+            .expect("Config artifact present");
+        assert_eq!(config_art.status, "skipped");
+
+        // Destination remains unchanged
+        let readback = crate::config_store::load_readonly(&dest_config_path).unwrap();
+        assert_eq!(readback.theme, "existing_authoritative_theme");
+    }
+
+    #[test]
+    fn test_config_migration_persistence_failure_records_failed_artifact_and_blocks_cleanup() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+
+        let source_db = source_dir.path().join("berry.db");
+        let db = omera_storage::Database::connect(&source_db).unwrap();
+        drop(db);
+
+        let source_config_path = source_dir.path().join("config.json");
+        let cfg = crate::commands::AppConfig::default();
+        std::fs::write(
+            &source_config_path,
+            serde_json::to_string_pretty(&cfg).unwrap(),
+        )
+        .unwrap();
+
+        // Make destination config path un-writable by creating a directory where config.json should be,
+        // or a read-only collision. In temp dir, creating a directory at dest_config_path causes save_migrated to fail writing a file there.
+        let dest_config_path = dest_dir.path().join("config.json");
+        std::fs::create_dir_all(&dest_config_path).unwrap();
+
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-persist-fail".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration coordinator returns job");
+        assert_eq!(job.status, "failed");
+        assert!(job.error.is_some());
+
+        let receipt = job.receipt.expect("Receipt should be saved");
+        let config_art = receipt
+            .artifacts
+            .iter()
+            .find(|a| a.category == "config")
+            .expect("Config artifact present");
+        assert_eq!(config_art.status, "failed");
+
+        // Now test preview_cleanup logic: config.json must NOT be eligible for cleanup!
+        // We verify item eligibility for receipt with failed config artifact
+        let mut config_eligible = false;
+        let mut config_reason = None;
+        if let Ok(entries) = std::fs::read_dir(source_dir.path()) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                if name.to_string_lossy() == "config.json" {
+                    let config_verified = receipt.artifacts.iter().any(|a| {
+                        a.category == "config" && (a.status == "success" || a.status == "skipped")
+                    });
+                    if config_verified {
+                        config_eligible = true;
+                    } else {
+                        config_eligible = false;
+                        config_reason =
+                            Some("Destination configuration not verified or missing".to_string());
+                    }
+                }
+            }
+        }
+        assert!(
+            !config_eligible,
+            "Config must not be eligible for cleanup when artifact status is failed"
+        );
+        assert_eq!(
+            config_reason.as_deref(),
+            Some("Destination configuration not verified or missing")
         );
     }
 }

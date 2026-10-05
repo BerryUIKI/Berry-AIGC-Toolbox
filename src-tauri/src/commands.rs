@@ -3959,202 +3959,18 @@ pub fn harvest_pipeline_folder(
     folder_id: i64,
     state: State<'_, AppState>,
 ) -> Result<usize, String> {
-    let folder = {
-        let db = db(&state)?;
-        db.find_folder_by_id(folder_id)
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "folder not found".to_string())?
-    };
-
-    if folder.folder_type != "pipeline" {
-        return Err("folder is not an ingestion pipeline".to_string());
-    }
-
-    let source_path_str = match &folder.source_path {
-        Some(s) if !s.is_empty() => s.clone(),
-        _ => return Err("pipeline folder has no source path configured".to_string()),
-    };
-
-    let source_dir = Path::new(&source_path_str);
-    if !source_dir.is_dir() {
-        return Err(format!(
-            "pipeline source path does not exist: {source_path_str}"
-        ));
-    }
-
-    let dest_dir = Path::new(&folder.path);
-    std::fs::create_dir_all(dest_dir)
-        .map_err(|e| format!("failed to create destination directory: {e}"))?;
-
-    let supported_exts = ["png", "jpg", "jpeg", "webp", "mp4"];
-    let mut harvested_count = 0;
-
-    let entries = std::fs::read_dir(source_dir)
-        .map_err(|e| format!("failed to read source directory: {e}"))?;
-
-    let now_ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    for entry in entries.flatten() {
-        let file_path = entry.path();
-        if !file_path.is_file() {
-            continue;
-        }
-
-        let ext = file_path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_lowercase();
-
-        if !supported_exts.contains(&ext.as_str()) {
-            continue;
-        }
-
-        let meta = match file_path.metadata() {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        if meta.len() == 0 {
-            continue;
-        }
-
-        let file_mtime = meta
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs() as i64)
-            .unwrap_or(0);
-
-        if now_ts.saturating_sub(file_mtime) < 1 {
-            // Still being written to, debounce
-            continue;
-        }
-
-        let file_name = match file_path.file_name() {
-            Some(n) => n.to_string_lossy().to_string(),
-            None => continue,
-        };
-
-        let target_path = dest_dir.join(&file_name);
-        let src_str = file_path.display().to_string();
-        let tgt_str = target_path.display().to_string();
-
-        if target_path.exists() {
-            if let Ok(t_meta) = target_path.metadata() {
-                if t_meta.len() == meta.len() {
-                    continue;
-                }
-            }
-        }
-
-        if let Err(e) = std::fs::copy(&file_path, &target_path) {
-            eprintln!("Failed to copy {src_str} to {tgt_str}: {e}");
-            continue;
-        }
-
-        let src_txt = file_path.with_extension("txt");
-        if src_txt.exists() {
-            let tgt_txt = target_path.with_extension("txt");
-            let _ = std::fs::copy(&src_txt, &tgt_txt);
-        }
-
-        let container = match ext.as_str() {
-            "png" => omera_domain::Container::Png,
-            "jpg" | "jpeg" => omera_domain::Container::Jpeg,
-            "webp" => omera_domain::Container::WebP,
-            "mp4" => omera_domain::Container::Mp4,
-            _ => continue,
-        };
-
-        let metadata = omera_metadata::extract_metadata(container, &target_path);
-
-        let image_file = ImageFile {
-            id: None,
-            folder_id,
-            path: tgt_str.clone(),
-            size_bytes: meta.len(),
-            modified_at: file_mtime,
-            container,
-            metadata,
-            rating: None,
-            aesthetic_score: None,
-            is_favorite: false,
-            is_nsfw: false,
-            stack_id: None,
-            stack_order: 0,
-        };
-
-        let db = db(&state)?;
-        if let Ok(inserted_id) = db.upsert_file(&image_file) {
-            harvested_count += 1;
-
-            if folder.ingest_action.as_deref() == Some("move") {
-                let grace = folder.grace_period_hours.unwrap_or(24);
-                if grace <= 0 {
-                    let _ = trash::delete(&file_path);
-                    if src_txt.exists() {
-                        let _ = trash::delete(&src_txt);
-                    }
-                } else {
-                    let _ = db.enqueue_cleanup(&src_str, inserted_id, grace);
-                }
-            }
-        }
-    }
-
-    Ok(harvested_count)
+    let db = db(&state)?;
+    let report = omera_scan::pipeline::harvest_pipeline_folder(&db, folder_id, None)
+        .map_err(|e| e.to_string())?;
+    Ok(report.harvested_count)
 }
 
 #[tauri::command]
 pub fn process_pipeline_cleanups(state: State<'_, AppState>) -> Result<u64, String> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    let due_items = {
-        let db = db(&state)?;
-        db.list_due_cleanups(now).map_err(|e| e.to_string())?
-    };
-    let mut deleted_count = 0;
-
-    let mut results = Vec::new();
-    for item in due_items {
-        let p = Path::new(&item.source_file_path);
-        let mut success = true;
-        if p.exists() {
-            if let Err(e) = trash::delete(p) {
-                eprintln!(
-                    "Failed to trash expired pipeline file {}: {e}",
-                    item.source_file_path
-                );
-                success = false;
-            }
-        }
-        if success {
-            let txt = p.with_extension("txt");
-            if txt.exists() {
-                let _ = trash::delete(&txt);
-            }
-            results.push((item.id, "deleted"));
-            deleted_count += 1;
-        } else {
-            results.push((item.id, "failed"));
-        }
-    }
-
-    {
-        let db = db(&state)?;
-        for (id, status) in results {
-            let _ = db.update_cleanup_status(id, status);
-        }
-    }
-
-    Ok(deleted_count)
+    let db = db(&state)?;
+    let report =
+        omera_scan::pipeline::process_pipeline_cleanups(&db, None).map_err(|e| e.to_string())?;
+    Ok(report.deleted_count)
 }
 
 #[tauri::command]
@@ -4163,8 +3979,7 @@ pub fn get_pipeline_cleanup_queue(
     state: State<'_, AppState>,
 ) -> Result<Vec<CleanupQueueItem>, String> {
     let db = db(&state)?;
-    db.get_cleanup_queue(limit.unwrap_or(50))
-        .map_err(|e| e.to_string())
+    omera_scan::pipeline::get_pipeline_cleanup_queue(&db, limit).map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------------------

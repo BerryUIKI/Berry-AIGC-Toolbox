@@ -189,6 +189,14 @@ impl MigrationCoordinator {
             ));
         }
 
+        self.execute_migration_plan(&plan)
+    }
+
+    /// Internal execution engine for a migration plan.
+    pub fn execute_migration_plan(
+        &mut self,
+        plan: &LegacyMigrationPreview,
+    ) -> Result<LegacyMigrationJob, String> {
         let _lock = self
             .migration_lock
             .try_lock()
@@ -197,7 +205,7 @@ impl MigrationCoordinator {
         let job_id = uuid::Uuid::new_v4().to_string();
         let mut job = LegacyMigrationJob {
             job_id: job_id.clone(),
-            plan_id: plan_id.to_string(),
+            plan_id: plan.plan_id.clone(),
             status: "copying".to_string(),
             progress: 0.1,
             current_step: "Staging and validating SQLite database".to_string(),
@@ -255,7 +263,7 @@ impl MigrationCoordinator {
         let source_config_path = source_root.join("config.json");
         let dest_config_path = destination_root.join("config.json");
         if source_config_path.exists() {
-            match config_store::load(&source_config_path) {
+            match config_store::load_readonly(&source_config_path) {
                 Ok(legacy_cfg) => {
                     // Migrate credentials into new Omera keyring
                     let _ = config_store::migrate_credentials_to_omera(&legacy_cfg);
@@ -642,6 +650,7 @@ fn get_available_disk_space(_path: &Path) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use omera_domain::DiscoveredSource;
 
     #[test]
     fn test_coordinator_defaults() {
@@ -672,5 +681,191 @@ mod tests {
         std::fs::write(sub.join("a.txt"), b"12345").unwrap();
         std::fs::write(dir.path().join("b.txt"), b"67890").unwrap();
         assert_eq!(calculate_folder_size(dir.path()), 10);
+    }
+
+    #[test]
+    fn test_migration_preserves_source_config_bytes_identically() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        // Ensure keyring works on headless CI runners (e.g. Linux without Secret Service)
+        keyring::set_default_credential_builder(keyring::mock::default_credential_builder());
+
+        // 1. Create a minimal valid SQLite source database
+        let source_db = source_dir.path().join("berry.db");
+        let db = omera_storage::Database::connect(&source_db).unwrap();
+        drop(db);
+
+        // 2. Create source config with plaintext credentials
+        let source_config_path = source_dir.path().join("config.json");
+        let mut cfg = crate::commands::AppConfig::default();
+        cfg.cloud_backup.webdav_password = Some("plaintext_legacy_password".into());
+        let raw_config = serde_json::to_string_pretty(&cfg).unwrap();
+        std::fs::write(&source_config_path, raw_config.as_bytes()).unwrap();
+        let source_hash_before = compute_file_sha256(&source_config_path).unwrap();
+
+        // 3. Build a migration preview/plan
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-config".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration execution should succeed");
+        assert_eq!(job.status, "completed");
+
+        // 4. Assert source config.json bytes and hash are 100% identical before and after
+        let source_hash_after = compute_file_sha256(&source_config_path).unwrap();
+        assert_eq!(
+            source_hash_before, source_hash_after,
+            "Source config file must NOT be modified or rewritten during migration!"
+        );
+        let source_content_after = std::fs::read_to_string(&source_config_path).unwrap();
+        assert_eq!(source_content_after, raw_config);
+
+        // 5. Destination config was created and credentials are protected
+        let dest_config_path = dest_dir.path().join("config.json");
+        assert!(dest_config_path.exists());
+        let dest_raw = std::fs::read_to_string(&dest_config_path).unwrap();
+        // The destination JSON should not contain the plaintext password
+        assert!(
+            !dest_raw.contains("plaintext_legacy_password"),
+            "Destination config must protect migrated credentials"
+        );
+        let dest_cfg: crate::commands::AppConfig = serde_json::from_str(&dest_raw).unwrap();
+        assert!(
+            dest_cfg
+                .cloud_backup
+                .webdav_password
+                .as_deref()
+                .unwrap_or_default()
+                .starts_with("keyring:"),
+            "Destination credentials should be saved with keyring reference"
+        );
+    }
+
+    #[test]
+    fn test_migration_failure_preserves_source_config_bytes() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        // 1. Create a corrupt source database to cause migration failure in step 1
+        let source_db = source_dir.path().join("berry.db");
+        std::fs::write(&source_db, b"not-a-valid-sqlite-db").unwrap();
+
+        // 2. Create source config with plaintext credentials
+        let source_config_path = source_dir.path().join("config.json");
+        let raw_config = r#"{"theme":"light","cloud_backup":{"webdav_password":"secret"}}"#;
+        std::fs::write(&source_config_path, raw_config.as_bytes()).unwrap();
+        let source_hash_before = compute_file_sha256(&source_config_path).unwrap();
+
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-failure".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let res = coordinator.execute_migration_plan(&preview);
+        assert!(res.is_err());
+
+        // 3. Source config bytes must still be identical
+        let source_hash_after = compute_file_sha256(&source_config_path).unwrap();
+        assert_eq!(source_hash_before, source_hash_after);
+        assert_eq!(
+            std::fs::read_to_string(&source_config_path).unwrap(),
+            raw_config
+        );
+    }
+
+    #[test]
+    fn test_malformed_source_config_does_not_mutate_or_delete_source() {
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        // Valid source database
+        let source_db = source_dir.path().join("berry.db");
+        let db = omera_storage::Database::connect(&source_db).unwrap();
+        drop(db);
+
+        // Malformed / unparseable source config
+        let source_config_path = source_dir.path().join("config.json");
+        let corrupted_content = b"{ unclosed json with sensitive data: 'password' ";
+        std::fs::write(&source_config_path, corrupted_content).unwrap();
+        let source_hash_before = compute_file_sha256(&source_config_path).unwrap();
+
+        let dest_db = dest_dir.path().join("omera.db");
+        let preview = LegacyMigrationPreview {
+            plan_id: "plan-test-malformed-config".to_string(),
+            source: DiscoveredSource {
+                source_id: "berry-app-data".to_string(),
+                identifier: "com.berryuiki.berryaistudio".to_string(),
+                root_path: source_dir.path().to_string_lossy().to_string(),
+                database_path: source_db.to_string_lossy().to_string(),
+                config_path: Some(source_config_path.to_string_lossy().to_string()),
+                file_count: 1,
+                database_size_bytes: 1024,
+                total_size_bytes: 2048,
+                schema_version: 1,
+                is_locked: false,
+            },
+            destination_root: dest_dir.path().to_string_lossy().to_string(),
+            destination_db: dest_db.to_string_lossy().to_string(),
+            required_space_bytes: 1024,
+            available_space_bytes: 10_000_000,
+            conflicts: vec![],
+            exclusions: vec![],
+        };
+
+        let mut coordinator = MigrationCoordinator::new();
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration of database should succeed even if config is unparseable");
+        assert_eq!(job.status, "completed");
+
+        // The malformed source config file MUST NOT be altered, deleted, or overwritten
+        let source_hash_after = compute_file_sha256(&source_config_path).unwrap();
+        assert_eq!(source_hash_before, source_hash_after);
+        assert_eq!(
+            std::fs::read(&source_config_path).unwrap(),
+            corrupted_content
+        );
     }
 }

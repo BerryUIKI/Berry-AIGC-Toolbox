@@ -96,6 +96,9 @@ The in-progress persistence service writes atomically, rejects corrupt JSON with
 
 `copy_files`/`move_files` take `{ filePaths, targetFolderId }`; `trash_files` takes `{ filePaths }`. Current working responses are a completed count on full success or a rejection string containing partial progress and recovery-journal information. This is a known transitional limitation (#100): never parse localized strings to infer which individual files succeeded, and never automatically retry the entire operation after partial failure. Refresh affected state and display the error.
 
+`cull_stack_drafts({ stackId, minRating })` trashes lower-rated draft images and sidecars (`.txt`, `.json`) in a stack while preserving the hero image (`stack_order == 0`). Trash operations must succeed on the filesystem before database records are deleted; failed trash operations preserve database rows and are excluded from the returned success count.
+
+
 The lead will stabilize a per-file result DTO before engineers add collision/retry UI. Source deletion, collision policies and filesystem rollback are backend responsibilities. Copy/move sidecars and trash behavior must not diverge from the primary-file outcome without an explicit partial result.
 
 `backup_database({ destinationPath })` exports a database snapshot. `restore_database({ sourcePath })` stages a validated database and restarts the app on success; do not assume code after a successful invoke will run before process exit. Cloud restore has the same restart boundary. No component may replace `berry.db`/`omera.db` itself or delete WAL/SHM files.

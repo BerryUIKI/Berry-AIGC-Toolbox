@@ -4057,16 +4057,14 @@ pub fn list_stacks(
     db.list_stacks(folder_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn cull_stack_drafts(
-    stack_id: String,
+pub(crate) fn cull_stack_drafts_core(
+    db: &Database,
+    stack_id: &str,
     min_rating: u8,
-    state: State<'_, AppState>,
 ) -> Result<u64, String> {
     let files_to_cull: Vec<(i64, PathBuf)> = {
-        let db = db(&state)?;
         let cull_ids = db
-            .get_stack_cull_candidate_ids(&stack_id, min_rating)
+            .get_stack_cull_candidate_ids(stack_id, min_rating)
             .map_err(|e| e.to_string())?;
 
         let mut list = Vec::new();
@@ -4079,28 +4077,50 @@ pub fn cull_stack_drafts(
     };
 
     let mut trashed = 0;
-    let mut successfully_trashed_ids = Vec::new();
 
     for (id, p) in files_to_cull {
+        // Collect existing file and sidecars to delete
+        let mut to_delete = Vec::new();
         if p.exists() {
-            let _ = trash::delete(&p);
+            to_delete.push(p.clone());
         }
         let txt = p.with_extension("txt");
         if txt.exists() {
-            let _ = trash::delete(&txt);
+            to_delete.push(txt);
         }
-        successfully_trashed_ids.push(id);
-    }
+        let json = p.with_extension("json");
+        if json.exists() {
+            to_delete.push(json);
+        }
 
-    {
-        let db = db(&state)?;
-        for id in successfully_trashed_ids {
-            let _ = db.delete_file_by_id(id);
-            trashed += 1;
+        // If files exist on disk, trash::delete_all must succeed before removing DB record
+        if !to_delete.is_empty() {
+            if let Err(e) = trash::delete_all(&to_delete) {
+                eprintln!("Failed to trash file(s) for file_id {id}: {e}");
+                continue;
+            }
         }
+
+        // Only remove database row after confirmed filesystem success (or if file was already missing)
+        if let Err(e) = db.delete_file_by_id(id) {
+            eprintln!("Failed to delete database record for file_id {id}: {e}");
+            continue;
+        }
+
+        trashed += 1;
     }
 
     Ok(trashed)
+}
+
+#[tauri::command]
+pub fn cull_stack_drafts(
+    stack_id: String,
+    min_rating: u8,
+    state: State<'_, AppState>,
+) -> Result<u64, String> {
+    let db = db(&state)?;
+    cull_stack_drafts_core(&db, &stack_id, min_rating)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -4796,6 +4816,97 @@ mod tests {
         assert_eq!(updated.rating, Some(5));
         assert!(updated.is_favorite);
         assert!(std::path::Path::new(&updated.path).exists());
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_cull_stack_drafts_core_preserves_on_db_delete_failure() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_cull_db_fail_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder(&temp_dir.to_string_lossy()).unwrap();
+
+        let stack_id = "test_stack_cull_1";
+
+        // Hero file (stack_order 0, rating 5)
+        let hero_path = temp_dir.join("hero.png");
+        std::fs::write(&hero_path, b"hero").unwrap();
+        let hero = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: hero_path.to_string_lossy().to_string(),
+            size_bytes: 4,
+            modified_at: 100,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: Some(5),
+            aesthetic_score: None,
+            is_favorite: true,
+            is_nsfw: false,
+            stack_id: Some(stack_id.to_string()),
+            stack_order: 0,
+        };
+        db.upsert_file(&hero).unwrap();
+
+        // Draft file (stack_order 1, rating 1 -> lower than min_rating 3)
+        let draft_path = temp_dir.join("draft.png");
+        std::fs::write(&draft_path, b"draft").unwrap();
+        let draft = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: draft_path.to_string_lossy().to_string(),
+            size_bytes: 5,
+            modified_at: 101,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: Some(1),
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: Some(stack_id.to_string()),
+            stack_order: 1,
+        };
+        let draft_id = db.upsert_file(&draft).unwrap();
+
+        // High-rated member (stack_order 2, rating 4 -> not culled)
+        let keeper_path = temp_dir.join("keeper.png");
+        std::fs::write(&keeper_path, b"keeper").unwrap();
+        let keeper = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: keeper_path.to_string_lossy().to_string(),
+            size_bytes: 6,
+            modified_at: 102,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: Some(4),
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: Some(stack_id.to_string()),
+            stack_order: 2,
+        };
+        let keeper_id = db.upsert_file(&keeper).unwrap();
+
+        // Inject trigger rejecting DELETE on files table to verify DB failure is not counted as success
+        db.connection()
+            .execute_batch(
+                "CREATE TRIGGER test_fail_delete BEFORE DELETE ON files BEGIN SELECT RAISE(FAIL, 'simulated db delete failure'); END;",
+            )
+            .unwrap();
+
+        let culled_count = cull_stack_drafts_core(&db, stack_id, 3).unwrap();
+        assert_eq!(
+            culled_count, 0,
+            "Failed DB deletion must not increment trashed count"
+        );
+
+        // Files still exist in DB
+        assert!(db.get_file_by_id(draft_id).unwrap().is_some());
+        assert!(db.get_file_by_id(keeper_id).unwrap().is_some());
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

@@ -1,19 +1,19 @@
 # Omera application interface contracts
 
-Status: current source contract plus explicitly marked proposals. The current source includes unfinished review fixes; it is not a released Omera API. Application identity activation and migration commands below are not implemented yet.
+Status: current source contract plus explicitly marked proposals. The active runtime identity is Omera (`com.berryuiki.omera`), and the seven legacy migration coordination commands are implemented in `src-tauri` under lead ownership. Proposed extensions and contracts not yet implemented as invokable runtime IPC are explicitly labeled.
 
 ## Sources of truth and compatibility
 
 | Surface | Source of truth | Consumer |
 | --- | --- | --- |
 | Registered IPC commands | `src-tauri/src/lib.rs` `generate_handler!` and `src-tauri/src/commands.rs` | Vue `invoke` calls |
-| Domain DTOs | `crates/berry-domain/src/` Serde definitions | `src/types.ts` |
+| Domain DTOs | `crates/omera-domain/src/` Serde definitions | `src/types.ts` |
 | Configuration DTO/defaults | Rust `AppConfig` in commands; config persistence service | `src/utils/config.ts` |
-| Thumbnail DTOs | `crates/berry-scan/src/thumbnail.rs` | `src/utils/thumbnail.ts` |
+| Thumbnail DTOs | `crates/omera-scan/src/thumbnail.rs` | `src/utils/thumbnail.ts` |
 | Update DTOs | Rust `UpdateDownloadProgress` | `src/utils/updater.ts` |
 | Watcher events | `src-tauri/src/watcher.rs` | App refresh scheduling |
 
-[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 138 commands registered in implementation snapshot `5fabdd8`, their actual request keys and Rust return types. This source is in draft PR #138, not yet integrated into `dev`. On a documentation-only checkout, validate with `node scripts/generate-ipc-reference.mjs --source-ref 5fabdd8 --check` after fetching that branch. On an implementation checkout, regenerate/check without `--source-ref`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
+[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 157 commands currently registered in `src-tauri/src/lib.rs`, their actual request keys and Rust return types. On any checkout, validate with `node scripts/generate-ipc-reference.mjs --check`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
 
 Current commands are local Tauri IPC, not HTTP endpoints. Do not invent REST routes or expose these commands through a network server. Commands are restricted to the configured application WebView; IPC arguments still require backend validation.
 
@@ -90,7 +90,7 @@ The in-progress persistence service writes atomically, rejects corrupt JSON with
 
 `legacy_migration_complete` currently refers to the old config/localStorage migration. It is **not** an Omera migration receipt, proof of database validation, or authorization to delete a directory. New Omera values take precedence over imported legacy values; false/zero/empty values are not evidence of absence.
 
-`get_storage_paths()` returns `data_dir`, `config_file`, `database_file`, `thumbnails_dir`, `models_dir`, and `updates_dir`. UI code must use returned paths rather than reconstructing them from product names. `open_storage_dir({ target })` accepts the named categories in the reference. The current runtime still uses the legacy application identity; target Omera paths are activated by the lead-owned migration.
+`get_storage_paths()` returns `data_dir`, `config_file`, `database_file`, `thumbnails_dir`, `models_dir`, and `updates_dir`. UI code must use returned paths rather than reconstructing them from product names. `open_storage_dir({ target })` accepts the named categories in the reference. The active runtime uses the target Omera application identity and locations (`com.berryuiki.omera`).
 
 ## File operations, backup and restore
 
@@ -137,9 +137,12 @@ Owner: lead. These 7 commands are registered in `src-tauri` and coordinate WAL-s
 | `confirm_legacy_cleanup` | `{ previewId, confirmed: true }` | Per-artifact outcomes after revalidation; reject stale preview, concurrent writer, missing destination, changed source or absent confirmation |
 | `defer_legacy_cleanup` | `{ receiptId }` | Persisted decision to retain old data; prevent repetitive startup prompts |
 
-Proposed migration states: `discovered -> awaiting_source_choice -> planned -> copying -> validating -> activating -> migrated -> cleanup_available`. Failure records the failed stage and preserves retry/recovery evidence. Cleanup states are separate: `retained`, `cleaning`, `partially_cleaned`, `cleaned`. Restarting must not promote a partially activated migration to success.
+The 7 migration coordination commands above are implemented and registered in `src-tauri` with domain DTOs defined in `crates/omera-domain/src/migration.rs`. The runtime implementation returns `Result<T, String>` where T corresponds to the respective domain struct (`LegacyMigrationStatus`, `LegacyMigrationPreview`, `LegacyMigrationJob`, `LegacyCleanupPreview`, `LegacyCleanupResult`, or `()`).
 
-Proposed structured errors: `{ code, message_key, retryable, context }`. Initial codes: `SOURCE_CHANGED`, `SOURCE_BUSY`, `MULTIPLE_SOURCES`, `DESTINATION_EXISTS`, `UNSUPPORTED_SCHEMA`, `INTEGRITY_FAILED`, `INSUFFICIENT_SPACE`, `CREDENTIAL_STORE_UNAVAILABLE`, `LEGACY_ORIGIN_UNAVAILABLE`, `PLAN_EXPIRED`, `CONFIRMATION_REQUIRED`, `CLEANUP_PARTIAL`. Context must be bounded and secret-free. Existing commands still reject strings; do not retrofit this envelope without a coordinated migration.
+The following migration lifecycle states and structured error envelope represent proposed extensions for future UI/backend coordination:
+
+- Migration states: `discovered -> awaiting_source_choice -> planned -> copying -> validating -> activating -> migrated -> cleanup_available`. Failure records the failed stage and preserves retry/recovery evidence. Cleanup states: `retained`, `cleaning`, `partially_cleaned`, `cleaned`. Restarting must not promote a partially activated migration to success.
+- Proposed structured errors (not yet returned by runtime commands; existing commands reject with `Result::Err(String)`): `{ code, message_key, retryable, context }`. Proposed initial codes: `SOURCE_CHANGED`, `SOURCE_BUSY`, `MULTIPLE_SOURCES`, `DESTINATION_EXISTS`, `UNSUPPORTED_SCHEMA`, `INTEGRITY_FAILED`, `INSUFFICIENT_SPACE`, `CREDENTIAL_STORE_UNAVAILABLE`, `LEGACY_ORIGIN_UNAVAILABLE`, `PLAN_EXPIRED`, `CONFIRMATION_REQUIRED`, `CLEANUP_PARTIAL`. Context must be bounded and secret-free. Existing commands still reject strings; do not retrofit this envelope without a coordinated migration.
 
 Confirmation must refer to the exact backend preview the user saw. A boolean alone is insufficient to authorize new paths. Backend cleanup is restricted to receipt-owned legacy artifacts, excludes media/vaults, rechecks destination health and source revision, and never falls back from trash to permanent deletion. See [OMERA_MIGRATION.md](OMERA_MIGRATION.md).
 

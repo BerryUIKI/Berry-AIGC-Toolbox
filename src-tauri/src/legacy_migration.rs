@@ -32,19 +32,31 @@ impl MigrationCoordinator {
     /// Retrieve the overall migration lifecycle status for the application.
     pub fn get_status(&mut self, app: &AppHandle) -> Result<LegacyMigrationStatus, String> {
         let (omera_root, candidates) = resolve_migration_roots(app)?;
+        self.get_status_for_roots(&omera_root, &candidates)
+    }
+
+    /// Internal method to retrieve migration lifecycle status given specific roots (testable without AppHandle).
+    pub fn get_status_for_roots(
+        &mut self,
+        omera_root: &Path,
+        candidates: &[(String, PathBuf)],
+    ) -> Result<LegacyMigrationStatus, String> {
         let destination_exists = omera_root.join("omera.db").exists();
-        let active_receipt = storage_migration::load_receipt(&omera_root).ok().flatten();
+        let active_receipt = storage_migration::load_receipt(omera_root).ok().flatten();
 
         let mut discovered_sources = Vec::new();
         for (identifier, path) in candidates {
             if path.exists() {
-                if let Ok(Some(src)) =
-                    storage_migration::discover_database_source(&path, &identifier)
+                if let Ok(Some(src)) = storage_migration::discover_database_source(path, identifier)
                 {
                     discovered_sources.push(src);
                 }
             }
         }
+
+        let dest_db_path = omera_root.join("omera.db");
+        let destination_is_empty =
+            destination_exists && storage_migration::is_database_empty(&dest_db_path);
 
         let stage = if let Some(ref receipt) = active_receipt {
             if receipt.cleanup_status == "pending" {
@@ -54,10 +66,14 @@ impl MigrationCoordinator {
             }
         } else if let Some(ref job) = self.active_job {
             job.status.clone()
-        } else if destination_exists {
-            "migrated".to_string()
         } else if discovered_sources.is_empty() {
-            "none".to_string()
+            if destination_exists && !destination_is_empty {
+                "migrated".to_string()
+            } else {
+                "none".to_string()
+            }
+        } else if destination_exists && !destination_is_empty {
+            "migrated".to_string()
         } else if discovered_sources.len() > 1 {
             "awaiting_source_choice".to_string()
         } else {
@@ -117,8 +133,18 @@ impl MigrationCoordinator {
         source_id: &str,
     ) -> Result<LegacyMigrationPreview, String> {
         let (omera_root, candidates) = resolve_migration_roots(app)?;
+        self.preview_migration_for_roots(&omera_root, &candidates, source_id)
+    }
+
+    /// Internal method to preview a migration plan given specific roots (testable without AppHandle).
+    pub fn preview_migration_for_roots(
+        &mut self,
+        omera_root: &Path,
+        candidates: &[(String, PathBuf)],
+        source_id: &str,
+    ) -> Result<LegacyMigrationPreview, String> {
         let mut target_source = None;
-        for (identifier, path) in &candidates {
+        for (identifier, path) in candidates {
             if let Ok(Some(src)) = storage_migration::discover_database_source(path, identifier) {
                 if src.source_id == source_id {
                     target_source = Some(src);
@@ -133,7 +159,7 @@ impl MigrationCoordinator {
 
         let mut conflicts = Vec::new();
         let destination_db = omera_root.join("omera.db");
-        if destination_db.exists() {
+        if destination_db.exists() && !storage_migration::is_database_empty(&destination_db) {
             conflicts.push("Target database omera.db already exists. An explicit import or manual recovery is required.".into());
         }
         if source.is_locked {
@@ -146,7 +172,7 @@ impl MigrationCoordinator {
         ];
 
         let required_space_bytes = source.database_size_bytes * 2 + 1024 * 1024; // DB copy + staging buffer
-        let available_space_bytes = get_available_disk_space(&omera_root).unwrap_or(u64::MAX);
+        let available_space_bytes = get_available_disk_space(omera_root).unwrap_or(u64::MAX);
 
         if available_space_bytes < required_space_bytes {
             conflicts.push(format!(
@@ -221,6 +247,19 @@ impl MigrationCoordinator {
 
         std::fs::create_dir_all(&destination_root).map_err(|e| e.to_string())?;
         let staging_dir = tempfile::tempdir_in(&destination_root).map_err(|e| e.to_string())?;
+
+        // If destination exists but is an empty, unpopulated database created by startup
+        // without an active receipt, safely remove the empty stub so the migrated database can publish.
+        if destination_db.exists() && storage_migration::is_database_empty(&destination_db) {
+            let active_receipt = storage_migration::load_receipt(&destination_root)
+                .ok()
+                .flatten();
+            if active_receipt.is_none() {
+                let _ = std::fs::remove_file(&destination_db);
+                let _ = std::fs::remove_file(destination_root.join("omera.db-wal"));
+                let _ = std::fs::remove_file(destination_root.join("omera.db-shm"));
+            }
+        }
 
         // 1. Stage and migrate SQLite database
         let db_size = match storage_migration::migrate_database(
@@ -1185,6 +1224,161 @@ mod tests {
         assert_eq!(
             config_reason.as_deref(),
             Some("Destination configuration not verified or missing")
+        );
+    }
+
+    #[test]
+    fn test_empty_destination_does_not_mask_ambiguous_sources() {
+        let omera_dir = tempfile::tempdir().unwrap();
+        let src1_dir = tempfile::tempdir().unwrap();
+        let src2_dir = tempfile::tempdir().unwrap();
+
+        // Create empty omera.db in omera_dir (e.g. created on fresh startup)
+        let omera_db = omera_dir.path().join("omera.db");
+        let _ = omera_storage::Database::connect(&omera_db).unwrap();
+
+        // Create two valid legacy sources
+        let berry1_db = src1_dir.path().join("berry.db");
+        let conn1 = omera_storage::rusqlite::Connection::open(&berry1_db).unwrap();
+        conn1
+            .execute("CREATE TABLE files (id INTEGER PRIMARY KEY);", [])
+            .unwrap();
+        conn1
+            .execute("INSERT INTO files (id) VALUES (1);", [])
+            .unwrap();
+        drop(conn1);
+
+        let berry2_db = src2_dir.path().join("berry.db");
+        let conn2 = omera_storage::rusqlite::Connection::open(&berry2_db).unwrap();
+        conn2
+            .execute("CREATE TABLE files (id INTEGER PRIMARY KEY);", [])
+            .unwrap();
+        conn2
+            .execute("INSERT INTO files (id) VALUES (1);", [])
+            .unwrap();
+        drop(conn2);
+
+        let candidates = vec![
+            ("src1".to_string(), src1_dir.path().to_path_buf()),
+            ("src2".to_string(), src2_dir.path().to_path_buf()),
+        ];
+
+        let mut coordinator = MigrationCoordinator::new();
+        let status = coordinator
+            .get_status_for_roots(omera_dir.path(), &candidates)
+            .expect("Status check should succeed");
+
+        // Destination exists, but is empty and 2 sources exist -> awaiting_source_choice
+        assert_eq!(status.stage, "awaiting_source_choice");
+        assert_eq!(status.discovered_sources.len(), 2);
+        assert!(status.destination_exists);
+        assert!(status
+            .available_actions
+            .contains(&"preview_migration".to_string()));
+    }
+
+    #[test]
+    fn test_empty_destination_does_not_mask_single_source() {
+        let omera_dir = tempfile::tempdir().unwrap();
+        let src_dir = tempfile::tempdir().unwrap();
+
+        // Create empty omera.db in omera_dir
+        let omera_db = omera_dir.path().join("omera.db");
+        let _ = omera_storage::Database::connect(&omera_db).unwrap();
+
+        // Create one valid legacy source using Database::connect
+        let berry_db = src_dir.path().join("berry.db");
+        let source_db_conn = omera_storage::Database::connect(&berry_db).unwrap();
+        source_db_conn.add_folder("/legacy/folder").unwrap();
+        drop(source_db_conn);
+
+        let candidates = vec![("src".to_string(), src_dir.path().to_path_buf())];
+
+        let mut coordinator = MigrationCoordinator::new();
+        let status = coordinator
+            .get_status_for_roots(omera_dir.path(), &candidates)
+            .expect("Status check should succeed");
+
+        // Destination exists, but is empty and 1 source exists -> discovered
+        assert_eq!(status.stage, "discovered");
+        assert_eq!(status.discovered_sources.len(), 1);
+        assert!(status.destination_exists);
+        assert!(status
+            .available_actions
+            .contains(&"preview_migration".to_string()));
+
+        // Preview migration: empty destination must NOT trigger conflict
+        let preview = coordinator
+            .preview_migration_for_roots(
+                omera_dir.path(),
+                &candidates,
+                &status.discovered_sources[0].source_id,
+            )
+            .expect("Preview should succeed");
+        assert!(
+            preview.conflicts.is_empty(),
+            "Conflicts should be empty for empty destination: {:?}",
+            preview.conflicts
+        );
+
+        // Execute migration into the empty destination
+        let job = coordinator
+            .execute_migration_plan(&preview)
+            .expect("Migration execution should succeed");
+        assert_eq!(job.status, "completed");
+
+        // Now omera.db is populated with migrated data (has 1 folder)
+        let omera_conn = omera_storage::rusqlite::Connection::open(&omera_db).unwrap();
+        let count: i64 = omera_conn
+            .query_row("SELECT COUNT(*) FROM folders", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_non_empty_destination_masks_and_reports_conflict() {
+        let omera_dir = tempfile::tempdir().unwrap();
+        let src_dir = tempfile::tempdir().unwrap();
+
+        // Create omera.db and populate it with a folder/file so it is non-empty
+        let omera_db = omera_dir.path().join("omera.db");
+        let db = omera_storage::Database::connect(&omera_db).unwrap();
+        db.add_folder("/omera/folder").unwrap();
+
+        // Create one legacy source
+        let berry_db = src_dir.path().join("berry.db");
+        let conn = omera_storage::rusqlite::Connection::open(&berry_db).unwrap();
+        conn.execute("CREATE TABLE files (id INTEGER PRIMARY KEY);", [])
+            .unwrap();
+        conn.execute("INSERT INTO files (id) VALUES (1);", [])
+            .unwrap();
+        drop(conn);
+
+        let candidates = vec![("src".to_string(), src_dir.path().to_path_buf())];
+
+        let mut coordinator = MigrationCoordinator::new();
+        let status = coordinator
+            .get_status_for_roots(omera_dir.path(), &candidates)
+            .expect("Status check should succeed");
+
+        // Non-empty destination -> migrated
+        assert_eq!(status.stage, "migrated");
+
+        // Preview for the source must include conflict about omera.db already existing
+        let preview = coordinator
+            .preview_migration_for_roots(
+                omera_dir.path(),
+                &candidates,
+                &status.discovered_sources[0].source_id,
+            )
+            .expect("Preview should succeed");
+        assert!(
+            preview
+                .conflicts
+                .iter()
+                .any(|c| c.contains("Target database omera.db already exists")),
+            "Preview conflicts should mention target database exists: {:?}",
+            preview.conflicts
         );
     }
 }

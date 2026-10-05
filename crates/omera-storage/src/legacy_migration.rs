@@ -364,6 +364,26 @@ pub fn verify_destination_health(destination_db: &Path) -> Result<bool, String> 
     }
 }
 
+/// Check if a SQLite database exists and is empty (contains 0 indexed files and 0 folders).
+/// Returns false if the file does not exist, cannot be opened, or contains user data.
+pub fn is_database_empty(db_path: &Path) -> bool {
+    if !db_path.exists() {
+        return false;
+    }
+    match Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(conn) => {
+            let files_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))
+                .unwrap_or(1);
+            let folders_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM folders", [], |r| r.get(0))
+                .unwrap_or(1);
+            files_count == 0 && folders_count == 0
+        }
+        Err(_) => false,
+    }
+}
+
 fn calculate_dir_size(dir: &Path) -> u64 {
     let mut total = 0u64;
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -441,6 +461,23 @@ mod tests {
         // Re-migrating to existing destination must error with DESTINATION_EXISTS
         let err = migrate_database(&source_db, &dest_db, staging_dir.path()).unwrap_err();
         assert_eq!(err.code, "DESTINATION_EXISTS");
+    }
+
+    #[test]
+    fn test_is_database_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+
+        // Non-existent database
+        assert!(!is_database_empty(&db_path));
+
+        // Newly created database via Database::connect (runs migrations, but 0 files / 0 folders)
+        let db = crate::Database::connect(&db_path).unwrap();
+        assert!(is_database_empty(&db_path));
+
+        // Add a folder
+        db.add_folder("/test/folder").unwrap();
+        assert!(!is_database_empty(&db_path));
     }
 
     #[test]

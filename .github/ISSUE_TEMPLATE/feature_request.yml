@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a capability, usability improvement, or engineering change.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe one proposal per issue and search existing open and closed issues first.
+        Explain the user problem and an observable outcome before proposing implementation details.
+  - type: checkboxes
+    id: existing-issues
+    attributes:
+      label: Existing issues
+      options:
+        - label: I have searched existing issues and will link related proposals below.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Who encounters this problem, and what are they trying to accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-outcome
+    attributes:
+      label: Proposed outcome
+      description: Describe the behavior or capability you would like to see.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and current workaround
+      description: Explain how this is handled today and any alternatives you considered.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable conditions that would make this proposal complete. Include accessibility, performance, and data preservation where relevant.
+      placeholder: |
+        - [ ] A user can ...
+        - [ ] The existing workflow continues to ...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and dependencies
+      description: Add relevant version, affected workflows, dependencies, or ownership boundaries. Implementation details are optional.
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related issues or pull requests
+      description: Link prior proposals, relevant designs, or supporting evidence.

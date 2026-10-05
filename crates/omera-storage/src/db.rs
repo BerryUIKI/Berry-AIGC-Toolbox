@@ -130,6 +130,24 @@ const UPSERT_FILE_SQL: &str =
          stack_id        = coalesce(excluded.stack_id, files.stack_id),
          stack_order     = coalesce(excluded.stack_order, files.stack_order)";
 
+/// SQL that inserts or updates a file row keyed by its unique path, returning the affected row id.
+const UPSERT_FILE_RETURNING_ID_SQL: &str =
+    "INSERT INTO files (folder_id, path, container, size_bytes, modified_at, metadata, rating, aesthetic_score, is_favorite, is_nsfw, stack_id, stack_order)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+     ON CONFLICT(path) DO UPDATE SET
+         folder_id       = excluded.folder_id,
+         container       = excluded.container,
+         size_bytes      = excluded.size_bytes,
+         modified_at     = excluded.modified_at,
+         metadata        = excluded.metadata,
+         rating          = coalesce(excluded.rating, files.rating),
+         aesthetic_score = coalesce(excluded.aesthetic_score, files.aesthetic_score),
+         is_favorite     = files.is_favorite,
+         is_nsfw         = files.is_nsfw,
+         stack_id        = coalesce(excluded.stack_id, files.stack_id),
+         stack_order     = coalesce(excluded.stack_order, files.stack_order)
+     RETURNING id";
+
 /// A SQLite database with a fully migrated schema.
 pub struct Database {
     conn: Connection,
@@ -440,8 +458,8 @@ impl Database {
             .as_ref()
             .map(serde_json::to_string)
             .transpose()?;
-        self.conn.execute(
-            UPSERT_FILE_SQL,
+        let id = self.conn.query_row(
+            UPSERT_FILE_RETURNING_ID_SQL,
             params![
                 file.folder_id,
                 file.path,
@@ -456,8 +474,9 @@ impl Database {
                 file.stack_id,
                 file.stack_order as i64,
             ],
+            |row| row.get(0),
         )?;
-        Ok(self.conn.last_insert_rowid())
+        Ok(id)
     }
 
     /// Insert or update many files in a single transaction, returning the
@@ -3597,6 +3616,64 @@ mod tests {
         let files = db.list_files(folder.id).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].size_bytes, 200);
+    }
+
+    #[test]
+    fn upsert_existing_path_returns_actual_id_after_intervening_inserts() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+
+        let file_a = image(folder.id, "/img/a.png");
+        let id_a = db.upsert_file(&file_a).unwrap();
+
+        let file_b = image(folder.id, "/img/b.png");
+        let id_b = db.upsert_file(&file_b).unwrap();
+        assert_ne!(id_a, id_b);
+
+        let file_c = image(folder.id, "/img/c.png");
+        let id_c = db.upsert_file(&file_c).unwrap();
+        assert_ne!(id_a, id_c);
+        assert_ne!(id_b, id_c);
+
+        // Upsert existing file_a after intervening inserts must return id_a, not id_c
+        let mut updated_a = file_a.clone();
+        updated_a.size_bytes = 9999;
+        let returned_id_a = db.upsert_file(&updated_a).unwrap();
+        assert_eq!(
+            returned_id_a, id_a,
+            "Upserting existing file A must return A's row ID"
+        );
+
+        // Upsert existing file_b after intervening update must return id_b
+        let mut updated_b = file_b.clone();
+        updated_b.size_bytes = 8888;
+        let returned_id_b = db.upsert_file(&updated_b).unwrap();
+        assert_eq!(
+            returned_id_b, id_b,
+            "Upserting existing file B must return B's row ID"
+        );
+
+        // Verify downstream associations (tag, album, cleanup queue) attach to the correct row
+        let tag = db.create_tag("test_tag", None).unwrap();
+        db.tag_file(returned_id_a, tag.id).unwrap();
+        let a_tags = db.get_file_tags(id_a).unwrap();
+        assert_eq!(a_tags.len(), 1);
+        assert_eq!(a_tags[0].name, "test_tag");
+
+        let b_tags = db.get_file_tags(id_b).unwrap();
+        assert_eq!(b_tags.len(), 0, "File B must not receive File A's tag");
+
+        let album = db.create_album("test_album", None).unwrap();
+        db.add_file_to_album(album.id, returned_id_a).unwrap();
+        let album_files = db.list_album_files(album.id).unwrap();
+        assert_eq!(album_files.len(), 1);
+        assert_eq!(album_files[0].id, Some(id_a));
+
+        db.enqueue_cleanup("/source/a.png", returned_id_a, 0)
+            .unwrap();
+        let pending = db.list_due_cleanups(i64::MAX).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].target_image_id, id_a);
     }
 
     #[test]

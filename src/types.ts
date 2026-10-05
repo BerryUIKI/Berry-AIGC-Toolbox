@@ -628,3 +628,101 @@ export interface DetectedLora {
   hash?: string | null;
   model?: LoraModel | null;
 }
+
+export interface DiscoveredSource {
+  source_id: string;
+  identifier: string;
+  root_path: string;
+  database_path: string;
+  config_path?: string | null;
+  file_count: number;
+  database_size_bytes: number;
+  total_size_bytes: number;
+  schema_version: number;
+  is_locked: boolean;
+}
+
+export interface MigratedArtifact {
+  category: string;
+  source_path: string;
+  destination_path: string;
+  status: string;
+  size_bytes: number;
+}
+
+export interface MigrationReceipt {
+  receipt_id: string;
+  source_id: string;
+  source_identifier: string;
+  source_root: string;
+  source_schema_version: number;
+  destination_root: string;
+  destination_db: string;
+  created_at: number;
+  artifacts: MigratedArtifact[];
+  integrity_hash: string;
+  cleanup_status: string;
+}
+
+export interface MigrationError {
+  code: string;
+  message_key: string;
+  retryable: boolean;
+  context?: string | null;
+}
+
+export interface LegacyMigrationStatus {
+  stage: string;
+  discovered_sources: DiscoveredSource[];
+  destination_exists: boolean;
+  active_receipt?: MigrationReceipt | null;
+  available_actions: string[];
+}
+
+export interface LegacyMigrationPreview {
+  plan_id: string;
+  source: DiscoveredSource;
+  destination_root: string;
+  destination_db: string;
+  required_space_bytes: number;
+  available_space_bytes: number;
+  conflicts: string[];
+  exclusions: string[];
+}
+
+export interface LegacyMigrationJob {
+  job_id: string;
+  plan_id: string;
+  status: string;
+  progress: number;
+  current_step: string;
+  error?: MigrationError | null;
+  receipt?: MigrationReceipt | null;
+}
+
+export interface CleanupItem {
+  path: string;
+  category: string;
+  size_bytes: number;
+  eligible: boolean;
+  reason?: string | null;
+}
+
+export interface LegacyCleanupPreview {
+  preview_id: string;
+  receipt_id: string;
+  expires_at: number;
+  items: CleanupItem[];
+  total_size_bytes: number;
+  destination_healthy: boolean;
+}
+
+export interface LegacyCleanupResult {
+  receipt_id: string;
+  cleaned_count: number;
+  failed_count: number;
+  cleaned_bytes: number;
+  errors: string[];
+  status: string;
+}
+

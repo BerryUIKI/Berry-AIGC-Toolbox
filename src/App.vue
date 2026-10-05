@@ -95,6 +95,9 @@ const ImportTransformModal = defineAsyncComponent(
 const BatchTransformModal = defineAsyncComponent(
   () => import("./components/BatchTransformModal.vue")
 );
+const LegacyMigrationModal = defineAsyncComponent(
+  () => import("./components/LegacyMigrationModal.vue")
+);
 
 const info = ref<AppInfo | null>(null);
 const folders = ref<Folder[]>([]);
@@ -180,6 +183,7 @@ const importModalFolderId = ref<number | null>(null);
 const importModalAlbumId = ref<number | null>(null);
 const batchTransformModalOpen = ref(false);
 const batchTransformFilesList = ref<ImageFile[]>([]);
+const legacyMigrationModalOpen = ref(false);
 const allowOverrideExistingPrompt = ref(false);
 
 const isAnyModalOpen = computed(() =>
@@ -202,6 +206,7 @@ const isAnyModalOpen = computed(() =>
   exportModalOpen.value ||
   importModalOpen.value ||
   batchTransformModalOpen.value ||
+  legacyMigrationModalOpen.value ||
   stackMergeWarningOpen.value
 );
 
@@ -1489,6 +1494,17 @@ async function onOnboardingComplete() {
   }
 }
 
+async function onLegacyMigrated() {
+  try {
+    await reloadFolders();
+    await loadAlbumsAndTags();
+    await refreshCounts();
+    await loadFiles();
+  } catch (err) {
+    console.warn("Post-legacy migration data reload failed:", err);
+  }
+}
+
 function onBatchAddToAlbum() {
   const ids = selectedFilesList.value
     .map((f) => f.id)
@@ -2215,6 +2231,7 @@ function onResetZoom() {
           @scan-active="onScanActiveFromMenu"
           @rescan-all="onRescanAllFromMenu"
           @open-db-manager="dbManagerModalOpen = true"
+          @open-legacy-migration="legacyMigrationModalOpen = true"
           @open-settings="settingsModalOpen = true"
           @select-all="onSelectAll"
           @clear-selection="onClearSelection"
@@ -2762,6 +2779,14 @@ function onResetZoom() {
       :folders="folders"
       @close="batchTransformModalOpen = false"
       @completed="onBatchTransformCompleted"
+    />
+
+    <!-- Legacy Migration Modal -->
+    <LegacyMigrationModal
+      v-if="legacyMigrationModalOpen"
+      :show="legacyMigrationModalOpen"
+      @close="legacyMigrationModalOpen = false"
+      @migrated="onLegacyMigrated"
     />
 
     <!-- Help & Feature Guide Drawer -->

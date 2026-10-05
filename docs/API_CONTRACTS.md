@@ -119,6 +119,16 @@ Subscribe to progress before starting an operation and always dispose listeners 
 
 An `async fn` declaration alone does not ensure work is off the runtime thread. Blocking filesystem/decode/inference/network work belongs in bounded workers, and shared database locks must be released before that work. See L8/#102 for command-by-command ownership changes.
 
+## Database restore and recovery lifecycle — IMPLEMENTED
+
+Owner: lead. Database restores (both local `restore_database` and remote `cloud_backup_restore_snapshot`) route through the safe staged recovery lifecycle in `omera_storage::recovery`.
+
+- Restores validate archive integrity, SQLite `PRAGMA integrity_check`, user schema version, and foreign key relationships (`PRAGMA foreign_key_check`) on a staged temporary copy.
+- The validated database is written to `active.pending-restore.db` without mutating the live SQLite file or conflicting with active WAL/mmap readers or writers.
+- Live database connections and workers remain open and unmodified during staging; no in-place overwrite occurs while locks or mmap sections are active.
+- Activation occurs during startup/restart in `omera_storage::recovery::apply_pending_restore` before application connections or workers start.
+- Prior to applying the restore, a timestamped rollback copy (`pre-restore-<uuid>.db`) is transactionally preserved.
+
 ## Planned image transformation contract — NOT IMPLEMENTED
 
 The #118 import/batch transformation commands, job receipt, source-disposition authorization and archive/recovery behavior are **proposals**, not registered IPC. See [IMAGE_TRANSFORM_PLAN.md](IMAGE_TRANSFORM_PLAN.md) for the draft shape and gates. `export_files_batch` remains the existing callable command; changes to its DTO, progress event or privacy semantics require a coordinated Rust/TypeScript contract update and [IPC_REFERENCE.md](IPC_REFERENCE.md) update. The lead must approve backend-owned path selection, staged publication, persistent partial results and source cleanup before any UI invokes new commands.

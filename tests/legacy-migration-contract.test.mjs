@@ -144,3 +144,47 @@ test("Legacy Migration: Command parameters and return DTO shapes are compatible"
   assert.match(domainMigration, /pub struct LegacyCleanupPreview/);
   assert.match(domainMigration, /pub struct LegacyCleanupResult/);
 });
+
+test("Cloud Restore: Uses staged recovery lifecycle and does not overwrite live database", async () => {
+  const cloudBackupContent = await fs.readFile(
+    new URL("../src-tauri/src/cloud_backup.rs", import.meta.url),
+    "utf8",
+  );
+  const commandsContent = await fs.readFile(
+    new URL("../src-tauri/src/commands.rs", import.meta.url),
+    "utf8",
+  );
+  const libContent = await fs.readFile(
+    new URL("../src-tauri/src/lib.rs", import.meta.url),
+    "utf8",
+  );
+
+  // 1. cloud_backup::restore_cloud_snapshot must route through omera_storage::recovery::stage_restore
+  assert.match(
+    cloudBackupContent,
+    /omera_storage::recovery::stage_restore/,
+    "cloud_backup must call omera_storage::recovery::stage_restore",
+  );
+
+  // 2. Must NOT overwrite active_db_path with fs::copy directly in restore_cloud_snapshot
+  assert.doesNotMatch(
+    cloudBackupContent,
+    /fs::copy\([^,]+,\s*active_db_path\)/,
+    "cloud_backup must not copy directly over active_db_path",
+  );
+
+  // 3. Application startup must apply pending restore prior to connecting to SQLite database
+  assert.match(
+    libContent,
+    /omera_storage::recovery::apply_pending_restore\(&database_path\)/,
+    "lib.rs setup must apply pending restore before opening database",
+  );
+
+  // 4. commands.rs restarts the application after staging cloud restore
+  assert.match(
+    commandsContent,
+    /pub async fn cloud_backup_restore_snapshot[\s\S]*?app_handle\.restart\(\)/,
+    "cloud_backup_restore_snapshot must trigger app_handle.restart() to apply staged restore",
+  );
+});
+

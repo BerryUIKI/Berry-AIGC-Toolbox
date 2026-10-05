@@ -89,3 +89,58 @@ test("Legacy Migration: Data safety rules exclude user media and external vaults
     "Must use OS Recycle Bin / Trash rather than permanent deletion",
   );
 });
+
+test("Legacy Migration: Command parameters and return DTO shapes are compatible", async () => {
+  const domainMigration = await fs.readFile(
+    new URL("../crates/omera-domain/src/migration.rs", import.meta.url),
+    "utf8",
+  );
+  const commandsContent = await fs.readFile(
+    new URL("../src-tauri/src/commands.rs", import.meta.url),
+    "utf8",
+  );
+
+  // Verify return types in commands.rs match domain types
+  assert.match(
+    commandsContent,
+    /pub fn get_legacy_migration_status\([^)]*\)\s*->\s*Result<omera_domain::LegacyMigrationStatus,\s*String>/,
+    "get_legacy_migration_status must return LegacyMigrationStatus",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn preview_legacy_migration\([^)]*source_id:\s*String[^)]*\)\s*->\s*Result<omera_domain::LegacyMigrationPreview,\s*String>/,
+    "preview_legacy_migration must accept source_id and return LegacyMigrationPreview",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn start_legacy_migration\([^)]*plan_id:\s*String[^)]*\)\s*->\s*Result<omera_domain::LegacyMigrationJob,\s*String>/,
+    "start_legacy_migration must accept plan_id and return LegacyMigrationJob",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn get_legacy_migration_job\([^)]*job_id:\s*String[^)]*\)\s*->\s*Result<omera_domain::LegacyMigrationJob,\s*String>/,
+    "get_legacy_migration_job must accept job_id and return LegacyMigrationJob",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn preview_legacy_cleanup\([^)]*receipt_id:\s*String[^)]*\)\s*->\s*Result<omera_domain::LegacyCleanupPreview,\s*String>/,
+    "preview_legacy_cleanup must accept receipt_id and return LegacyCleanupPreview",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn confirm_legacy_cleanup\([^)]*preview_id:\s*String,\s*confirmed:\s*bool[^)]*\)\s*->\s*Result<omera_domain::LegacyCleanupResult,\s*String>/,
+    "confirm_legacy_cleanup must accept preview_id and confirmed, returning LegacyCleanupResult",
+  );
+  assert.match(
+    commandsContent,
+    /pub fn defer_legacy_cleanup\([^)]*receipt_id:\s*String[^)]*\)\s*->\s*Result<\(\),\s*String>/,
+    "defer_legacy_cleanup must accept receipt_id and return ()",
+  );
+
+  // Verify core struct definitions exist in domain
+  assert.match(domainMigration, /pub struct LegacyMigrationStatus/);
+  assert.match(domainMigration, /pub struct LegacyMigrationPreview/);
+  assert.match(domainMigration, /pub struct LegacyMigrationJob/);
+  assert.match(domainMigration, /pub struct LegacyCleanupPreview/);
+  assert.match(domainMigration, /pub struct LegacyCleanupResult/);
+});

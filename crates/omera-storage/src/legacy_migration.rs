@@ -384,6 +384,65 @@ pub fn is_database_empty(db_path: &Path) -> bool {
     }
 }
 
+/// Verify that a destination model artifact (file or directory) exists, is readable,
+/// and is non-empty. If source was a directory, destination must contain at least as many files.
+pub fn validate_model_artifact_health(
+    source_path: &Path,
+    dest_path: &Path,
+) -> Result<bool, String> {
+    if !dest_path.exists() {
+        return Ok(false);
+    }
+
+    if source_path.is_file() {
+        if !dest_path.is_file() {
+            return Ok(false);
+        }
+        let source_len = std::fs::metadata(source_path).map(|m| m.len()).unwrap_or(0);
+        let dest_len = std::fs::metadata(dest_path).map(|m| m.len()).unwrap_or(0);
+        if dest_len == 0 || (source_len > 0 && dest_len < source_len) {
+            return Ok(false);
+        }
+    } else if source_path.is_dir() {
+        if !dest_path.is_dir() {
+            return Ok(false);
+        }
+        let source_count = count_dir_entries(source_path);
+        let dest_count = count_dir_entries(dest_path);
+        if dest_count == 0 || (source_count > 0 && dest_count < source_count) {
+            return Ok(false);
+        }
+    } else {
+        // Source no longer exists or special file: destination must exist and be non-empty
+        let dest_len = if dest_path.is_file() {
+            std::fs::metadata(dest_path).map(|m| m.len()).unwrap_or(0)
+        } else {
+            calculate_dir_size(dest_path)
+        };
+        if dest_len == 0 {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+fn count_dir_entries(dir: &Path) -> usize {
+    let mut count = 0;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.is_file() {
+                    count += 1;
+                } else if meta.is_dir() && !meta.is_symlink() {
+                    count += count_dir_entries(&entry.path());
+                }
+            }
+        }
+    }
+    count
+}
+
 fn calculate_dir_size(dir: &Path) -> u64 {
     let mut total = 0u64;
     if let Ok(entries) = std::fs::read_dir(dir) {
@@ -742,5 +801,46 @@ mod tests {
             src_file_count, 2,
             "Source files count must remain exactly 2"
         );
+    }
+
+    #[test]
+    fn test_validate_model_artifact_health() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+
+        let src_model = src_dir.path().join("model.onnx");
+        let dest_model = dest_dir.path().join("model.onnx");
+
+        // Destination missing
+        std::fs::write(&src_model, b"weights-data-12345").unwrap();
+        assert!(!validate_model_artifact_health(&src_model, &dest_model).unwrap());
+
+        // Destination truncated / incomplete
+        std::fs::write(&dest_model, b"short").unwrap();
+        assert!(!validate_model_artifact_health(&src_model, &dest_model).unwrap());
+
+        // Destination matching size / healthy
+        std::fs::write(&dest_model, b"weights-data-12345").unwrap();
+        assert!(validate_model_artifact_health(&src_model, &dest_model).unwrap());
+
+        // Test directory model
+        let src_models_dir = src_dir.path().join("models");
+        let dest_models_dir = dest_dir.path().join("models");
+        std::fs::create_dir_all(&src_models_dir).unwrap();
+        std::fs::create_dir_all(&dest_models_dir).unwrap();
+
+        std::fs::write(src_models_dir.join("m1.bin"), b"data1").unwrap();
+        std::fs::write(src_models_dir.join("m2.bin"), b"data2").unwrap();
+
+        // Dest directory empty
+        assert!(!validate_model_artifact_health(&src_models_dir, &dest_models_dir).unwrap());
+
+        // Dest directory partial
+        std::fs::write(dest_models_dir.join("m1.bin"), b"data1").unwrap();
+        assert!(!validate_model_artifact_health(&src_models_dir, &dest_models_dir).unwrap());
+
+        // Dest directory complete
+        std::fs::write(dest_models_dir.join("m2.bin"), b"data2").unwrap();
+        assert!(validate_model_artifact_health(&src_models_dir, &dest_models_dir).unwrap());
     }
 }

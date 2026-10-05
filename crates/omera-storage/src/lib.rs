@@ -16,3 +16,4 @@ pub mod recovery;
 
 pub use db::{Database, DatabaseError, ThumbnailCacheEntry};
 pub use engine::{DatabaseDialect, StorageEngine};
+pub use rusqlite;

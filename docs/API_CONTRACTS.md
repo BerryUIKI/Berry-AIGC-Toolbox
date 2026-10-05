@@ -102,8 +102,9 @@ The lead will stabilize a per-file result DTO before engineers add collision/ret
 
 The storage-only Rust function `recovery::migrate_copy(source, destination)` is **not an IPC command**. It snapshots committed SQLite/WAL content, validates the source, upgrades a staged copy, rejects existing destinations, and preserves the source. It does not migrate config/credentials, discover sources, track receipts, or authorize cleanup. Integrators must implement those steps under the migration contract.
 
-`import_files_to_managed_vault` ingests external files into managed vault folders with optional transcoding and album association. It delegates directly to the unified publication service in `crates/omera-scan::transform`:
-- Destination folders are validated to exist and be managed vaults (`folder_type == "managed"`). Linked (external read-only) folders are strictly rejected with zero destination or database side effects.
+`import_files_to_managed_vault` and the reusable `execute_managed_import_transform` ingest external files into managed vault folders with optional transcoding and album association. Both delegate directly to the unified publication service in `crates/omera-scan::transform`:
+- Destination folders are validated to exist and be managed vaults (`folder_type == "managed"`). Linked (external read-only) and pipeline folders are strictly rejected before any file creation, with zero destination or database side effects.
+- Missing or stale destination IDs reject cleanly with descriptive errors.
 - Collision handling supports configurable `TransformCollisionPolicy` (`rename` or `skip`).
 - Sibling metadata sidecars (`.txt`, `.json`) are preserved unless `metadata_policy` is `StripAll`.
 - Metadata policy (`KeepSupported`, `StripAi`, `StripAll`) is applied consistently.

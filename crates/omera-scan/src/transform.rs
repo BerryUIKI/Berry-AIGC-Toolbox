@@ -1412,6 +1412,77 @@ mod tests {
         // Verify zero files in database
         let files = db.list_files(link_folder.id).unwrap();
         assert_eq!(files.len(), 0);
+
+        // 3. Test exact issue #260 reproduction: folder created via default db.add_folder()
+        let repro_dest = dir.path().join("repro_external");
+        fs::create_dir_all(&repro_dest).unwrap();
+        let repro_folder = db.add_folder(&repro_dest.to_string_lossy()).unwrap();
+        let repro_req = ImportTransformRequest {
+            managed_destination_id: repro_folder.id,
+            source_paths: vec![src_img.to_string_lossy().to_string()],
+            spec: TransformSpec::default(),
+            source_disposition: omera_domain::transform::ImportSourceDisposition::Keep,
+        };
+        let repro_err =
+            execute_managed_import_transform(&db, &repro_req, None::<fn(usize, usize, &str)>)
+                .unwrap_err();
+        assert!(
+            repro_err.contains("not a managed vault folder"),
+            "Error was: {repro_err}"
+        );
+        let repro_entries: Vec<_> = fs::read_dir(&repro_dest).unwrap().collect();
+        assert_eq!(
+            repro_entries.len(),
+            0,
+            "Repro external folder must have no created files"
+        );
+
+        // 4. Test missing/stale destination ID fails cleanly
+        let stale_req = ImportTransformRequest {
+            managed_destination_id: 999999,
+            source_paths: vec![src_img.to_string_lossy().to_string()],
+            spec: TransformSpec::default(),
+            source_disposition: omera_domain::transform::ImportSourceDisposition::Keep,
+        };
+        let stale_err =
+            execute_managed_import_transform(&db, &stale_req, None::<fn(usize, usize, &str)>)
+                .unwrap_err();
+        assert!(stale_err.contains("not found"), "Error was: {stale_err}");
+        let stale_err2 = import_files_to_managed_folder(
+            &db,
+            &[src_img.to_string_lossy().to_string()],
+            999999,
+            None,
+        )
+        .unwrap_err();
+        assert!(stale_err2.contains("not found"), "Error was: {stale_err2}");
+
+        // 5. Test pipeline destination folder is rejected
+        let pipeline_dir = dir.path().join("pipeline_folder");
+        fs::create_dir_all(&pipeline_dir).unwrap();
+        let pipe_folder = db
+            .add_folder_with_mode(
+                &pipeline_dir.to_string_lossy(),
+                "pipeline",
+                Some("/unused"),
+                Some("copy"),
+                None,
+                true,
+            )
+            .unwrap();
+        let pipe_req = ImportTransformRequest {
+            managed_destination_id: pipe_folder.id,
+            source_paths: vec![src_img.to_string_lossy().to_string()],
+            spec: TransformSpec::default(),
+            source_disposition: omera_domain::transform::ImportSourceDisposition::Keep,
+        };
+        let pipe_err =
+            execute_managed_import_transform(&db, &pipe_req, None::<fn(usize, usize, &str)>)
+                .unwrap_err();
+        assert!(
+            pipe_err.contains("not a managed vault folder"),
+            "Error was: {pipe_err}"
+        );
     }
 
     #[test]

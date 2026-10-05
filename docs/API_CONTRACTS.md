@@ -109,6 +109,21 @@ The storage-only Rust function `recovery::migrate_copy(source, destination)` is 
 - Metadata policy (`KeepSupported`, `StripAi`, `StripAll`) is applied consistently.
 - In-flight failure compensation: if file publication succeeds but database record upserting fails, the published file and any copied sidecars are compensated (cleaned up) from the managed vault directory, leaving source files completely intact.
 
+`harvest_pipeline_folder({ folderId })` and `process_pipeline_cleanups()` manage local AI generator outputs (ComfyUI, SD WebUI, Fooocus) and delayed trash disposal. They delegate directly to reusable Rust services in `crates/omera-scan::pipeline`:
+- `harvest_pipeline_folder`:
+  - Validates folder existence, type (`folder_type == "pipeline"`), and configured source directory existence.
+  - Debounces newly modified files to prevent ingesting partially written images during local generation.
+  - Enforces collision policies (`SkipIdentical`, `Rename`, `SkipAlways`, `Overwrite`).
+  - Preserves sibling metadata sidecars (`.txt`, `.json`) alongside harvested images.
+  - Extracts metadata and indexes files into SQLite with transactional failure rollback / filesystem compensation.
+  - Ingest action support: when `ingest_action == "move"`, files are scheduled for delayed cleanup (`grace_period_hours > 0`) or trashed immediately (`grace_period_hours <= 0`).
+- `process_pipeline_cleanups`:
+  - Enforces strict destination and source revalidation before any file is trashed.
+  - Destination revalidation: verifies that the target library image record still exists in SQLite and that the harvested file on disk exists and has non-zero size. If the target was removed from the library or is missing on disk, source deletion is rejected and recorded as failed to prevent data loss.
+  - Source revalidation: rejects directory roots, external library roots, and self-referential paths (where source equals destination).
+  - Moves source files and any sidecars (`.txt`, `.json`) to system trash, updating cleanup queue records to `deleted` on success or `failed` on error.
+  - Never falls back to permanent deletion if system trash fails.
+
 
 ## Updates and long-running operations
 

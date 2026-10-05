@@ -9,6 +9,7 @@
 pub mod export;
 pub mod file_operations;
 pub mod html_showcase;
+pub mod pipeline;
 pub mod scanner;
 pub mod thumbnail;
 pub mod transform;
@@ -18,6 +19,12 @@ pub use export::{
     sanitize_filename_part, ProcessedExportItem,
 };
 pub use html_showcase::{generate_html_showcase, ShowcaseItemMetadata};
+pub use pipeline::{
+    get_pipeline_cleanup_queue, harvest_pipeline_folder, harvest_pipeline_folder_with_cancellation,
+    process_pipeline_cleanups, process_pipeline_cleanups_at, PipelineCleanupItemOutcome,
+    PipelineCleanupReport, PipelineCollisionPolicy, PipelineError, PipelineHarvestItemOutcome,
+    PipelineHarvestOptions, PipelineHarvestReport,
+};
 pub use scanner::{ScanError, ScanProgress, ScanStats, Scanner};
 pub use thumbnail::{
     batch_generate_thumbnails, clear_thumbnail_cache, ensure_thumbnail, get_thumbnail_cache_stats,

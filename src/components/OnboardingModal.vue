@@ -3,7 +3,8 @@ import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { t } from "../i18n";
-import type { Folder, PipelineDetectedPath } from "../types";
+import type { Folder, PipelineDetectedPath, LegacyMigrationStatus } from "../types";
+import LegacyMigrationModal from "./LegacyMigrationModal.vue";
 
 const emit = defineEmits<{
   (e: "close"): void;
@@ -16,10 +17,22 @@ const vaultPath = ref("");
 const detecting = ref(false);
 const submitting = ref(false);
 const error = ref("");
+const legacyDiscoveredSourcesCount = ref(0);
+const showLegacyMigrationModal = ref(false);
 
 onMounted(() => {
   void scanLocalAi();
+  void checkLegacyMigration();
 });
+
+async function checkLegacyMigration() {
+  try {
+    const status = await invoke<LegacyMigrationStatus>("get_legacy_migration_status");
+    legacyDiscoveredSourcesCount.value = status.discovered_sources.length;
+  } catch (e) {
+    console.warn("Failed to check legacy migration status:", e);
+  }
+}
 
 async function scanLocalAi() {
   detecting.value = true;
@@ -116,6 +129,30 @@ function skip() {
                 <p>{{ t.onboarding.feat3Desc }}</p>
               </div>
             </div>
+          </div>
+
+          <!-- Discovered legacy library banner -->
+          <div
+            v-if="legacyDiscoveredSourcesCount > 0"
+            class="legacy-banner"
+            style="margin-top: 16px; padding: 14px 16px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px;"
+          >
+            <div>
+              <strong style="color: var(--color-text-primary); font-size: 0.95rem;">
+                📦 {{ t.legacyMigration.discoveredTitle }}
+              </strong>
+              <p style="margin: 4px 0 0 0; font-size: 0.82rem; color: var(--color-text-secondary);">
+                {{ t.legacyMigration.discoveredDesc }}
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn-primary"
+              style="white-space: nowrap; padding: 6px 14px; font-size: 0.82rem;"
+              @click="showLegacyMigrationModal = true"
+            >
+              🚀 {{ t.legacyMigration.title }}
+            </button>
           </div>
         </div>
 
@@ -230,6 +267,11 @@ function skip() {
         </div>
       </div>
     </div>
+    <LegacyMigrationModal
+      :show="showLegacyMigrationModal"
+      @close="showLegacyMigrationModal = false"
+      @migrated="showLegacyMigrationModal = false; emit('close');"
+    />
   </div>
 </template>
 

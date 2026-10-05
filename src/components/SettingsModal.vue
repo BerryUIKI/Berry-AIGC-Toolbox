@@ -43,12 +43,14 @@ import {
 import { applyTheme, normalizeTheme, type AppTheme } from "../utils/theme";
 import ThumbnailDiagnosticsModal from "./ThumbnailDiagnosticsModal.vue";
 import MigrationWizardModal from "./MigrationWizardModal.vue";
+import LegacyMigrationModal from "./LegacyMigrationModal.vue";
 import { checkServiceStatus } from "../utils/generation";
 import { open } from "@tauri-apps/plugin-dialog";
 import { collaborationSync, pingDatabase } from "../utils/collaborationSync";
 
 const showDiagnosticsModal = ref(false);
 const showMigrationWizardModal = ref(false);
+const showLegacyMigrationModal = ref(false);
 
 const props = defineProps<{
   show: boolean;
@@ -1181,6 +1183,24 @@ async function saveSettings() {
                 </button>
               </div>
             </div>
+
+            <!-- Legacy Berry Migration Card -->
+            <div class="settings-subsection migration-card-section" style="margin-top: 14px;">
+              <div class="migration-card-header">
+                <div>
+                  <h5 class="subsection-title">📦 {{ t.legacyMigration.title }}</h5>
+                  <p class="panel-subtitle">{{ t.legacyMigration.subtitle }}</p>
+                </div>
+                <button
+                  type="button"
+                  class="btn-open-wizard"
+                  style="background: #0284c7; border-color: #38bdf8;"
+                  @click="showLegacyMigrationModal = true"
+                >
+                  📥 {{ t.legacyMigration.openSettingsMigration }}
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- Tab: Cloud Snapshot Backup & Restore -->
@@ -1746,6 +1766,7 @@ async function saveSettings() {
     </div>
     <ThumbnailDiagnosticsModal :show="showDiagnosticsModal" @close="showDiagnosticsModal = false" />
     <MigrationWizardModal :show="showMigrationWizardModal" @close="showMigrationWizardModal = false" />
+    <LegacyMigrationModal :show="showLegacyMigrationModal" @close="showLegacyMigrationModal = false" />
   </div>
 </template>
 

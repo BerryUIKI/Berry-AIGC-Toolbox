@@ -18,6 +18,7 @@ const emit = defineEmits<{
   scanActive: [];
   rescanAll: [];
   openDbManager: [];
+  openLegacyMigration: [];
   openSettings: [];
   selectAll: [];
   clearSelection: [];
@@ -144,6 +145,10 @@ onUnmounted(() => {
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('openDbManager'))">
           <span class="item-icon">🗄️</span>
           <span class="item-title">{{ t.menu.dbManager }}</span>
+        </button>
+        <button type="button" class="dropdown-item" @click="handleAction(() => emit('openLegacyMigration'))">
+          <span class="item-icon">📦</span>
+          <span class="item-title">{{ t.legacyMigration.title }}</span>
         </button>
         <button type="button" class="dropdown-item" @click="handleAction(() => emit('openSettings'))">
           <span class="item-icon">⚙️</span>

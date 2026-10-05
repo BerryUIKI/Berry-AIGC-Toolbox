@@ -1,0 +1,94 @@
+name: Bug report
+description: Report an unexpected behavior or a regression in Omera.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe one problem per issue and search existing open and closed issues first.
+        Use synthetic files when possible. Remove credentials, private prompts, and personal paths from attachments.
+  - type: checkboxes
+    id: existing-issues
+    attributes:
+      label: Existing issues
+      options:
+        - label: I have searched existing issues and will link related reports below.
+          required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the problem and how it affects your workflow.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Omera version or commit
+      description: Include the version from Settings. For a development build, include the branch and commit.
+      placeholder: "0.4.3, or dev at <commit>"
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment details
+      description: OS version, CPU architecture, and installation source; add the provider or gallery mode if relevant.
+      placeholder: "Windows 11, x64, development build, Table mode"
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include relevant settings and a minimal synthetic example. If this is a code-review finding, explain the traced code path instead.
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include an error message or observable result, and state whether the issue is intermittent.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Choose the strongest evidence available; code inspection alone is a valid report.
+      options:
+        - Reproduced in the application
+        - Reproduced with a production function or component
+        - Observed in the interface
+        - Code inspection only
+    validations:
+      required: true
+  - type: textarea
+    id: supporting-material
+    attributes:
+      label: Logs, screenshots, or minimal reproduction
+      description: Paste sanitized logs or attach relevant material. State which platforms or scenarios remain untested.
+  - type: textarea
+    id: related-issues
+    attributes:
+      label: Related issues or pull requests
+      description: Link prior discussions, especially if this persists after a previously closed issue.

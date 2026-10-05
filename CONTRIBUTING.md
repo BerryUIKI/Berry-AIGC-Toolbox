@@ -13,6 +13,19 @@ Thank you for your interest in contributing to **Omera**! We welcome bug reports
 
 ---
 
+## Reporting Issues
+
+Search both open and closed issues before submitting a report. If a problem persists after a previous fix, link the original issue and include the version or commit you tested. Keep each issue focused on one problem or proposal.
+
+- Use the **Bug report** form for unexpected behavior. Include your environment, reproducible steps or the inspected code path, expected and actual behavior, and sanitized supporting evidence.
+- Use the **Feature request** form for new capabilities, usability improvements, or engineering proposals. Explain the problem, alternatives, and observable acceptance criteria.
+- Prefer synthetic sample files. Remove credentials, private prompts, and personal paths from logs and attachments.
+- Write titles and descriptions in English where possible so contributors can discuss and reproduce the issue together. Maintainers assign priority and area labels during triage.
+
+The form definitions live in [`.github/ISSUE_TEMPLATE`](.github/ISSUE_TEMPLATE). Blank issues remain available for reports that do not fit either form.
+
+---
+
 ## Local Development Setup
 
 ### Prerequisites

@@ -2770,7 +2770,11 @@ pub async fn batch_auto_tag_files(
                     BatchTagProgress {
                         current: index,
                         total,
-                        percent: if total > 0 { (index as f64 / total as f64) * 100.0 } else { 100.0 },
+                        percent: if total > 0 {
+                            (index as f64 / total as f64) * 100.0
+                        } else {
+                            100.0
+                        },
                         current_file: String::new(),
                         processed_files,
                         failed_files,
@@ -2819,7 +2823,7 @@ pub async fn batch_auto_tag_files(
                         tagger.predict_file(Path::new(&file.path), &config)
                     } else {
                         return Err(
-                            "No WD14 tagger model loaded. Please load a model first.".to_string(),
+                            "No WD14 tagger model loaded. Please load a model first.".to_string()
                         );
                     }
                 };
@@ -2838,7 +2842,9 @@ pub async fn batch_auto_tag_files(
                         if config.write_to_prompt && !predictions.is_empty() {
                             let prompt_text = predictions
                                 .iter()
-                                .filter(|p| !matches!(p.category, omera_tagger::TagCategory::Rating))
+                                .filter(|p| {
+                                    !matches!(p.category, omera_tagger::TagCategory::Rating)
+                                })
                                 .map(|p| p.name.as_str())
                                 .collect::<Vec<_>>()
                                 .join(", ");

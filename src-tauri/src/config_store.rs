@@ -94,6 +94,18 @@ pub fn load(path: &Path) -> Result<AppConfig, String> {
     Ok(config)
 }
 
+/// Read configuration without mutating the source file or migrating credentials.
+/// Keyring-referenced credentials will be resolved in-memory if available, but
+/// plaintext credentials will remain intact in memory and the file on disk is never written.
+pub fn load_readonly(path: &Path) -> Result<AppConfig, String> {
+    let _guard = CONFIG_LOCK.lock().map_err(|e| e.to_string())?;
+    let mut config = read(path)?;
+    // Resolve any existing keyring references without rewriting the source file
+    let _ = secrets(&mut config, resolve);
+    config.storage_backend = "sqlite".into();
+    Ok(config)
+}
+
 pub fn save(path: &Path, mut config: AppConfig) -> Result<AppConfig, String> {
     let _guard = CONFIG_LOCK.lock().map_err(|e| e.to_string())?;
     let current = read(path)?;
@@ -215,5 +227,25 @@ mod tests {
         assert_eq!(saved.config_revision, 1);
         assert!(save(&path, original).is_err());
         assert!(path.with_extension("json.bak").exists());
+    }
+
+    #[test]
+    fn load_readonly_preserves_file_bytes_and_reads_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let mut cfg = AppConfig::default();
+        cfg.cloud_backup.webdav_password = Some("my_secret_password".into());
+        let raw_bytes = serde_json::to_vec_pretty(&cfg).unwrap();
+        std::fs::write(&path, &raw_bytes).unwrap();
+
+        let loaded = load_readonly(&path).expect("load_readonly must succeed");
+        assert_eq!(
+            loaded.cloud_backup.webdav_password.as_deref(),
+            Some("my_secret_password")
+        );
+
+        // Verify the source file on disk was not modified in any byte
+        let on_disk_bytes = std::fs::read(&path).unwrap();
+        assert_eq!(on_disk_bytes, raw_bytes);
     }
 }

@@ -969,34 +969,8 @@ where
 
         let final_str = final_path.to_string_lossy().into_owned();
 
-        // Handle original disposition
-        let mut original_action = "kept";
-        let is_same_path = src_path == final_path;
-
-        if !is_same_path {
-            match request.original_disposition {
-                OriginalDisposition::Keep => {
-                    original_action = "kept";
-                }
-                OriginalDisposition::Archive => {
-                    let archive_dir = Path::new(&folder.path).join(".omera_archive");
-                    let _ = fs::create_dir_all(&archive_dir);
-                    let archive_dest = archive_dir.join(src_path.file_name().unwrap_or_default());
-                    if let Ok(()) = fs::rename(&src_path, &archive_dest) {
-                        original_action = "archived";
-                    }
-                }
-                OriginalDisposition::Trash => {
-                    if let Ok(()) = trash::delete(&src_path) {
-                        original_action = "trashed";
-                    } else {
-                        original_action = "trash_failed_kept";
-                    }
-                }
-            }
-        }
-
-        // Update database record with new metadata while keeping user ratings, albums, tags, stacks
+        // Update database record with new metadata while keeping user ratings, albums, tags, stacks.
+        // Persistence must precede original disposition to protect source integrity.
         let final_meta = fs::metadata(&final_path);
         let size_bytes = final_meta
             .as_ref()
@@ -1011,22 +985,69 @@ where
 
         let container = Container::from_id(&ext).unwrap_or(file.container);
 
+        let target_file_id = file.id.unwrap_or(*file_id);
         if let Err(e) = db.update_file_transformed(
-            file.id.unwrap_or(*file_id),
+            target_file_id,
             &final_str,
             container.id(),
             size_bytes,
             modified_at,
         ) {
+            // Compensation: if DB update fails and published file is separate from source, remove published derivative
+            if src_path != final_path {
+                let _ = fs::remove_file(&final_path);
+            }
             failed += 1;
             items.push(TransformItemReceipt {
                 source_id_or_path: file.path.clone(),
                 output_id_or_path: Some(final_str),
                 status: TransformItemStatus::Failed,
                 error_code: Some(format!("Failed to update database record: {e}")),
-                original_action: Some(original_action.to_string()),
+                original_action: Some("preserved".to_string()),
             });
             continue;
+        }
+
+        // Handle original disposition only after destination file and database update succeed
+        let mut original_action = "kept";
+        let is_same_path = src_path == final_path;
+
+        if !is_same_path {
+            match request.original_disposition {
+                OriginalDisposition::Keep => {
+                    original_action = "kept";
+                }
+                OriginalDisposition::Archive => {
+                    let archive_dir = Path::new(&folder.path).join(".omera_archive");
+                    let _ = fs::create_dir_all(&archive_dir);
+                    let file_stem_archive = src_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("archived");
+                    let file_ext_archive =
+                        src_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                    let archive_dest = resolve_publication_path(
+                        &archive_dir,
+                        file_stem_archive,
+                        file_ext_archive,
+                        TransformCollisionPolicy::Rename,
+                    )
+                    .unwrap_or_else(|_| archive_dir.join(src_path.file_name().unwrap_or_default()));
+
+                    if let Ok(()) = fs::rename(&src_path, &archive_dest) {
+                        original_action = "archived";
+                    } else {
+                        original_action = "archive_failed_kept";
+                    }
+                }
+                OriginalDisposition::Trash => {
+                    if let Ok(()) = trash::delete(&src_path) {
+                        original_action = "trashed";
+                    } else {
+                        original_action = "trash_failed_kept";
+                    }
+                }
+            }
         }
 
         succeeded += 1;
@@ -1667,5 +1688,161 @@ mod tests {
         // Source file and sidecar remain intact
         assert!(src_img.exists(), "Source image must remain intact");
         assert!(sidecar.exists(), "Source sidecar must remain intact");
+    }
+
+    #[test]
+    fn test_library_batch_transform_archive_waits_for_db_persistence() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        fs::create_dir_all(&managed_dir).unwrap();
+
+        let source = managed_dir.join("source.png");
+        create_dummy_png(&source, 64, 32);
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+
+        let file = omera_domain::ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: source.to_string_lossy().into_owned(),
+            size_bytes: fs::metadata(&source).unwrap().len(),
+            modified_at: 1,
+            container: Container::Png,
+            metadata: None,
+            rating: Some(4),
+            aesthetic_score: None,
+            is_favorite: true,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let id = db.upsert_file(&file).unwrap();
+
+        // Install synthetic trigger to simulate database write failure on UPDATE
+        db.connection()
+            .execute_batch(
+                "CREATE TRIGGER test_fail_update BEFORE UPDATE ON files BEGIN SELECT RAISE(FAIL, 'simulated database write failure'); END;",
+            )
+            .unwrap();
+
+        let request = LibraryTransformRequest {
+            file_ids: vec![id],
+            spec: TransformSpec {
+                format: TransformFormat::Jpeg,
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Archive,
+        };
+
+        let result =
+            execute_library_batch_transform(&db, &request, None::<fn(usize, usize, &str)>).unwrap();
+        assert_eq!(result.failed, 1);
+        assert_eq!(result.succeeded, 0);
+
+        // Source file MUST still exist in its original place
+        assert!(
+            source.exists(),
+            "Source was archived before failed DB update; indexed source path is missing"
+        );
+
+        // Derivative must have been rolled back / cleaned up on DB failure
+        let derivative_jpg = managed_dir.join("source.jpg");
+        assert!(
+            !derivative_jpg.exists(),
+            "Unindexed derivative should be cleaned up on DB failure"
+        );
+
+        // No files in .omera_archive
+        let archive_dir = managed_dir.join(".omera_archive");
+        if archive_dir.exists() {
+            let archive_entries: Vec<_> = fs::read_dir(&archive_dir).unwrap().collect();
+            assert_eq!(
+                archive_entries.len(),
+                0,
+                "Archive folder should not contain original when DB update failed"
+            );
+        }
+    }
+
+    #[test]
+    fn test_library_batch_transform_archive_collision_renames() {
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("managed_vault");
+        fs::create_dir_all(&managed_dir).unwrap();
+
+        // Create pre-existing file in .omera_archive with same name
+        let archive_dir = managed_dir.join(".omera_archive");
+        fs::create_dir_all(&archive_dir).unwrap();
+        let existing_archived = archive_dir.join("photo.png");
+        fs::write(&existing_archived, "previously archived").unwrap();
+
+        let source = managed_dir.join("photo.png");
+        create_dummy_png(&source, 64, 32);
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+
+        let file = omera_domain::ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: source.to_string_lossy().into_owned(),
+            size_bytes: fs::metadata(&source).unwrap().len(),
+            modified_at: 1,
+            container: Container::Png,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let id = db.upsert_file(&file).unwrap();
+
+        let request = LibraryTransformRequest {
+            file_ids: vec![id],
+            spec: TransformSpec {
+                format: TransformFormat::Jpeg,
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Archive,
+        };
+
+        let result =
+            execute_library_batch_transform(&db, &request, None::<fn(usize, usize, &str)>).unwrap();
+        assert_eq!(result.succeeded, 1);
+        assert_eq!(result.failed, 0);
+
+        // Pre-existing archived file remains untouched
+        assert_eq!(
+            fs::read_to_string(&existing_archived).unwrap(),
+            "previously archived"
+        );
+
+        // Newly archived file renamed to photo_1.png
+        let renamed_archived = archive_dir.join("photo_1.png");
+        assert!(
+            renamed_archived.exists(),
+            "Collision in archive folder must be resolved via renaming"
+        );
     }
 }

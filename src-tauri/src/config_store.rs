@@ -130,6 +130,30 @@ pub fn save(path: &Path, mut config: AppConfig) -> Result<AppConfig, String> {
     Ok(result)
 }
 
+/// Save a legacy configuration during migration into the destination path.
+///
+/// If the destination configuration does not yet exist, its baseline revision is 0,
+/// so the migrated configuration's revision is reset to 0 to pass optimistic concurrency
+/// and initialized to revision 1 upon first persistence.
+/// If the destination configuration already exists, it is kept authoritative and this function
+/// returns `Ok(existing_config)` without overwriting.
+pub fn save_migrated(path: &Path, mut legacy_config: AppConfig) -> Result<AppConfig, String> {
+    let _guard = CONFIG_LOCK.lock().map_err(|e| e.to_string())?;
+    if path.exists() {
+        return read(path);
+    }
+    legacy_config.config_revision = 0;
+    legacy_config.config_revision += 1;
+    legacy_config.storage_backend = "sqlite".into();
+    let result = legacy_config.clone();
+    secrets(&mut legacy_config, protect)?;
+    atomic_write(
+        path,
+        &serde_json::to_vec_pretty(&legacy_config).map_err(|e| e.to_string())?,
+    )?;
+    Ok(result)
+}
+
 /// Migrate secret entries from legacy keyring services to the Omera service,
 /// verifying readback before marking complete.
 pub fn migrate_credentials_to_omera(config: &AppConfig) -> Result<usize, String> {
@@ -247,5 +271,46 @@ mod tests {
         // Verify the source file on disk was not modified in any byte
         let on_disk_bytes = std::fs::read(&path).unwrap();
         assert_eq!(on_disk_bytes, raw_bytes);
+    }
+
+    #[test]
+    fn save_migrated_nonzero_revision_succeeds_on_absent_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let legacy_cfg = AppConfig {
+            config_revision: 42,
+            theme: "nord".to_string(),
+            ..Default::default()
+        };
+
+        let saved = save_migrated(&path, legacy_cfg).expect("save_migrated should succeed");
+        assert_eq!(saved.config_revision, 1);
+        assert_eq!(saved.theme, "nord");
+
+        let readback = load_readonly(&path).expect("load_readonly should succeed");
+        assert_eq!(readback.config_revision, 1);
+        assert_eq!(readback.theme, "nord");
+    }
+
+    #[test]
+    fn save_migrated_preserves_existing_destination_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let existing_cfg = AppConfig {
+            theme: "existing_theme".to_string(),
+            ..Default::default()
+        };
+        save(&path, existing_cfg).expect("save existing config should succeed");
+
+        let legacy_cfg = AppConfig {
+            theme: "legacy_theme".to_string(),
+            ..Default::default()
+        };
+        let result =
+            save_migrated(&path, legacy_cfg).expect("save_migrated should return existing");
+        assert_eq!(result.theme, "existing_theme");
+
+        let readback = load_readonly(&path).expect("load_readonly should succeed");
+        assert_eq!(readback.theme, "existing_theme");
     }
 }

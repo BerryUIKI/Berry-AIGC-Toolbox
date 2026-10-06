@@ -56,7 +56,7 @@ Organize, search, compare, and export tens of thousands of AIGC artworks — all
 - 📤 **Standalone HTML Showcase Export** — Zero-dependency single `index.html` with dark-theme gallery, fullscreen lightbox, prompt inspector, and keyword filter.
 - 🔄 **Incremental Remote Media Mirroring** — One-way local-to-remote upload sync with fingerprint/SHA-256 change detection, token-bucket bandwidth throttle, and worker concurrency (bidirectional sync planned).
 - ⚡ **O(1) Keyset Cursor Pagination** — < 1 ms page traversal at 500,000+ assets (84× faster than OFFSET).
-- 👥 **Multi-Database Team Studio** — Abstract `StorageEngine` supporting SQLite, MySQL 8.0+, and PostgreSQL 14+ with optimistic concurrency and real-time collaboration sync.
+- 👥 **Multi-Database Team Studio (Planned)** — Abstract `StorageEngine` trait with cross-platform storage roots, optimistic concurrency, and real-time collaboration sync. Current runtime uses SQLite; MySQL 8.0+ and PostgreSQL 14+ support are experimental/planned.
 - 📦 **Batch Transcoding & Privacy Strip** — Multi-threaded WebP/JPEG/PNG conversion with 4-tier metadata stripping (`KeepAll` → `StripAll`).
 
 ---
@@ -111,12 +111,12 @@ Automatically extracts and indexes Prompt, Negative Prompt, Model, Hash, Sampler
 - **Batch Export & Transcoding** — Multi-threaded WebP/JPEG/PNG conversion with 4-tier privacy metadata stripping and customizable filename templates.
 - **HTML Showcase Generator** — Standalone zero-dependency `index.html` with responsive dark gallery, fullscreen lightbox, prompt inspector, and instant keyword filter.
 
-### 👥 Multi-Database Team Studio
+### 👥 Multi-Database Team Studio (Planned)
 
-- **Storage Engine Abstraction** — `StorageEngine` trait supporting SQLite (default), MySQL 8.0+, and PostgreSQL 14+.
+- **Current Runtime: SQLite** — Fast local database with WAL mode for single-user and network file system scenarios.
+- **Storage Engine Abstraction** — `StorageEngine` trait and dialect system designed for multi-backend support. MySQL 8.0+ and PostgreSQL 14+ backends are experimental/planned.
 - **Cross-Platform Storage Roots** — Path normalization for multi-user collaboration across Windows, macOS, and Linux.
-- **Optimistic Concurrency** — Row-level version tracking with last-write-wins and set-union conflict resolution.
-- **Real-Time Collaboration** — Zero-DevOps change log journal polling engine with automatic cadence adaptation.
+- **SQL Export & Connection Testing** — Export SQLite data for migration; test remote connection strings (implementation of live query backends is planned).
 
 ### 🌐 Internationalization & Auto-Update
 
@@ -169,8 +169,8 @@ Omera is built for large libraries. The gallery renders from the indexed SQLite 
 │  └──────────────┘ └──────────────┘ └───────────────┘           │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────────┐           │
 │  │berry-storage │ │ berry-tagger │ │  berry-clip   │           │
-│  │ SQLite/MySQL │ │ WD14 ONNX    │ │ CLIP/SigLIP   │           │
-│  │ PostgreSQL   │ │ Danbooru     │ │ Text & Vision │           │
+│  │ SQLite       │ │ WD14 ONNX    │ │ CLIP/SigLIP   │           │
+│  │ (runtime)    │ │ Danbooru     │ │ Text & Vision │           │
 │  │ Migrations   │ │ Tagging      │ │ Embeddings    │           │
 │  └──────────────┘ └──────────────┘ └───────────────┘           │
 └─────────────────────────────────────────────────────────────────┘

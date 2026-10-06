@@ -1,18 +1,20 @@
-# Multi-Database Team Studio
+# Multi-Database Team Studio (Planned)
 
-For design studios, gaming companies, and visual agencies with multiple artists working on shared network storage (NAS, SMB, NFS), Omera can scale beyond local SQLite into a **Multi-Database Team Collaboration Studio**.
+For design studios, gaming companies, and visual agencies with multiple artists working on shared network storage (NAS, SMB, NFS), Omera is designed with a **Multi-Database Team Collaboration Studio** architecture.
+
+> **Current Status**: The application currently runs on SQLite. The `StorageEngine` abstraction, dialect system, and connection testing are implemented. MySQL 8.0+ and PostgreSQL 14+ query backends are experimental/planned features not yet available for production use.
 
 ---
 
-## 1. The Multi-Database Architecture
+## 1. The Multi-Database Architecture (Planned)
 
-Omera provides an asynchronous `StorageEngine` abstraction layer supporting three backends:
+Omera provides an asynchronous `StorageEngine` abstraction layer designed to support multiple backends:
 
 | Backend | Recommended Team Size | Concurrency Model | Performance Profile |
 | :--- | :--- | :--- | :--- |
-| **SQLite (Default)** | 1 user per library | Single-writer / Multi-reader WAL | <0.5 ms latency on local NVMe SSDs. |
-| **MySQL 8.0+ / MariaDB** | 2 to 50+ concurrent users | Row-level locking & `ngram` full-text indexing | Sub-5ms queries on shared 500,000+ asset libraries. |
-| **PostgreSQL 14+** | 2 to 100+ concurrent users | MVCC, `tsvector` GIN indexes & `LISTEN/NOTIFY` | Low-latency real-time collaboration with broadcast events. |
+| **SQLite (Current Runtime)** | 1 user per library | Single-writer / Multi-reader WAL | <0.5 ms latency on local NVMe SSDs. |
+| **MySQL 8.0+ / MariaDB (Planned)** | 2 to 50+ concurrent users | Row-level locking & `ngram` full-text indexing | Sub-5ms queries on shared 500,000+ asset libraries. |
+| **PostgreSQL 14+ (Planned)** | 2 to 100+ concurrent users | MVCC, `tsvector` GIN indexes & `LISTEN/NOTIFY` | Low-latency real-time collaboration with broadcast events. |
 
 ```mermaid
 graph TD
@@ -92,10 +94,10 @@ Loading thumbnails across a 1Gbps or 10Gbps studio network can saturate shared b
 
 ---
 
-## 6. Migration Wizard: SQLite to MySQL / PostgreSQL (`MigrationWizardModal.vue`)
+## 6. SQL Export & Connection Testing
 
-If you started with a single-user SQLite library and want to upgrade to a shared team database:
-1. Open **Settings > Team & Collaboration**.
-2. Click **"Launch Central Database Migration Wizard"**.
-3. Omera inspects your local SQLite database, lets you choose MySQL 8.0+ or PostgreSQL 14+, and generates dialect-optimized DDL schemas and transactional SQL batch migration files.
-4. Execute the migration script on your database server to transition your studio's library.
+**Current Capabilities**:
+- **SQL Export**: Export SQLite data to SQL format for migration planning
+- **Connection Testing**: Test remote database connection strings (available in Settings > Team & Collaboration)
+
+**Implementation of Live Query Backends** for MySQL and PostgreSQL is a planned feature. The Settings UI shows MySQL/PostgreSQL options as disabled to reflect their experimental status.

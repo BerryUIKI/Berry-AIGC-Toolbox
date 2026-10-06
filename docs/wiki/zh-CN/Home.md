@@ -33,7 +33,7 @@ Omera 是一款开源、本地优先（Local-First）的媒体资产管理与提
 ### [第 5 章：导出、云端备份与团队协同](05-export-and-collaboration/export-and-web-showcase.md)
 - **[批量导出、转码与静态网页画册](05-export-and-collaboration/export-and-web-showcase.md)**：多线程 Rayon 并发转码、4 级隐私元数据清洗脱敏、动态命名模板、ZIP 压缩打包，以及生成完全独立的单文件自适应交互 HTML 网页画册。
 - **[云端快照备份与媒体差异镜像](05-export-and-collaboration/cloud-backup-and-sync.md)**：基于 SQLite 热快照（`VACUUM INTO`）备份至 AWS S3、Cloudflare R2、MinIO、WebDAV 或本地 NAS；基于大小与 SHA-256 的单向增量镜像上传与带宽限速（双向同步规划中）。
-- **[多数据库团队协同工作站](05-export-and-collaboration/team-collaboration.md)**：无缝扩展至共享 MySQL 8.0+ 或 PostgreSQL 14+ 数据库；跨平台存储根映射（自动规范化 Windows 盘符与 macOS/Linux 挂载路径）、乐观并发锁（OCC）与客户端 NVMe 高速缩略图缓存。
+- **[多数据库团队协同工作站（规划中）](05-export-and-collaboration/team-collaboration.md)**：存储引擎抽象与跨平台存储根映射，配备乐观并发锁（OCC）与客户端 NVMe 高速缩略图缓存。当前运行时采用 SQLite；共享 MySQL 8.0+ 或 PostgreSQL 14+ 后端为实验性/规划中功能。
 
 ### [第 6 章：系统参考与维护手册](06-reference-and-maintenance/settings-reference.md)
 - **[首选项与设置完整参考](06-reference-and-maintenance/settings-reference.md)**：涵盖全部 8 大设置标签页的参数配置详解。

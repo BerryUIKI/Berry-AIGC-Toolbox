@@ -63,6 +63,7 @@ import { useNotification } from "./utils/notification";
 import { actionHistory } from "./utils/history";
 import { collaborationSync } from "./utils/collaborationSync";
 import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
+import { useGalleryPrivacy } from "./utils/gallery-privacy";
 
 const LightboxModal = defineAsyncComponent(() => import("./components/LightboxModal.vue"));
 const FilterDrawer = defineAsyncComponent(() => import("./components/FilterDrawer.vue"));
@@ -316,6 +317,12 @@ const viewMode = ref<GalleryViewMode>(
     : "grid",
 );
 const blurNsfw = ref(getStorageItem("blur_nsfw") !== "false");
+const {
+  revealedPaths: revealedNsfw,
+  toggleReveal: onToggleNsfwReveal,
+  reveal: onRevealNsfw,
+  remask: onRemaskNsfw,
+} = useGalleryPrivacy();
 const showCardBadges = ref(getStorageItem("card_badges") !== "false");
 const appTheme = ref<AppTheme>(normalizeTheme(getStorageItem("theme")));
 applyTheme(appTheme.value);
@@ -602,9 +609,41 @@ function handleWindowKeyDown(e: KeyboardEvent) {
 
   // Open Lightbox: Space or Enter
   if (e.key === " " || e.key === "Enter") {
+    if (
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.tagName === "BUTTON"
+    ) {
+      return;
+    }
     if (!lightboxFile.value && (selectedFile.value || selectedFilesList.value.length > 0)) {
       e.preventDefault();
       lightboxFile.value = selectedFile.value || selectedFilesList.value[0];
+      return;
+    }
+  }
+
+  // Sensitive content reveal / re-mask toggle: R / r
+  if ((e.key === "r" || e.key === "R") && !e.ctrlKey && !e.metaKey && !e.altKey && !lightboxFile.value) {
+    const targets = selectedFilesList.value.length > 0
+      ? selectedFilesList.value
+      : selectedFile.value
+        ? [selectedFile.value]
+        : [];
+    const sensitiveTargets = targets.filter((f) => f.is_nsfw);
+    if (sensitiveTargets.length > 0 && blurNsfw.value) {
+      e.preventDefault();
+      if (sensitiveTargets.length === 1) {
+        onToggleNsfwReveal(sensitiveTargets[0].path);
+      } else {
+        const anyConcealed = sensitiveTargets.some((f) => !revealedNsfw.value.has(f.path));
+        for (const f of sensitiveTargets) {
+          if (anyConcealed) {
+            onRevealNsfw(f.path);
+          } else {
+            onRemaskNsfw(f.path);
+          }
+        }
+      }
       return;
     }
   }
@@ -2489,6 +2528,7 @@ function onResetZoom() {
             :has-more="galleryHasMore"
             :item-min-width="gridItemWidth"
             :blur-nsfw="blurNsfw"
+            :revealed-nsfw="revealedNsfw"
             :show-card-badges="showCardBadges"
             :stack-map="stackMap"
             :expanded-stacks="expandedStacks"
@@ -2502,6 +2542,7 @@ function onResetZoom() {
             @compare-stack="onTriggerCompare"
             @cull-stack="onCullStack"
             @load-more="loadMoreFiles"
+            @toggle-reveal="onToggleNsfwReveal"
           />
 
           <FileList
@@ -2519,6 +2560,8 @@ function onResetZoom() {
             :has-more="galleryHasMore"
             :sort-field="sortField"
             :sort-direction="sortDirection"
+            :blur-nsfw="blurNsfw"
+            :revealed-nsfw="revealedNsfw"
             @update:sort-field="(f) => { sortField = f; void loadFiles(); }"
             @update:sort-direction="(d) => { sortDirection = d; void loadFiles(); }"
             @select="onFileSelected"
@@ -2526,6 +2569,7 @@ function onResetZoom() {
             @toggle-select="toggleSelectFile"
             @toggle-all="onToggleAll"
             @load-more="loadMoreFiles"
+            @toggle-reveal="onToggleNsfwReveal"
           />
 
           <!-- Floating Batch Action Bar -->

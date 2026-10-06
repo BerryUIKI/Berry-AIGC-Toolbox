@@ -126,6 +126,8 @@ export const zhTW: typeof en = {
     rating: "評分",
     unrated: "未評分",
     clickToReveal: "點擊檢視敏感內容",
+    remaskContent: "重新遮罩敏感內容",
+    remaskShortcut: "切換檢視/遮罩敏感內容 (R)",
     retryThumbnail: "重試載入縮圖",
     copyPrompt: "複製提示詞",
     copyNegative: "複製負向提示詞",

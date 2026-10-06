@@ -21,6 +21,11 @@ import {
 import { t } from "../i18n";
 import { hasActiveDialog, isEditableTarget } from "../utils/dialog";
 import { useGalleryNavigation } from "../utils/gallery-navigation";
+import {
+  isSensitiveMasked,
+  isSensitiveRevealed,
+  useGalleryPrivacy,
+} from "../utils/gallery-privacy";
 
 const props = defineProps<{
   files: ImageFile[];
@@ -35,6 +40,8 @@ const props = defineProps<{
   emptyActionText?: string;
   sortField?: FileSortField;
   sortDirection?: SortDirection;
+  blurNsfw?: boolean;
+  revealedNsfw?: Set<string>;
 }>();
 
 const emit = defineEmits<{
@@ -46,7 +53,27 @@ const emit = defineEmits<{
   (e: "recover"): void;
   (e: "update:sortField", value: FileSortField): void;
   (e: "update:sortDirection", value: SortDirection): void;
+  (e: "toggleReveal", path: string): void;
 }>();
+
+const privacy = useGalleryPrivacy();
+
+function isMasked(file: ImageFile | null | undefined): boolean {
+  const revealedSet = props.revealedNsfw ?? privacy.revealedPaths.value;
+  return isSensitiveMasked(file, props.blurNsfw ?? true, revealedSet);
+}
+
+function isRevealed(path: string): boolean {
+  const revealedSet = props.revealedNsfw ?? privacy.revealedPaths.value;
+  return isSensitiveRevealed(path, revealedSet);
+}
+
+function toggleNsfwReveal(path: string) {
+  emit("toggleReveal", path);
+  if (!props.revealedNsfw) {
+    privacy.toggleReveal(path);
+  }
+}
 
 const ROW_HEIGHT = 46;
 const OVERSCAN = 6;
@@ -273,6 +300,16 @@ function handleKeyDown(e: KeyboardEvent) {
     case "ArrowUp":
       nextIndex = currentIndex > 0 ? currentIndex - 1 : props.files.length - 1;
       break;
+    case "r":
+    case "R": {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && props.selectedFile) {
+        if (props.selectedFile.is_nsfw && (props.blurNsfw ?? true)) {
+          e.preventDefault();
+          toggleNsfwReveal(props.selectedFile.path);
+        }
+      }
+      return;
+    }
     default:
       return;
   }
@@ -399,48 +436,81 @@ onUnmounted(() => {
               />
             </td>
             <td class="preview-cell">
-              <img
-                v-if="
-                  !isVideoContainer(file.container) &&
-                  file.container !== 'txt' &&
-                  getRowImageSrc(file)
-                "
-                :src="getRowImageSrc(file) || undefined"
-                :alt="getFileName(file.path)"
-                class="thumb"
-                loading="lazy"
-                decoding="async"
-                @error="onImageError(file.path)"
-              />
-              <div
-                v-else-if="failedImages.has(file.path)"
-                class="thumb-placeholder thumb-failed"
-              >
-                <button
-                  type="button"
-                  class="retry-thumb-btn table-retry-btn"
-                  :title="t.preview.retryThumbnail"
-                  :aria-label="t.preview.retryThumbnail"
-                  @click.stop="retryImage(file)"
+              <div class="table-thumb-wrapper">
+                <img
+                  v-if="
+                    !isVideoContainer(file.container) &&
+                    file.container !== 'txt' &&
+                    getRowImageSrc(file)
+                  "
+                  :src="getRowImageSrc(file) || undefined"
+                  :alt="getFileName(file.path)"
+                  class="thumb"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
+                  loading="lazy"
+                  decoding="async"
+                  @error="onImageError(file.path)"
+                />
+                <div
+                  v-else-if="failedImages.has(file.path)"
+                  class="thumb-placeholder thumb-failed"
                 >
-                  ↻
+                  <button
+                    type="button"
+                    class="retry-thumb-btn table-retry-btn"
+                    :title="t.preview.retryThumbnail"
+                    :aria-label="t.preview.retryThumbnail"
+                    @click.stop="retryImage(file)"
+                  >
+                    ↻
+                  </button>
+                </div>
+                <div
+                  v-else-if="!isVideoContainer(file.container) && file.container !== 'txt'"
+                  class="thumb-placeholder thumb-pending"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
+                  aria-hidden="true"
+                />
+                <video
+                  v-else-if="isVideoContainer(file.container)"
+                  :src="assetUrl(file.path)"
+                  class="thumb thumb-video"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
+                  muted
+                  preload="metadata"
+                  playsinline
+                />
+                <div
+                  v-else
+                  class="thumb-placeholder"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
+                >
+                  {{ file.container.toUpperCase() }}
+                </div>
+
+                <!-- Sensitive content blur overlay (click to reveal) -->
+                <button
+                  v-if="isMasked(file)"
+                  type="button"
+                  class="table-nsfw-overlay"
+                  :title="t.preview.clickToReveal"
+                  :aria-label="t.preview.clickToReveal"
+                  @click.stop="toggleNsfwReveal(file.path)"
+                >
+                  <span class="table-nsfw-badge" aria-hidden="true">🔞</span>
                 </button>
-              </div>
-              <div
-                v-else-if="!isVideoContainer(file.container) && file.container !== 'txt'"
-                class="thumb-placeholder thumb-pending"
-                aria-hidden="true"
-              />
-              <video
-                v-else-if="isVideoContainer(file.container)"
-                :src="assetUrl(file.path)"
-                class="thumb thumb-video"
-                muted
-                preload="metadata"
-                playsinline
-              />
-              <div v-else class="thumb-placeholder">
-                {{ file.container.toUpperCase() }}
+
+                <!-- Sensitive content re-mask button (when revealed) -->
+                <button
+                  v-else-if="file.is_nsfw && (props.blurNsfw ?? true) && isRevealed(file.path)"
+                  type="button"
+                  class="table-nsfw-remask-btn"
+                  :title="t.preview.remaskContent"
+                  :aria-label="t.preview.remaskContent"
+                  @click.stop="toggleNsfwReveal(file.path)"
+                >
+                  <span class="table-remask-icon" aria-hidden="true">🔒</span>
+                </button>
               </div>
             </td>
             <td class="name" :title="normalizePath(file.path)">{{ getFileName(file.path) }}</td>
@@ -619,6 +689,17 @@ onUnmounted(() => {
   padding: 0.25rem 0.4rem !important;
 }
 
+.table-thumb-wrapper {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
 .thumb {
   width: 36px;
   height: 36px;
@@ -626,6 +707,80 @@ onUnmounted(() => {
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.1);
   display: block;
+}
+
+.thumb.nsfw-blurred {
+  filter: blur(14px) brightness(0.65);
+  transform: scale(1.15);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.table-nsfw-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+  transition: background var(--transition-fast, 0.15s ease);
+  border-radius: 4px;
+}
+
+.table-nsfw-overlay:hover,
+.table-nsfw-overlay:focus-visible {
+  background: rgba(0, 0, 0, 0.75);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.table-nsfw-badge {
+  font-size: 1.15rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.table-nsfw-remask-btn {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  opacity: 0;
+  padding: 0;
+  transition: opacity var(--transition-fast, 0.15s ease), background var(--transition-fast, 0.15s ease);
+}
+
+.data-row:hover .table-nsfw-remask-btn,
+.data-row.row-selected .table-nsfw-remask-btn,
+.table-nsfw-remask-btn:focus-visible {
+  opacity: 1;
+}
+
+.table-nsfw-remask-btn:hover,
+.table-nsfw-remask-btn:focus-visible {
+  background: rgba(220, 38, 38, 0.9);
+  border-color: rgba(255, 255, 255, 0.8);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.table-remask-icon {
+  font-size: 0.65rem;
+  line-height: 1;
 }
 
 .thumb-video {
@@ -694,6 +849,11 @@ onUnmounted(() => {
   .thumb-pending {
     animation: none;
     background: rgba(255, 255, 255, 0.04);
+  }
+  .thumb.nsfw-blurred,
+  .table-nsfw-overlay,
+  .table-nsfw-remask-btn {
+    transition: none;
   }
 }
 

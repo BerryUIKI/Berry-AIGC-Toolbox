@@ -126,6 +126,8 @@ export const fr: typeof en = {
     rating: "Note",
     unrated: "Non noté",
     clickToReveal: "Cliquer pour afficher le contenu sensible",
+    remaskContent: "Masquer le contenu sensible",
+    remaskShortcut: "Afficher / masquer le contenu sensible (R)",
     retryThumbnail: "Réessayer la miniature",
     copyPrompt: "Copier le prompt",
     copyNegative: "Copier le prompt négatif",

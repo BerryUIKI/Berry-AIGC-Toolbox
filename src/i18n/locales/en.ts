@@ -124,6 +124,8 @@ export const en = {
     rating: "Rating",
     unrated: "Unrated",
     clickToReveal: "Click to reveal sensitive content",
+    remaskContent: "Conceal sensitive content",
+    remaskShortcut: "Reveal / Conceal Sensitive Content (R)",
     retryThumbnail: "Retry loading thumbnail",
     copyPrompt: "Copy Prompt",
     copyNegative: "Copy Negative",

@@ -27,6 +27,11 @@ import { calculateGalleryColumns, calculateGalleryTrackOffset } from "../utils/g
 import { hasActiveDialog, isEditableTarget } from "../utils/dialog";
 import { useGalleryNavigation } from "../utils/gallery-navigation";
 import { WaterfallGeometry, visibleWaterfallItems } from "../utils/gallery-state";
+import {
+  isSensitiveMasked,
+  isSensitiveRevealed,
+  useGalleryPrivacy,
+} from "../utils/gallery-privacy";
 
 const props = withDefaults(
   defineProps<{
@@ -40,6 +45,7 @@ const props = withDefaults(
     gap?: number;
     overscan?: number;
     blurNsfw?: boolean;
+    revealedNsfw?: Set<string>;
     showCardBadges?: boolean;
     stackMap?: Record<string, { count: number; heroId: number | null }>;
     expandedStacks?: Set<string>;
@@ -73,6 +79,7 @@ const emit = defineEmits<{
   (e: "cullStack", stackId: string): void;
   (e: "loadMore"): void;
   (e: "recover"): void;
+  (e: "toggleReveal", path: string): void;
 }>();
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -82,7 +89,17 @@ const containerHeight = ref(0);
 
 // Image loading error tracker
 const failedImages = ref<Set<string>>(new Set());
-const revealedNsfw = ref<Set<string>>(new Set());
+const privacy = useGalleryPrivacy();
+
+function isMasked(file: ImageFile | null | undefined): boolean {
+  const revealedSet = props.revealedNsfw ?? privacy.revealedPaths.value;
+  return isSensitiveMasked(file, props.blurNsfw ?? true, revealedSet);
+}
+
+function isRevealed(path: string): boolean {
+  const revealedSet = props.revealedNsfw ?? privacy.revealedPaths.value;
+  return isSensitiveRevealed(path, revealedSet);
+}
 
 function onImageError(path: string) {
   failedImages.value.add(path);
@@ -96,12 +113,10 @@ function retryImage(file: ImageFile) {
   void loadThumbnailFor(file, edge, beginThumbnailRequestCycle());
 }
 
-
 function toggleNsfwReveal(path: string) {
-  if (revealedNsfw.value.has(path)) {
-    revealedNsfw.value.delete(path);
-  } else {
-    revealedNsfw.value.add(path);
+  emit("toggleReveal", path);
+  if (!props.revealedNsfw) {
+    privacy.toggleReveal(path);
   }
 }
 
@@ -573,6 +588,17 @@ function handleKeyDown(e: KeyboardEvent) {
         nextIndex = currentIndex - cols.value;
       }
       break;
+    case "r":
+    case "R": {
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && currentIndex >= 0 && currentIndex < props.files.length) {
+        const file = props.files[currentIndex];
+        if (file && file.is_nsfw && (props.blurNsfw ?? true)) {
+          e.preventDefault();
+          toggleNsfwReveal(file.path);
+        }
+      }
+      return;
+    }
     default:
       return;
   }
@@ -733,7 +759,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 v-if="isVideoContainer(file.container) && hoveredVideoPath === file.path"
                 :src="assetUrl(file.path)"
                 class="thumbnail-img thumbnail-video video-active"
-                :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
+                :class="{ 'nsfw-blurred': isMasked(file) }"
                 muted
                 playsinline
                 preload="auto"
@@ -750,7 +776,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 :src="getCardImageSrc(file, Math.max(width || itemWidth, imageHeight)) || undefined"
                 :alt="getFileName(file.path)"
                 class="thumbnail-img"
-                :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
+                :class="{ 'nsfw-blurred': isMasked(file) }"
                 loading="lazy"
                 decoding="async"
                 @error="onImageError(file.path)"
@@ -760,7 +786,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
               <div
                 v-else-if="isVideoContainer(file.container)"
                 class="thumbnail-video-placeholder"
-                :class="{ 'nsfw-blurred': blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path) }"
+                :class="{ 'nsfw-blurred': isMasked(file) }"
               >
                 <div class="video-placeholder-icon">🎬</div>
               </div>
@@ -772,6 +798,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                   !failedImages.has(file.path)
                 "
                 class="thumbnail-pending"
+                :class="{ 'nsfw-blurred': isMasked(file) }"
                 aria-hidden="true"
               />
 
@@ -823,17 +850,31 @@ function onDragStart(e: DragEvent, file: ImageFile) {
               </div>
 
               <!-- NSFW blur overlay -->
-              <div
-                v-if="blurNsfw && file.is_nsfw && !revealedNsfw.has(file.path)"
+              <button
+                v-if="isMasked(file)"
+                type="button"
                 class="nsfw-overlay"
                 :title="t.preview.clickToReveal"
+                :aria-label="t.preview.clickToReveal"
                 @click.stop="toggleNsfwReveal(file.path)"
               >
                 <div class="nsfw-overlay-content">
-                  <span class="nsfw-icon">🔞</span>
+                  <span class="nsfw-icon" aria-hidden="true">🔞</span>
                   <span class="nsfw-text">NSFW</span>
                 </div>
-              </div>
+              </button>
+
+              <!-- Re-mask button when revealed -->
+              <button
+                v-else-if="file.is_nsfw && (props.blurNsfw ?? true) && isRevealed(file.path)"
+                type="button"
+                class="card-remask-btn"
+                :title="t.preview.remaskContent"
+                :aria-label="t.preview.remaskContent"
+                @click.stop="toggleNsfwReveal(file.path)"
+              >
+                <span class="card-remask-icon" aria-hidden="true">🔒</span>
+              </button>
 
               <!-- Badges Container -->
               <template v-if="showCardBadges">
@@ -1567,7 +1608,10 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   .badge-stack,
   .card-stack-compare-btn,
   .card-stack-cull-btn,
-  .card-similar-btn {
+  .card-similar-btn,
+  .card-remask-btn,
+  .nsfw-overlay,
+  .thumbnail-img.nsfw-blurred {
     transition: none;
     animation: none;
   }
@@ -1621,10 +1665,57 @@ function onDragStart(e: DragEvent, file: ImageFile) {
   cursor: pointer;
   z-index: 1;
   transition: background 0.15s ease;
+  border: none;
+  font: inherit;
+  padding: 0;
 }
 
-.nsfw-overlay:hover {
-  background: rgba(0, 0, 0, 0.6);
+.nsfw-overlay:hover,
+.nsfw-overlay:focus-visible {
+  background: rgba(0, 0, 0, 0.65);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.card-remask-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  padding: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.grid-card:hover .card-remask-btn,
+.grid-card:focus-within .card-remask-btn,
+.grid-card.card-selected .card-remask-btn,
+.card-remask-btn:focus-visible {
+  opacity: 1;
+}
+
+.card-remask-btn:hover,
+.card-remask-btn:focus-visible {
+  background: rgba(220, 38, 38, 0.9);
+  border-color: rgba(255, 255, 255, 0.8);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.card-remask-icon {
+  font-size: 0.85rem;
+  line-height: 1;
 }
 
 .nsfw-overlay-content {

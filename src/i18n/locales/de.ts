@@ -126,6 +126,8 @@ export const de: typeof en = {
     rating: "Bewertung",
     unrated: "Unbewertet",
     clickToReveal: "Klicken, um sensible Inhalte anzuzeigen",
+    remaskContent: "Sensiblen Inhalt wieder verdecken",
+    remaskShortcut: "Sensiblen Inhalt ein-/ausblenden (R)",
     retryThumbnail: "Miniaturansicht erneut laden",
     copyPrompt: "Prompt kopieren",
     copyNegative: "Negativen Prompt kopieren",

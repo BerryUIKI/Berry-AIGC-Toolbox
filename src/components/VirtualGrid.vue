@@ -115,7 +115,9 @@ function retryImage(file: ImageFile) {
 
 function toggleNsfwReveal(path: string) {
   emit("toggleReveal", path);
-  privacy.toggleReveal(path);
+  if (!props.revealedNsfw) {
+    privacy.toggleReveal(path);
+  }
 }
 
 let resizeObserver: ResizeObserver | null = null;

@@ -70,7 +70,9 @@ function isRevealed(path: string): boolean {
 
 function toggleNsfwReveal(path: string) {
   emit("toggleReveal", path);
-  privacy.toggleReveal(path);
+  if (!props.revealedNsfw) {
+    privacy.toggleReveal(path);
+  }
 }
 
 const ROW_HEIGHT = 46;
@@ -466,6 +468,7 @@ onUnmounted(() => {
                 <div
                   v-else-if="!isVideoContainer(file.container) && file.container !== 'txt'"
                   class="thumb-placeholder thumb-pending"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
                   aria-hidden="true"
                 />
                 <video
@@ -477,7 +480,11 @@ onUnmounted(() => {
                   preload="metadata"
                   playsinline
                 />
-                <div v-else class="thumb-placeholder">
+                <div
+                  v-else
+                  class="thumb-placeholder"
+                  :class="{ 'nsfw-blurred': isMasked(file) }"
+                >
                   {{ file.container.toUpperCase() }}
                 </div>
 

@@ -372,6 +372,7 @@ export const zhTW: typeof en = {
     close: "關閉",
   },
   menu: {
+    applicationMenu: "應用程式選單",
     file: "檔案",
     addFolder: "新增資料夾...",
     scanActive: "掃描目前目錄",

@@ -372,6 +372,7 @@ export const ja: typeof en = {
     close: "閉じる",
   },
   menu: {
+    applicationMenu: "アプリケーションメニュー",
     file: "ファイル",
     addFolder: "フォルダを追加...",
     scanActive: "現在のフォルダをスキャン",

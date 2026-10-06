@@ -372,6 +372,7 @@ export const de: typeof en = {
     close: "Schließen",
   },
   menu: {
+    applicationMenu: "Anwendungsmenü",
     file: "Datei",
     addFolder: "Ordner hinzufügen...",
     scanActive: "Aktuellen Ordner scannen",

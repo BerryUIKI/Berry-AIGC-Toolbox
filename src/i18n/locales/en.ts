@@ -370,6 +370,7 @@ export const en = {
     close: "Close",
   },
   menu: {
+    applicationMenu: "Application Menu",
     file: "File",
     addFolder: "Add Folder...",
     scanActive: "Scan Current Folder",

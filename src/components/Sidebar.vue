@@ -44,6 +44,7 @@ const addingFolder = ref(false);
 const running = ref<{ id: number; action: "scan" | "rebuild" | "harvest" } | null>(null);
 const error = ref("");
 const notification = useNotification();
+const sidebarRef = ref<HTMLElement | null>(null);
 
 const subdirectories = ref<Record<string, SubdirectoryEntry[]>>({});
 const expandedPaths = ref<Set<string>>(new Set());
@@ -102,7 +103,7 @@ async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
   }
 }
 
-async function removeFolder(folder: Folder, e: MouseEvent) {
+async function removeFolder(folder: Folder, e: MouseEvent | KeyboardEvent) {
   e.stopPropagation();
   const folderName = getFolderName(folder.path);
   const template = t.value.nav.removeFolderConfirm || 'Remove folder "{name}" from Omera? Files on disk will not be deleted.';
@@ -112,10 +113,30 @@ async function removeFolder(folder: Folder, e: MouseEvent) {
   }
   error.value = "";
   try {
+    let fallbackTarget: HTMLElement | null = null;
+    if (typeof document !== "undefined" && sidebarRef.value) {
+      const currentFolderRow = sidebarRef.value.querySelector(`[data-folder-id="${folder.id}"]`);
+      if (currentFolderRow && currentFolderRow.contains(document.activeElement)) {
+        const allFolderRows = Array.from(sidebarRef.value.querySelectorAll(".folder-row-container"));
+        const idx = allFolderRows.indexOf(currentFolderRow as any);
+        if (idx > 0) {
+          fallbackTarget = allFolderRows[idx - 1].querySelector(".folder-item-btn, .tree-arrow-btn");
+        } else if (idx < allFolderRows.length - 1) {
+          fallbackTarget = allFolderRows[idx + 1].querySelector(".folder-item-btn, .tree-arrow-btn");
+        } else {
+          fallbackTarget = sidebarRef.value.querySelector(".group-action-btn");
+        }
+      }
+    }
+
     await invoke("remove_folder", { folderId: folder.id });
     expandedPaths.value.delete(folder.path);
     delete subdirectories.value[folder.path];
     emit("removed", folder.id);
+
+    if (fallbackTarget && fallbackTarget.isConnected) {
+      fallbackTarget.focus();
+    }
   } catch (e) {
     error.value = String(e);
     notification.showError(String(e), "Failed to remove folder");
@@ -139,9 +160,24 @@ async function loadSubdirectories(folder: Folder, path: string) {
   }
 }
 
+function escapeCss(str: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(str);
+  }
+  return str.replace(/([!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~])/g, "\\$1");
+}
+
 async function toggleFolderExpand(folder: Folder) {
   const rootPath = folder.path;
   if (expandedPaths.value.has(rootPath)) {
+    if (typeof document !== "undefined" && document.activeElement && sidebarRef.value) {
+      const activeEl = document.activeElement as HTMLElement;
+      const folderRow = sidebarRef.value.querySelector(`[data-folder-path="${escapeCss(rootPath)}"]`);
+      if (folderRow && folderRow.contains(activeEl)) {
+        const btn = folderRow.querySelector<HTMLElement>(".folder-item-btn, .tree-arrow-btn");
+        btn?.focus();
+      }
+    }
     expandedPaths.value.delete(rootPath);
     expandedPaths.value = new Set(expandedPaths.value);
     return;
@@ -156,6 +192,14 @@ async function toggleFolderExpand(folder: Folder) {
 
 async function toggleSubfolderExpand(folder: Folder, path: string) {
   if (expandedPaths.value.has(path)) {
+    if (typeof document !== "undefined" && document.activeElement && sidebarRef.value) {
+      const activeEl = document.activeElement as HTMLElement;
+      const subfolderEl = sidebarRef.value.querySelector(`[data-subfolder-path="${escapeCss(path)}"]`);
+      if (subfolderEl && subfolderEl.contains(activeEl)) {
+        const btn = subfolderEl.querySelector<HTMLElement>(".subfolder-header, .tree-arrow-btn");
+        btn?.focus();
+      }
+    }
     expandedPaths.value.delete(path);
     expandedPaths.value = new Set(expandedPaths.value);
     return;
@@ -175,6 +219,147 @@ function selectSubfolder(folder: Folder, subfolderPath: string) {
     subfolderPath,
     recursive: false,
   });
+}
+
+function getNavigableElements(): HTMLElement[] {
+  if (!sidebarRef.value) return [];
+  const selector = [
+    ".nav-item:not(.tree-arrow-btn):not(.icon-btn)",
+    ".subfolder-header",
+    ".tag-chip-eagle",
+    ".tool-btn",
+  ].join(", ");
+  const elements = Array.from(sidebarRef.value.querySelectorAll<HTMLElement>(selector));
+  return elements.filter((el) => {
+    return !el.hasAttribute("disabled") && el.offsetParent !== null;
+  });
+}
+
+function focusNextNavItem(current: HTMLElement, offset: number) {
+  const items = getNavigableElements();
+  if (!items.length) return;
+
+  let currentIndex = items.indexOf(current);
+  if (currentIndex === -1) {
+    const rowNav = current.closest("li, .tag-chip-eagle")?.querySelector<HTMLElement>(
+      ".nav-item, .subfolder-header, .tag-chip-eagle, .tool-btn",
+    );
+    if (rowNav) {
+      currentIndex = items.indexOf(rowNav);
+    }
+  }
+
+  let nextIndex: number;
+  if (currentIndex === -1) {
+    nextIndex = offset > 0 ? 0 : items.length - 1;
+  } else {
+    nextIndex = currentIndex + offset;
+    if (nextIndex < 0) nextIndex = 0;
+    else if (nextIndex >= items.length) nextIndex = items.length - 1;
+  }
+
+  const nextItem = items[nextIndex];
+  if (nextItem) {
+    nextItem.focus();
+    nextItem.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function focusFirstNavItem() {
+  const items = getNavigableElements();
+  if (items.length > 0) {
+    items[0].focus();
+    items[0].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function focusLastNavItem() {
+  const items = getNavigableElements();
+  if (items.length > 0) {
+    items[items.length - 1].focus();
+    items[items.length - 1].scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function focusNextTagChip(current: HTMLElement, offset: number) {
+  if (!sidebarRef.value) return;
+  const chips = Array.from(sidebarRef.value.querySelectorAll<HTMLElement>(".tag-chip-eagle"));
+  const idx = chips.indexOf(current);
+  if (idx !== -1) {
+    const nextIdx = Math.max(0, Math.min(chips.length - 1, idx + offset));
+    chips[nextIdx]?.focus();
+    chips[nextIdx]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function onFolderKeydown(e: KeyboardEvent, folder: Folder) {
+  if (e.key === "ArrowRight") {
+    if (!expandedPaths.value.has(folder.path)) {
+      e.preventDefault();
+      void toggleFolderExpand(folder);
+    } else {
+      const currentLi = (e.target as HTMLElement).closest("li");
+      const firstChildBtn = currentLi?.querySelector<HTMLElement>(
+        ".subfolder-tree-list .subfolder-header",
+      );
+      if (firstChildBtn) {
+        e.preventDefault();
+        firstChildBtn.focus();
+        firstChildBtn.scrollIntoView({ block: "nearest" });
+      }
+    }
+  } else if (e.key === "ArrowLeft") {
+    if (expandedPaths.value.has(folder.path)) {
+      e.preventDefault();
+      void toggleFolderExpand(folder);
+    }
+  } else if (e.key === " " || e.key === "Spacebar") {
+    e.preventDefault();
+    emit("selectNav", { type: "folder", folder, subfolderPath: undefined, recursive: true });
+  }
+}
+
+function onSidebarKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null;
+  if (!target || !sidebarRef.value?.contains(target)) return;
+  if (target.matches("input, textarea, select")) return;
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    focusNextNavItem(target, 1);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    focusNextNavItem(target, -1);
+  } else if (
+    e.key === "Home" &&
+    target.matches(".nav-item, .subfolder-header, .tag-chip-eagle, .tool-btn")
+  ) {
+    e.preventDefault();
+    focusFirstNavItem();
+  } else if (
+    e.key === "End" &&
+    target.matches(".nav-item, .subfolder-header, .tag-chip-eagle, .tool-btn")
+  ) {
+    e.preventDefault();
+    focusLastNavItem();
+  } else if (target.matches(".tag-chip-eagle")) {
+    if (e.key === "ArrowRight") {
+      e.preventDefault();
+      focusNextTagChip(target, 1);
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      focusNextTagChip(target, -1);
+    }
+  } else if (e.key === " " || e.key === "Spacebar") {
+    if (
+      target.matches(
+        ".nav-item, .subfolder-header, .tag-chip-eagle, .tree-arrow-btn, .group-action-btn, .icon-btn, .tool-btn",
+      )
+    ) {
+      e.preventDefault();
+      target.click();
+    }
+  }
 }
 
 function isTargetActive(target: NavTarget): boolean {
@@ -343,71 +528,94 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 </script>
 
 <template>
-  <aside class="sidebar-eagle" :class="{ collapsed }">
+  <aside
+    ref="sidebarRef"
+    class="sidebar-eagle"
+    :class="{ collapsed }"
+    aria-label="Sidebar Navigation"
+    @keydown="onSidebarKeydown"
+  >
     <div class="sidebar-scrollable">
       <!-- Section: Library -->
-      <section class="nav-group">
+      <section class="nav-group" aria-labelledby="sidebar-heading-library">
         <div class="group-header">
-          <span class="group-title">{{ t.nav.library }}</span>
+          <span id="sidebar-heading-library" class="group-title">{{ t.nav.library }}</span>
         </div>
-        <ul class="nav-list">
-          <li
-            class="nav-item"
-            :class="{ active: isTargetActive({ type: 'all' }) }"
-            @click="emit('selectNav', { type: 'all' })"
-          >
-            <span class="item-icon">
-              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
-                <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm1 0v10h10V3H3zm2 7.5l2-2.5 1.5 2 2.5-3.5 3 4H4l1-1.5z" />
-              </svg>
-            </span>
-            <span class="item-label">{{ t.nav.allImages }}</span>
-            <span v-if="counts" class="item-badge">{{ counts.total }}</span>
+        <ul class="nav-list" role="list">
+          <li role="none">
+            <button
+              type="button"
+              class="nav-item"
+              :class="{ active: isTargetActive({ type: 'all' }) }"
+              :aria-current="isTargetActive({ type: 'all' }) ? 'page' : undefined"
+              :aria-label="t.nav.allImages + (counts ? ` (${counts.total})` : '')"
+              @click="emit('selectNav', { type: 'all' })"
+            >
+              <span class="item-icon" aria-hidden="true">
+                <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                  <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3zm1 0v10h10V3H3zm2 7.5l2-2.5 1.5 2 2.5-3.5 3 4H4l1-1.5z" />
+                </svg>
+              </span>
+              <span class="item-label">{{ t.nav.allImages }}</span>
+              <span v-if="counts" class="item-badge" aria-hidden="true">{{ counts.total }}</span>
+            </button>
           </li>
-          <li
-            class="nav-item"
-            :class="{ active: isTargetActive({ type: 'favorites' }) }"
-            @click="emit('selectNav', { type: 'favorites' })"
-          >
-            <span class="item-icon star-icon">★</span>
-            <span class="item-label">{{ t.nav.favorites }}</span>
-            <span v-if="counts?.favorites !== undefined" class="item-badge">{{ counts.favorites }}</span>
+          <li role="none">
+            <button
+              type="button"
+              class="nav-item"
+              :class="{ active: isTargetActive({ type: 'favorites' }) }"
+              :aria-current="isTargetActive({ type: 'favorites' }) ? 'page' : undefined"
+              :aria-label="t.nav.favorites + (counts?.favorites !== undefined ? ` (${counts.favorites})` : '')"
+              @click="emit('selectNav', { type: 'favorites' })"
+            >
+              <span class="item-icon star-icon" aria-hidden="true">★</span>
+              <span class="item-label">{{ t.nav.favorites }}</span>
+              <span v-if="counts?.favorites !== undefined" class="item-badge" aria-hidden="true">{{ counts.favorites }}</span>
+            </button>
           </li>
-          <li
-            class="nav-item"
-            :class="{ active: isTargetActive({ type: 'nsfw' }) }"
-            @click="emit('selectNav', { type: 'nsfw' })"
-          >
-            <span class="item-icon nsfw-icon">🔞</span>
-            <span class="item-label">{{ t.nav.sensitive }}</span>
-            <span v-if="counts?.nsfw !== undefined" class="item-badge">{{ counts.nsfw }}</span>
+          <li role="none">
+            <button
+              type="button"
+              class="nav-item"
+              :class="{ active: isTargetActive({ type: 'nsfw' }) }"
+              :aria-current="isTargetActive({ type: 'nsfw' }) ? 'page' : undefined"
+              :aria-label="t.nav.sensitive + (counts?.nsfw !== undefined ? ` (${counts.nsfw})` : '')"
+              @click="emit('selectNav', { type: 'nsfw' })"
+            >
+              <span class="item-icon nsfw-icon" aria-hidden="true">🔞</span>
+              <span class="item-label">{{ t.nav.sensitive }}</span>
+              <span v-if="counts?.nsfw !== undefined" class="item-badge" aria-hidden="true">{{ counts.nsfw }}</span>
+            </button>
           </li>
         </ul>
       </section>
 
       <!-- Section: Folders -->
-      <section class="nav-group">
+      <section class="nav-group" aria-labelledby="sidebar-heading-folders">
         <div class="group-header">
-          <span class="group-title">{{ t.nav.folders }}</span>
+          <span id="sidebar-heading-folders" class="group-title">{{ t.nav.folders }}</span>
           <button
             type="button"
             class="group-action-btn"
             :disabled="addingFolder"
-            :title="t.nav.scan"
+            :title="t.nav.addFolder || t.addFolder?.title || 'Add Folder'"
+            :aria-label="t.nav.addFolder || t.addFolder?.title || 'Add Folder'"
             @click="pickFolder"
           >
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
               <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/>
             </svg>
           </button>
         </div>
-        <ul class="nav-list">
+        <ul class="nav-list" role="list">
           <template v-for="folder in folders" :key="folder.id">
             <li
-              class="nav-item folder-item"
+              class="folder-row-container"
               :class="{ active: isTargetActive({ type: 'folder', folder }) }"
-              :title="displayPath(folder.path)"
-              @click="emit('selectNav', { type: 'folder', folder, subfolderPath: undefined, recursive: true })"
+              :data-folder-id="folder.id"
+              :data-folder-path="folder.path"
+              role="none"
               @dragover.prevent
               @drop="onDropOnFolder($event, folder)"
             >
@@ -415,18 +623,31 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                 type="button"
                 class="tree-arrow-btn"
                 :class="{ expanded: expandedPaths.has(folder.path) }"
-                :title="expandedPaths.has(folder.path) ? 'Collapse' : 'Expand'"
+                :aria-expanded="expandedPaths.has(folder.path)"
+                :aria-label="(expandedPaths.has(folder.path) ? (t.nav?.collapse || 'Collapse') : (t.nav?.expand || 'Expand')) + ' ' + getFolderName(folder.path)"
+                :title="expandedPaths.has(folder.path) ? (t.nav?.collapse || 'Collapse') : (t.nav?.expand || 'Expand')"
                 @click.stop="toggleFolderExpand(folder)"
               >
                 <span v-if="loadingPaths.has(folder.path)" class="tree-loading-dot">…</span>
                 <span v-else>{{ expandedPaths.has(folder.path) ? '▼' : '▶' }}</span>
               </button>
 
-              <span class="item-icon">
-                {{ folder.folder_type === 'pipeline' ? '⚡' : folder.folder_type === 'managed' ? '📦' : (expandedPaths.has(folder.path) ? '📂' : '📁') }}
-              </span>
-              <span class="item-label truncate">{{ getFolderName(folder.path) }}</span>
-              <span v-if="counts?.folders" class="item-badge">{{ counts.folders[folder.id] ?? 0 }}</span>
+              <button
+                type="button"
+                class="nav-item folder-item-btn"
+                :class="{ active: isTargetActive({ type: 'folder', folder }) }"
+                :aria-current="isTargetActive({ type: 'folder', folder }) ? 'page' : undefined"
+                :aria-label="getFolderName(folder.path) + (counts?.folders?.[folder.id] !== undefined ? ` (${counts.folders[folder.id]})` : '')"
+                :title="displayPath(folder.path)"
+                @click="emit('selectNav', { type: 'folder', folder, subfolderPath: undefined, recursive: true })"
+                @keydown="onFolderKeydown($event, folder)"
+              >
+                <span class="item-icon" aria-hidden="true">
+                  {{ folder.folder_type === 'pipeline' ? '⚡' : folder.folder_type === 'managed' ? '📦' : (expandedPaths.has(folder.path) ? '📂' : '📁') }}
+                </span>
+                <span class="item-label truncate">{{ getFolderName(folder.path) }}</span>
+                <span v-if="counts?.folders" class="item-badge" aria-hidden="true">{{ counts.folders[folder.id] ?? 0 }}</span>
+              </button>
 
               <div class="folder-actions" @click.stop>
                 <button
@@ -434,7 +655,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   type="button"
                   class="icon-btn import-btn"
                   :disabled="isBusy(folder.id)"
-                  :title="t.importModal.title || 'Import Files'"
+                  :title="t.importModal?.title || 'Import Files'"
+                  :aria-label="t.importModal?.title || 'Import Files'"
                   @click="handleImportToManaged(folder, $event)"
                 >
                   📥
@@ -444,7 +666,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   type="button"
                   class="icon-btn harvest-btn"
                   :disabled="isBusy(folder.id)"
-                  :title="t.nav.harvest || 'Harvest New Images'"
+                  :title="t.nav?.harvest || 'Harvest New Images'"
+                  :aria-label="t.nav?.harvest || 'Harvest New Images'"
                   @click="harvest(folder, $event)"
                 >
                   {{ isBusy(folder.id) ? '⏳' : '⚡' }}
@@ -454,6 +677,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   class="icon-btn"
                   :disabled="isBusy(folder.id)"
                   :title="t.nav.scan"
+                  :aria-label="t.nav.scan"
                   @click="scan(folder, 'scan')"
                 >
                   {{ isBusy(folder.id) ? '⏳' : '🔄' }}
@@ -462,6 +686,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   type="button"
                   class="icon-btn remove-btn"
                   :title="t.nav.remove"
+                  :aria-label="t.nav.remove"
                   @click="removeFolder(folder, $event)"
                 >
                   ✕
@@ -473,6 +698,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
             <ul
               v-if="expandedPaths.has(folder.path) && subdirectories[folder.path]?.length"
               class="subfolder-tree-list root-subfolder-list"
+              role="list"
             >
               <FolderTreeNode
                 v-for="child in subdirectories[folder.path]"
@@ -496,33 +722,42 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
       </section>
 
       <!-- Section: Albums -->
-      <section class="nav-group">
+      <section class="nav-group" aria-labelledby="sidebar-heading-albums">
         <div class="group-header">
-          <span class="group-title">{{ t.nav.albums }}</span>
+          <span id="sidebar-heading-albums" class="group-title">{{ t.nav.albums }}</span>
           <button
             type="button"
             class="group-action-btn"
             :title="t.nav.newAlbum"
+            :aria-label="t.nav.newAlbum"
             @click="emit('openAlbumModal')"
           >
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
               <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/>
             </svg>
           </button>
         </div>
-        <ul class="nav-list">
+        <ul class="nav-list" role="list">
           <li
             v-for="album in albums || []"
             :key="album.id"
-            class="nav-item album-item"
-            :class="{ active: isTargetActive({ type: 'album', album }) }"
-            @click="emit('selectNav', { type: 'album', album })"
+            class="album-item-container"
+            role="none"
             @dragover.prevent
             @drop="onDropOnAlbum($event, album)"
           >
-            <span class="item-icon">🗂️</span>
-            <span class="item-label truncate">{{ album.name }}</span>
-            <span class="item-badge">{{ albumCounts?.[album.id] ?? 0 }}</span>
+            <button
+              type="button"
+              class="nav-item album-item"
+              :class="{ active: isTargetActive({ type: 'album', album }) }"
+              :aria-current="isTargetActive({ type: 'album', album }) ? 'page' : undefined"
+              :aria-label="album.name + (albumCounts?.[album.id] !== undefined ? ` (${albumCounts[album.id]})` : '')"
+              @click="emit('selectNav', { type: 'album', album })"
+            >
+              <span class="item-icon" aria-hidden="true">🗂️</span>
+              <span class="item-label truncate">{{ album.name }}</span>
+              <span class="item-badge" aria-hidden="true">{{ albumCounts?.[album.id] ?? 0 }}</span>
+            </button>
           </li>
           <li v-if="!albums || albums.length === 0" class="empty-hint">
             {{ t.nav.noAlbums }}
@@ -531,37 +766,43 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
       </section>
 
       <!-- Section: Tags -->
-      <section class="nav-group">
+      <section class="nav-group" aria-labelledby="sidebar-heading-tags">
         <div class="group-header">
-          <span class="group-title">{{ t.nav.tags }}</span>
+          <span id="sidebar-heading-tags" class="group-title">{{ t.nav.tags }}</span>
           <button
             type="button"
             class="group-action-btn"
             :title="t.nav.newTag"
+            :aria-label="t.nav.newTag"
             @click="emit('openTagModal')"
           >
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
               <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"/>
             </svg>
           </button>
         </div>
-        <div class="tags-container">
-          <div
+        <div class="tags-container" role="list" :aria-label="t.nav.tags">
+          <button
             v-for="tag in tags || []"
             :key="tag.id"
+            type="button"
             class="tag-chip-eagle"
+            role="listitem"
             :class="{ active: isTargetActive({ type: 'tag', tag }) }"
+            :aria-current="isTargetActive({ type: 'tag', tag }) ? 'page' : undefined"
+            :aria-label="tag.name + (tagCounts?.[tag.id] ? ` (${tagCounts[tag.id]})` : '')"
             @click="emit('selectNav', { type: 'tag', tag })"
             @dragover.prevent
             @drop="onDropOnTag($event, tag)"
           >
             <span
               class="tag-dot"
+              aria-hidden="true"
               :style="{ backgroundColor: tag.color || '#8b5cf6' }"
             ></span>
             <span class="tag-name">{{ tag.name }}</span>
-            <span v-if="tagCounts?.[tag.id]" class="tag-count">{{ tagCounts[tag.id] }}</span>
-          </div>
+            <span v-if="tagCounts?.[tag.id]" class="tag-count" aria-hidden="true">{{ tagCounts[tag.id] }}</span>
+          </button>
           <p v-if="!tags || tags.length === 0" class="empty-hint">
             {{ t.nav.noTags }}
           </p>
@@ -571,50 +812,55 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 
     <!-- Sidebar Bottom Action Bar (Eagle Style) -->
     <footer class="sidebar-footer">
-      <div class="footer-tools">
+      <div class="footer-tools" role="toolbar" aria-label="Sidebar Tools">
         <button
           type="button"
           class="tool-btn"
           :title="t.search.insights"
+          :aria-label="t.search.insights"
           @click="emit('openPromptStats')"
         >
-          <span class="tool-icon">📊</span>
+          <span class="tool-icon" aria-hidden="true">📊</span>
           <span class="tool-text">{{ t.search.insights }}</span>
         </button>
         <button
           type="button"
           class="tool-btn"
           :title="t.search.autoTagger"
+          :aria-label="t.search.autoTagger"
           @click="emit('openAutoTagger')"
         >
-          <span class="tool-icon">🤖</span>
+          <span class="tool-icon" aria-hidden="true">🤖</span>
           <span class="tool-text">{{ t.search.autoTagger }}</span>
         </button>
         <button
           type="button"
           class="tool-btn"
           :title="t.search.models"
+          :aria-label="t.search.models"
           @click="emit('openModelManager')"
         >
-          <span class="tool-icon">🧠</span>
+          <span class="tool-icon" aria-hidden="true">🧠</span>
           <span class="tool-text">{{ t.search.models }}</span>
         </button>
         <button
           type="button"
           class="tool-btn"
           :title="t.search.database"
+          :aria-label="t.search.database"
           @click="emit('openDbManager')"
         >
-          <span class="tool-icon">🗄️</span>
+          <span class="tool-icon" aria-hidden="true">🗄️</span>
           <span class="tool-text">{{ t.search.database }}</span>
         </button>
         <button
           type="button"
           class="tool-btn"
           :title="t.search.shortcuts"
+          :aria-label="t.search.shortcuts"
           @click="emit('openShortcutsHelp')"
         >
-          <span class="tool-icon">⌨️</span>
+          <span class="tool-icon" aria-hidden="true">⌨️</span>
           <span class="tool-text">{{ t.search.shortcuts }}</span>
         </button>
       </div>
@@ -704,6 +950,59 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   gap: 1px;
 }
 
+.folder-row-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  border-radius: 6px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.folder-item-btn {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.folder-item-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.folder-item-btn.active,
+.folder-row-container.active > .folder-item-btn {
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.folder-item-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: -1px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.album-item-container {
+  display: flex;
+  width: 100%;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -715,6 +1014,12 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   cursor: pointer;
   transition: background-color 0.12s, color 0.12s;
   position: relative;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  box-sizing: border-box;
 }
 
 .nav-item:hover {
@@ -728,6 +1033,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   font-weight: 600;
 }
 
+.nav-item:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: -1px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
 .item-icon {
   display: flex;
   align-items: center;
@@ -737,7 +1049,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   font-size: 0.85rem;
 }
 
-.nav-item.active .item-icon {
+.nav-item.active .item-icon,
+.folder-item-btn.active .item-icon {
   color: #a855f7;
 }
 
@@ -764,7 +1077,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   font-weight: 500;
 }
 
-.nav-item.active .item-badge {
+.nav-item.active .item-badge,
+.folder-item-btn.active .item-badge {
   background: rgba(168, 85, 247, 0.2);
   color: #e9d5ff;
 }
@@ -773,14 +1087,29 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   display: none;
   align-items: center;
   gap: 2px;
+  position: absolute;
+  right: 4px;
+  background: var(--color-bg-primary);
+  border-radius: 4px;
+  padding-left: 4px;
 }
 
-.folder-item:hover .folder-actions {
+.folder-row-container:hover .folder-actions,
+.folder-row-container:focus-within .folder-actions {
   display: flex;
 }
 
-.folder-item:hover .item-badge {
+.folder-row-container:hover .folder-item-btn .item-badge,
+.folder-row-container:focus-within .folder-item-btn .item-badge {
   display: none;
+}
+
+.folder-row-container:hover .folder-actions {
+  background: var(--color-bg-hover);
+}
+
+.folder-row-container.active .folder-actions {
+  background: var(--color-bg-active);
 }
 
 .tree-arrow-btn {
@@ -803,6 +1132,20 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 .tree-arrow-btn:hover {
   color: #f8fafc;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.tree-arrow-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.group-action-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
 }
 
 .tree-loading-dot {
@@ -842,6 +1185,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   color: var(--color-text-primary);
 }
 
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
 .icon-btn.remove-btn:hover {
   color: #ef4444;
 }
@@ -864,6 +1214,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   color: var(--color-text-secondary);
   cursor: pointer;
   transition: all 0.12s;
+  border: 1px solid transparent;
+  font-family: inherit;
 }
 
 .tag-chip-eagle:hover {
@@ -875,6 +1227,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   background: rgba(139, 92, 246, 0.2);
   color: #c4b5fd;
   font-weight: 600;
+}
+
+.tag-chip-eagle:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  background: var(--color-bg-active);
+  color: var(--color-text-primary);
 }
 
 .tag-dot {
@@ -931,6 +1290,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   color: #f1f5f9;
 }
 
+.tool-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f1f5f9;
+}
+
 .tool-icon {
   font-size: 0.8rem;
 }
@@ -945,5 +1311,21 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-loading-dot {
+    animation: none;
+    opacity: 0.6;
+  }
+  .nav-item,
+  .folder-item-btn,
+  .tag-chip-eagle,
+  .tool-btn,
+  .icon-btn,
+  .group-action-btn,
+  .tree-arrow-btn {
+    transition: none !important;
+  }
 }
 </style>

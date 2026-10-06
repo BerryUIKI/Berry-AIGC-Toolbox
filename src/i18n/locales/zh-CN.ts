@@ -126,6 +126,8 @@ export const zhCN: typeof en = {
     rating: "评分",
     unrated: "未评分",
     clickToReveal: "点击查看敏感内容",
+    remaskContent: "重新遮罩敏感内容",
+    remaskShortcut: "切换查看/遮罩敏感内容 (R)",
     retryThumbnail: "重试加载缩略图",
     copyPrompt: "复制提示词",
     copyNegative: "复制负向提示词",

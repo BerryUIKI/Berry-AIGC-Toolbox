@@ -18,6 +18,7 @@ const shortcuts = [
   { key: "1 - 5", desc: "Quickly rate selected image(s) 1 to 5 stars" },
   { key: "0", desc: "Clear rating on selected image(s)" },
   { key: "F", desc: "Toggle favorite on selected image(s)" },
+  { key: "R", desc: "Reveal or conceal sensitive image" },
   { key: "I", desc: "Toggle metadata inspector panel inside preview" },
   { key: "Delete / Backspace", desc: "Move selected image(s) to Trash" },
   { key: "?", desc: "Show this keyboard shortcuts guide" },

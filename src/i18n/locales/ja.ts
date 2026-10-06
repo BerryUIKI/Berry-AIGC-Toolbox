@@ -126,6 +126,8 @@ export const ja: typeof en = {
     rating: "評価",
     unrated: "未評価",
     clickToReveal: "クリックしてセンシティブ画像を表示",
+    remaskContent: "センシティブ画像を再度隠す",
+    remaskShortcut: "センシティブ画像の表示/非表示を切り替え (R)",
     retryThumbnail: "サムネイルを再読み込み",
     copyPrompt: "プロンプトをコピー",
     copyNegative: "ネガティブをコピー",

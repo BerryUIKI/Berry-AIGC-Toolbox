@@ -126,6 +126,8 @@ export const es: typeof en = {
     rating: "Puntuación",
     unrated: "Sin puntuar",
     clickToReveal: "Haga clic para revelar contenido sensible",
+    remaskContent: "Ocultar contenido sensible",
+    remaskShortcut: "Revelar / ocultar contenido sensible (R)",
     retryThumbnail: "Reintentar miniatura",
     copyPrompt: "Copiar prompt",
     copyNegative: "Copiar prompt negativo",

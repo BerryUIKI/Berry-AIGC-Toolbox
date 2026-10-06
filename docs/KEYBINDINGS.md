@@ -36,6 +36,19 @@ Ctrl/Cmd-click toggles individual images and establishes a new range anchor.
 
 ---
 
+## 🧭 Sidebar Navigation
+
+| Shortcut | Scope | Action |
+| :--- | :--- | :--- |
+| `↓` / `↑` | Sidebar | Move focus to next / previous destination (Library, Folders, Albums, Tags, Tools) |
+| `Home` / `End` | Sidebar | Jump focus to the first / last destination |
+| `→` | Sidebar Tree | Expand collapsed folder/subfolder, or step into the first child node |
+| `←` | Sidebar Tree | Collapse expanded folder/subfolder, or return focus to parent folder |
+| `←` / `→` | Sidebar Tags | Navigate horizontally between adjacent tag chips |
+| `Enter` / `Space` | Sidebar | Select destination, activate tool, or toggle action without scrolling |
+
+---
+
 ## 🔍 Search & Filtering
 
 | Shortcut | Scope | Action |

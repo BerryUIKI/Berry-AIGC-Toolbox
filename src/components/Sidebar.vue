@@ -174,7 +174,9 @@ async function toggleFolderExpand(folder: Folder) {
       const activeEl = document.activeElement as HTMLElement;
       const folderRow = sidebarRef.value.querySelector(`[data-folder-path="${escapeCss(rootPath)}"]`);
       if (folderRow && folderRow.contains(activeEl)) {
-        const btn = folderRow.querySelector<HTMLElement>(".folder-item-btn, .tree-arrow-btn");
+        const btn =
+          folderRow.querySelector<HTMLElement>(".folder-item-btn") ||
+          folderRow.querySelector<HTMLElement>(".tree-arrow-btn");
         btn?.focus();
       }
     }
@@ -196,7 +198,9 @@ async function toggleSubfolderExpand(folder: Folder, path: string) {
       const activeEl = document.activeElement as HTMLElement;
       const subfolderEl = sidebarRef.value.querySelector(`[data-subfolder-path="${escapeCss(path)}"]`);
       if (subfolderEl && subfolderEl.contains(activeEl)) {
-        const btn = subfolderEl.querySelector<HTMLElement>(".subfolder-header, .tree-arrow-btn");
+        const btn =
+          subfolderEl.querySelector<HTMLElement>(".subfolder-header") ||
+          subfolderEl.querySelector<HTMLElement>(".tree-arrow-btn");
         btn?.focus();
       }
     }

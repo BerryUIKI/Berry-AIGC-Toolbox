@@ -17,6 +17,10 @@ This file defines repository-local instructions for coding agents and automated 
 - Use `dev` as the integration branch. Feature and fix branches start from and target `dev`.
 - `main` is release-only. Do not commit or open feature pull requests directly against `main`.
 - Preserve unrelated local changes. Never rewrite history or run destructive Git commands without explicit approval.
+- Please commit frequently; large commits are prohibited.
+- Commit after each small, coherent step and its relevant checks. Keep each commit limited to one logical change; include the tests needed to validate that change.
+- Stage specific files or hunks and inspect the staged diff before committing. Split large changes into reviewable increments instead of accumulating the entire task into one commit.
+- Preserve small commits when merging a multi-step PR; do not squash them into one large commit. Follow required checks and branch protection without rewriting existing history.
 
 ## Architecture Boundaries
 

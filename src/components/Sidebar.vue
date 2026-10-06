@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { t } from "../i18n";
@@ -45,6 +45,87 @@ const running = ref<{ id: number; action: "scan" | "rebuild" | "harvest" } | nul
 const error = ref("");
 const notification = useNotification();
 const sidebarRef = ref<HTMLElement | null>(null);
+
+const tagQuery = ref("");
+const tagSearchInputRef = ref<HTMLInputElement | null>(null);
+const MAX_VISIBLE_TAGS = 200;
+
+const normalizedTagQuery = computed(() => {
+  return tagQuery.value.trim().normalize("NFC").toLocaleLowerCase();
+});
+
+const filteredTags = computed(() => {
+  const allTags = props.tags || [];
+  const q = normalizedTagQuery.value;
+  if (!q) {
+    if (allTags.length <= MAX_VISIBLE_TAGS) {
+      return allTags;
+    }
+    const sliced = allTags.slice(0, MAX_VISIBLE_TAGS);
+    if (props.activeTarget.type === "tag") {
+      const activeId = props.activeTarget.tag.id;
+      if (!sliced.some((t) => t.id === activeId)) {
+        const activeTag = allTags.find((t) => t.id === activeId);
+        if (activeTag) {
+          sliced.push(activeTag);
+        }
+      }
+    }
+    return sliced;
+  }
+
+  const matches: Tag[] = [];
+  for (let i = 0; i < allTags.length; i++) {
+    const tag = allTags[i];
+    if (tag.name.normalize("NFC").toLocaleLowerCase().includes(q)) {
+      matches.push(tag);
+      if (matches.length >= MAX_VISIBLE_TAGS) {
+        break;
+      }
+    }
+  }
+  return matches;
+});
+
+function clearTagFilter() {
+  tagQuery.value = "";
+  if (tagSearchInputRef.value) {
+    tagSearchInputRef.value.focus();
+  }
+}
+
+function onTagSearchKeydown(e: KeyboardEvent) {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (!sidebarRef.value) return;
+    const firstChip = sidebarRef.value.querySelector<HTMLElement>(".tag-chip-eagle");
+    if (firstChip) {
+      firstChip.focus();
+      firstChip.scrollIntoView({ block: "nearest" });
+    } else {
+      const toolBtn = sidebarRef.value.querySelector<HTMLElement>(".tool-btn");
+      if (toolBtn) {
+        toolBtn.focus();
+        toolBtn.scrollIntoView({ block: "nearest" });
+      }
+    }
+  } else if (e.key === "Enter") {
+    if (filteredTags.value.length > 0) {
+      e.preventDefault();
+      const firstTag = filteredTags.value[0];
+      emit("selectNav", { type: "tag", tag: firstTag });
+      if (sidebarRef.value) {
+        const firstChip = sidebarRef.value.querySelector<HTMLElement>(".tag-chip-eagle");
+        firstChip?.focus();
+      }
+    }
+  } else if (e.key === "Escape") {
+    if (tagQuery.value) {
+      e.preventDefault();
+      clearTagFilter();
+    }
+  }
+}
 
 const subdirectories = ref<Record<string, SubdirectoryEntry[]>>({});
 const expandedPaths = ref<Set<string>>(new Set());
@@ -332,6 +413,15 @@ function onSidebarKeydown(e: KeyboardEvent) {
     e.preventDefault();
     focusNextNavItem(target, 1);
   } else if (e.key === "ArrowUp") {
+    if (target.matches(".tag-chip-eagle") && tagSearchInputRef.value && sidebarRef.value) {
+      const chips = Array.from(sidebarRef.value.querySelectorAll<HTMLElement>(".tag-chip-eagle"));
+      if (chips.indexOf(target) === 0) {
+        e.preventDefault();
+        tagSearchInputRef.value.focus();
+        tagSearchInputRef.value.scrollIntoView({ block: "nearest" });
+        return;
+      }
+    }
     e.preventDefault();
     focusNextNavItem(target, -1);
   } else if (
@@ -785,9 +875,41 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
             </svg>
           </button>
         </div>
+        <!-- Tag Search / Filter Control -->
+        <div v-if="(tags && tags.length > 0) || tagQuery" class="tag-search-box">
+          <div class="tag-search-input-wrapper">
+            <span class="tag-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
+                <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+              </svg>
+            </span>
+            <input
+              ref="tagSearchInputRef"
+              v-model="tagQuery"
+              type="text"
+              class="tag-search-input"
+              :placeholder="t.nav.filterTags || 'Filter tags…'"
+              :aria-label="t.nav.filterTags || 'Filter tags…'"
+              autocomplete="off"
+              spellcheck="false"
+              @keydown="onTagSearchKeydown"
+            />
+            <button
+              v-if="tagQuery"
+              type="button"
+              class="tag-search-clear-btn"
+              :title="t.nav.clearTagFilter || 'Clear tag filter'"
+              :aria-label="t.nav.clearTagFilter || 'Clear tag filter'"
+              @click="clearTagFilter"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
         <div class="tags-container" role="list" :aria-label="t.nav.tags">
           <button
-            v-for="tag in tags || []"
+            v-for="tag in filteredTags"
             :key="tag.id"
             type="button"
             class="tag-chip-eagle"
@@ -807,8 +929,14 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
             <span class="tag-name">{{ tag.name }}</span>
             <span v-if="tagCounts?.[tag.id]" class="tag-count" aria-hidden="true">{{ tagCounts[tag.id] }}</span>
           </button>
-          <p v-if="!tags || tags.length === 0" class="empty-hint">
+          <p v-if="tags === undefined" class="empty-hint">
+            {{ t.nav.loadingTags || 'Loading tags…' }}
+          </p>
+          <p v-else-if="tags.length === 0" class="empty-hint">
             {{ t.nav.noTags }}
+          </p>
+          <p v-else-if="filteredTags.length === 0" class="empty-hint no-match-hint">
+            {{ t.nav.noMatchingTags || 'No matching tags.' }}
           </p>
         </div>
       </section>
@@ -1196,8 +1324,86 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   color: var(--color-text-primary);
 }
 
-.icon-btn.remove-btn:hover {
-  color: #ef4444;
+.tag-search-box {
+  padding: 2px 6px 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tag-search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--color-bg-secondary, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 4px;
+  padding: 3px 6px;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.tag-search-input-wrapper:focus-within {
+  border-color: var(--color-accent, #6366f1);
+  box-shadow: 0 0 0 1px var(--color-accent, #6366f1);
+}
+
+.tag-search-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.tag-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text-primary, #f1f5f9);
+  font-size: 0.74rem;
+  font-family: inherit;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.tag-search-input::placeholder {
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
+.tag-search-clear-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.68rem;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+
+.tag-search-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f8fafc;
+}
+
+.tag-search-clear-btn:focus-visible {
+  outline: 2px solid var(--color-accent, #6366f1);
+  outline-offset: 1px;
+  color: #f8fafc;
+}
+
+.no-match-hint {
+  color: #94a3b8;
 }
 
 .tags-container {
@@ -1328,7 +1534,9 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
   .tool-btn,
   .icon-btn,
   .group-action-btn,
-  .tree-arrow-btn {
+  .tree-arrow-btn,
+  .tag-search-input-wrapper,
+  .tag-search-clear-btn {
     transition: none !important;
   }
 }

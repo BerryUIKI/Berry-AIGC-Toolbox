@@ -45,6 +45,10 @@ Ctrl/Cmd-click toggles individual images and establishes a new range anchor.
 | `→` | Sidebar Tree | Expand collapsed folder/subfolder, or step into the first child node |
 | `←` | Sidebar Tree | Collapse expanded folder/subfolder, or return focus to parent folder |
 | `←` / `→` | Sidebar Tags | Navigate horizontally between adjacent tag chips |
+| `↑` | Sidebar Tags | Move focus from first tag chip up to tag search/filter input |
+| `↓` | Tag Search | Move focus from tag search/filter input to matching tag chips |
+| `Enter` | Tag Search | Select and focus the first matching tag from the filter query |
+| `Esc` | Tag Search | Clear the active tag filter query and refocus input |
 | `Enter` / `Space` | Sidebar | Select destination, activate tool, or toggle action without scrolling |
 
 ---

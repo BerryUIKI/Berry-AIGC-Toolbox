@@ -1,6 +1,0 @@
-{
-  "title": "Review index retired in favor of individual issue reports",
-  "body": "This aggregate review tracker has been retired to follow the project's requested convention of one topic per issue. Its findings remain tracked in their individual reports; closing this tracker does not mean those findings have been fixed.\n\nThe original index is preserved in the local review artifacts. Synthetic production-function reproductions and relevant evidence have been copied to the individual reports so they can be assessed independently.\n\nAdministrative closure only; no implementation change is claimed.",
-  "state": "closed",
-  "state_reason": "not_planned"
-}

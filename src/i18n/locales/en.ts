@@ -43,6 +43,9 @@ export const en = {
     noTags: "No tags yet.",
     recursiveMode: "Subfolders",
     singleLevelMode: "Direct only",
+    addFolder: "Add Folder",
+    expand: "Expand",
+    collapse: "Collapse",
   },
   search: {
     placeholder: "Search prompts, models, parameters... (e.g. prompt:cat steps:>=20)",

@@ -145,6 +145,8 @@ pub struct ScanStats {
     pub failed: u64,
     /// Wall-clock duration of the scan, in milliseconds.
     pub duration_ms: u64,
+    /// Walk errors encountered (directory read failures, permission errors).
+    pub walk_errors: u64,
 }
 
 /// A media file discovered by the walk, before container detection.
@@ -247,6 +249,7 @@ impl Scanner {
             removed: 0,
             failed: 0,
             duration_ms: 0,
+            walk_errors: 0,
         };
         let mut progress = ProgressReporter::new(folder_id, on_progress);
         progress.report(0, 0, None, true, true);
@@ -263,8 +266,12 @@ impl Scanner {
         // Files awaiting upsert, flushed in batches of BATCH_SIZE.
         let mut pending: Vec<ImageFile> = Vec::with_capacity(BATCH_SIZE);
 
+        // Track walk errors to determine if deletion is safe.
+        let (media_files, walk_errors) = walk_media_files_with_errors(root);
+        stats.walk_errors = walk_errors;
+
         let mut scanned = 0u64;
-        for file in walk_media_files(root) {
+        for file in media_files {
             stats.found += 1;
             scanned += 1;
             let path_str = file.path.to_string_lossy().to_string();
@@ -336,11 +343,14 @@ impl Scanner {
             db.upsert_files(&pending)?;
         }
 
-        // Entries remaining in the fingerprint map were not observed during
-        // the streaming walk and can be removed without retaining a second
-        // full list of paths seen on disk.
-        let missing_paths = existing.into_keys().collect::<Vec<_>>();
-        stats.removed = db.delete_files_by_paths(folder_id, &missing_paths)?;
+        // Only delete missing paths if the walk completed without errors.
+        // If we encountered directory read failures or permission errors during
+        // traversal, we cannot be certain that unobserved paths truly disappeared
+        // from disk — they may simply have been in an unreadable subtree.
+        if stats.walk_errors == 0 {
+            let missing_paths = existing.into_keys().collect::<Vec<_>>();
+            stats.removed = db.delete_files_by_paths(folder_id, &missing_paths)?;
+        }
 
         stats.duration_ms = started.elapsed().as_millis() as u64;
         progress.report(scanned, stats.found, None, false, true);
@@ -387,6 +397,7 @@ impl Scanner {
             removed: 0,
             failed: 0,
             duration_ms: 0,
+            walk_errors: 0,
         };
         let mut progress = ProgressReporter::new(folder_id, on_progress);
         let db = Database::connect(&self.db_path)?;
@@ -483,6 +494,53 @@ fn sidecar_image_candidates(path: &Path) -> Vec<PathBuf> {
 /// directories. Unreadable entries are skipped without failing the scan.
 fn collect_media_files(root: &Path) -> Vec<MediaFile> {
     walk_media_files(root).collect()
+}
+
+/// Stream supported media files under `root` without retaining the tree.
+/// Returns an iterator of successfully walked files and a count of walk errors.
+fn walk_media_files_with_errors(root: &Path) -> (Vec<MediaFile>, u64) {
+    let mut files = Vec::new();
+    let mut error_count = 0u64;
+
+    for entry_result in WalkDir::new(root)
+        .into_iter()
+        .filter_entry(|entry| !is_hidden(entry))
+    {
+        let entry = match entry_result {
+            Ok(e) => e,
+            Err(_) => {
+                error_count += 1;
+                continue;
+            }
+        };
+
+        if !entry.file_type().is_file() || !is_media(entry.path()) {
+            continue;
+        }
+
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => {
+                error_count += 1;
+                continue;
+            }
+        };
+
+        let modified_at = meta
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs() as i64)
+            .unwrap_or(0);
+
+        files.push(MediaFile {
+            path: entry.path().to_path_buf(),
+            size_bytes: meta.len(),
+            modified_at,
+        });
+    }
+
+    (files, error_count)
 }
 
 /// Stream supported media files under `root` without retaining the tree.

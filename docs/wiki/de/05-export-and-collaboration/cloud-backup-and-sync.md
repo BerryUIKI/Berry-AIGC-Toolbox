@@ -44,13 +44,19 @@ sequenceDiagram
 
 ## 3. Inkrementelle Medienspiegelung & Delta-Sync (`cloud_sync.rs`)
 
-Während Snapshots Ihre Datenbankstruktur und Metadaten sichern, spiegelt der **Delta-Sync** die physischen Bild- und Videodateien zwischen lokalem Speicher und Cloud-Ziel.
+Während Snapshots Ihre Datenbankstruktur und Metadaten sichern, bietet der **Delta-Sync** eine einseitige inkrementelle Upload-Spiegelung physischer Bild- und Videodateien aus Ihrer lokalen Bibliothek auf Remote- oder Netzwerkspeicher.
 
-### Synchronisationsfähigkeiten:
+### Synchronisationsfähigkeiten (Implementiert):
 - **Strategien zur Änderungserkennung**:
-  - *Schneller Fingerabdruck*: Vergleicht die lokale Dateigröße und den Remote-HTTP-ETag (besonders schnell bei langsameren Verbindungen).
-  - *Strikte Prüfsumme*: Berechnet fortlaufende SHA-256-Prüfsummen für eine garantierte Byte-für-Byte-Konsistenz.
+  - *Schneller Fingerabdruck*: Vergleicht die lokale Dateigröße mit der Remote-Dateigröße über HTTP-HEAD-Metadaten (besonders schnell bei langsameren Verbindungen).
+  - *Strikte Prüfsumme*: Berechnet lokale SHA-256-Prüfsummen zum Abgleich mit Remote-Headern (benutzerdefinierter `x-amz-meta-sha256`-Header auf S3) für garantierte Byte-für-Byte-Konsistenz.
 - **Bandbreitenbegrenzung (Token-Bucket)**: Legen Sie ein Upload-Limit (KB/s) fest, damit Hintergrundübertragungen die Internetleitung Ihres Studios nicht blockieren.
-- **Übertragungs-Threads (Worker Concurrency)**: Konfigurierbare Thread-Anzahl (1 bis 8 parallele Uploads).
-- **Testlauf-Modus (Dry-Run)**: Simuliert den Abgleich und meldet hochzuladende, zu überspringende oder zu löschende Dateien, ohne Daten auf dem Remote-Speicher zu verändern.
-- **Echtzeit-Fortschrittsanzeige**: Sendet kontinuierliche Status-Updates mit übertragenen Bytes, Durchsatzrate, Prozentsatz und geschätzter Restzeit (ETA).
+- **Übertragungs-Threads (Worker Concurrency)**: Konfigurierbare Thread-Anzahl (1 bis 16 parallele Uploads, Standard 4).
+- **Testlauf-Modus (Dry-Run)**: Simuliert den Abgleich und meldet hochzuladende und zu überspringende Dateien, ohne Daten auf dem Remote-Speicher zu verändern.
+- **Echtzeit-Fortschrittsanzeige**: Sendet kontinuierliche Status-Updates mit übertragenen Bytes, Durchsatzrate, Prozentsatz und geschätzter Restzeit (ETA) sowie atomarer kooperativer Abbruchunterstützung.
+
+### Aktuelle Einschränkungen & Geplante Funktionen:
+- **Nur unidirektionaler Upload**: Der aktuelle Synchronisationspfad lädt lokale indizierte Dateien zum Remote-Ziel hoch. Ein Herunterladen/Abgleich von Remote nach Lokal ist nicht implementiert.
+- **Keine Synchronisation von Löschungen**: Lokal gelöschte Dateien werden auf dem Remote-Speicher nicht gelöscht; Remote-Dateien bleiben erhalten.
+- **Kein ETag-basierter Delta-Abgleich**: Die Änderungserkennung nutzt Dateigröße und SHA-256; HTTP-ETags werden nicht zur Cache-Invalidierung ausgewertet.
+- **Geplante bidirektionale Synchronisation**: Eine vollständige bidirektionale Synchronisation mit Erkennung von Remote-Änderungen, Pull-Downloads und Konfliktlösungsrichtlinien ist für zukünftige Versionen geplant.

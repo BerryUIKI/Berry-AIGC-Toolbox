@@ -141,6 +141,7 @@ Follows `IMAGE_TRANSFORM_PLAN.md`. Phase 6 packages T0 (export contract/pure-Rus
 - Long-running synchronous inference/network handlers remain under #102. Split this work into named commands and document lock ownership; do not mechanically mark handlers async while leaving blocking work on the runtime thread.
 - Thumbnail worker connections now have an explicit release hook. Lifecycle callers must stop submissions before release; the hook alone is not concurrent restore safety.
 - CSP, watcher initialization/revocation, config revision conflicts, credential entry reuse, file-operation partial results and detail invalidation need their acceptance cases completed.
+- Cloud media synchronization in `cloud_sync.rs` is an upload-oriented one-way mirroring tool from local library to remote S3, WebDAV, or local path destinations. It does not implement remote-to-local pull, bidirectional reconciliation, or ETag-driven cache validation (#257).
 - Native GUI and installer acceptance tests have not been completed. Do not label the working tree release-ready.
 
 ## Definition of done

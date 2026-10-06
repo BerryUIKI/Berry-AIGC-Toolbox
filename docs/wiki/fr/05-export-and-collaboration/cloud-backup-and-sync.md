@@ -44,13 +44,19 @@ sequenceDiagram
 
 ## 3. Miroir multimédia incrémentiel & Synchronisation Delta (`cloud_sync.rs`)
 
-Tandis que les instantanés sécurisent votre base de données, la **Synchronisation Delta** met en miroir vos fichiers physiques d'images et de vidéos entre votre disque local et votre stockage cloud distant.
+Tandis que les instantanés sécurisent votre base de données, la **Synchronisation Delta** offre une mise en miroir unidirectionnelle par téléversement incrémentiel des fichiers physiques d'images et de vidéos depuis votre bibliothèque locale vers un stockage distant ou réseau.
 
-### Fonctionnalités de synchronisation :
+### Fonctionnalités de synchronisation (Implémentées) :
 - **Stratégies de détection des modifications** :
-  - *Empreinte rapide* : Compare la taille du fichier local et l'ETag HTTP distant (la plus rapide, idéale pour les connexions modérées).
-  - *Somme de contrôle stricte* : Calcule des sommes SHA-256 en continu pour certifier la conformité octet par octet.
+  - *Empreinte rapide* : Compare la taille du fichier local et celle du fichier distant via les métadonnées HTTP HEAD (la plus rapide, idéale pour les connexions modérées).
+  - *Somme de contrôle stricte* : Calcule des sommes SHA-256 locales pour vérifier la conformité avec les en-têtes distants (`x-amz-meta-sha256` sur S3) octet par octet.
 - **Limiteur de bande passante par seau de jetons** : Fixez un plafond de vitesse d'envoi (Ko/s) afin que la synchronisation d'arrière-plan ne sature pas la bande passante de votre studio.
-- **Concurrence des workers** : Configurez le nombre de threads d'envoi simultanés (de 1 à 8 threads).
-- **Mode simulation (Dry-Run)** : Simule l'exécution de la synchronisation et indique les fichiers à téléverser, à ignorer ou à supprimer sans modifier le stockage distant.
-- **Suivi de progression en temps réel** : Émet des événements réguliers indiquant les octets transférés, le débit, le pourcentage achevé et le temps estimé restant.
+- **Concurrence des workers** : Configurez le nombre de threads d'envoi simultanés (de 1 à 16 threads, 4 par défaut).
+- **Mode simulation (Dry-Run)** : Simule l'exécution de la synchronisation et indique les fichiers à téléverser et à ignorer sans modifier le stockage distant.
+- **Suivi de progression en temps réel** : Émet des événements réguliers indiquant les octets transférés, le débit, le pourcentage achevé et le temps estimé restant, avec annulation atomique coopérative.
+
+### Limites actuelles et fonctionnalités prévues :
+- **Téléversement unidirectionnel uniquement** : Le chemin de synchronisation actuel pousse les fichiers locaux indexés vers la cible distante. Le téléchargement/rapatriement de fichiers distants vers le stockage local n'est pas implémenté.
+- **Aucune synchronisation des suppressions** : Supprimer un fichier localement ne supprime pas le fichier distant ; le stockage distant conserve les médias.
+- **Aucune logique delta par ETag** : La détection s'appuie sur la taille et les en-têtes SHA-256 ; les ETag HTTP du fournisseur ne sont pas utilisés pour invalider le cache.
+- **Synchronisation bidirectionnelle planifiée** : Une synchronisation bidirectionnelle complète avec détection des modifications distantes, réconciliation descendante et gestion des conflits est planifiée pour de futures versions.

@@ -32,7 +32,7 @@ Omera は、AI生成クリエイター、プロンプトエンジニア、ビジ
 
 ### [第5章：エクスポート・クラウドバックアップ・チーム共有](05-export-and-collaboration/export-and-web-showcase.md)
 - **[一括エクスポート・トランスコード・Webショーケース](05-export-and-collaboration/export-and-web-showcase.md)**: Rayon によるマルチスレッド高速変換、4段階のプライバシーメタデータ消去、動的ファイル名テンプレート、ZIP アーカイブ出力、単一 HTML ファイルによる独立型ウェブギャラリー出力。
-- **[クラウドスナップショットバックアップとメディアミラーリング](05-export-and-collaboration/cloud-backup-and-sync.md)**: AWS S3、Cloudflare R2、MinIO、WebDAV、ローカル NAS への SQLite `VACUUM INTO` オンラインスナップショット；ETag / SHA-256 差分検出と帯域幅制限付き増分同期。
+- **[クラウドスナップショットバックアップとメディアミラーリング](05-export-and-collaboration/cloud-backup-and-sync.md)**: AWS S3、Cloudflare R2、MinIO、WebDAV、ローカル NAS への SQLite `VACUUM INTO` オンラインスナップショット；サイズおよび SHA-256 差分検出と帯域幅制限付き単方向増分アップロード（双方向同期は計画中）。
 - **[マルチデータベース・チームスタジオ](05-export-and-collaboration/team-collaboration.md)**: 共有 MySQL 8.0+ / PostgreSQL 14+ サーバーへのスケールアップ；クロスプラットフォームストレージルートマッピング（Windows ドライブレターと macOS/Linux パスの正規化）、楽観的並行性制御（OCC）、クライアント側の NVMe サムネイルキャッシュ。
 
 ### [第6章：システムリファレンスと保守](06-reference-and-maintenance/settings-reference.md)

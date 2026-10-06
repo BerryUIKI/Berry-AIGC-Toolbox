@@ -32,7 +32,7 @@ Omera ist ein quelloffener, lokaler („Local-First“) Asset-Manager und Prompt
 
 ### [Kapitel 5: Export, Cloud-Backup & Kollaboration](05-export-and-collaboration/export-and-web-showcase.md)
 - **[Stapelexport, Transkodierung & Web-Showcase](05-export-and-collaboration/export-and-web-showcase.md)**: Multithreaded-Rayon-Transkodierung, 4-stufige Bereinigung sensibler Metadaten, dynamische Dateinamensvorlagen, ZIP-Archive und Generierung eigenständiger, interaktiver Offline-HTML-Showcases.
-- **[Cloud-Snapshot-Backup & Medienspiegelung](05-export-and-collaboration/cloud-backup-and-sync.md)**: Konsistente SQLite `VACUUM INTO`-Snapshots auf AWS S3, Cloudflare R2, MinIO, WebDAV oder lokalen NAS-Speicher; inkrementeller Delta-Sync mit ETag/SHA-256-Erkennung und Bandbreitenbegrenzung.
+- **[Cloud-Snapshot-Backup & Medienspiegelung](05-export-and-collaboration/cloud-backup-and-sync.md)**: Konsistente SQLite `VACUUM INTO`-Snapshots auf AWS S3, Cloudflare R2, MinIO, WebDAV oder lokalen NAS-Speicher; einseitige inkrementelle Upload-Spiegelung mit Größen-/SHA-256-Erkennung und Bandbreitenbegrenzung (bidirektionaler Sync geplant).
 - **[Multi-Datenbank-Team-Studio](05-export-and-collaboration/team-collaboration.md)**: Skalierung über SQLite hinaus auf gemeinsame MySQL 8.0+- oder PostgreSQL 14+-Server; plattformübergreifendes Speicher-Root-Mapping (Normalisierung von Windows-Laufwerksbuchstaben auf macOS/Linux-Pfade), optimistische Nebenläufigkeitssteuerung (OCC) und clientseitiges NVMe-Thumbnail-Caching.
 
 ### [Kapitel 6: Systemreferenz & Wartung](06-reference-and-maintenance/settings-reference.md)

@@ -45,6 +45,9 @@ export const zhTW: typeof en = {
     noTags: "暫無標籤。",
     recursiveMode: "包含子資料夾",
     singleLevelMode: "僅目前目錄",
+    addFolder: "新增資料夾",
+    expand: "展開",
+    collapse: "摺疊",
   },
   search: {
     placeholder: "搜尋提示詞、模型、參數... (例: prompt:cat steps:>=20)",

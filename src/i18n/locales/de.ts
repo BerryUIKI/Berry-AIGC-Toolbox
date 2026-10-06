@@ -45,6 +45,9 @@ export const de: typeof en = {
     noTags: "Noch keine Tags.",
     recursiveMode: "Unterordner",
     singleLevelMode: "Nur aktueller",
+    addFolder: "Ordner hinzufügen",
+    expand: "Erweitern",
+    collapse: "Reduzieren",
   },
   search: {
     placeholder: "Prompts, Modelle, Parameter durchsuchen... (z.B. prompt:cat steps:>=20)",

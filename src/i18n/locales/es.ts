@@ -45,6 +45,9 @@ export const es: typeof en = {
     noTags: "Sin etiquetas.",
     recursiveMode: "Subcarpetas",
     singleLevelMode: "Carpeta actual",
+    addFolder: "Añadir carpeta",
+    expand: "Expandir",
+    collapse: "Contraer",
   },
   search: {
     placeholder: "Buscar prompts, modelos, parámetros... (ej: prompt:cat steps:>=20)",

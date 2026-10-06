@@ -45,6 +45,9 @@ export const fr: typeof en = {
     noTags: "Aucun tag.",
     recursiveMode: "Sous-dossiers",
     singleLevelMode: "Dossier actuel",
+    addFolder: "Ajouter un dossier",
+    expand: "Développer",
+    collapse: "Réduire",
   },
   search: {
     placeholder: "Rechercher prompts, modèles, paramètres... (ex: prompt:cat steps:>=20)",

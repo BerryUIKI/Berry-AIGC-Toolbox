@@ -226,6 +226,11 @@ pub const MIGRATIONS: &[&str] = &[
         PRIMARY KEY(file_id, model_id)
     ) STRICT;
     "#,
+    // v16: Add source identity fields to pipeline_cleanup_queue for safe validation.
+    r#"
+    ALTER TABLE pipeline_cleanup_queue ADD COLUMN source_size_bytes INTEGER;
+    ALTER TABLE pipeline_cleanup_queue ADD COLUMN source_hash TEXT;
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.

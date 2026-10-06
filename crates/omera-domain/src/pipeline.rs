@@ -28,4 +28,8 @@ pub struct CleanupQueueItem {
     pub created_at: i64,
     /// Status: "pending", "deleted", "cancelled", or "failed".
     pub status: String,
+    /// Source file size at enqueue time (bytes). Used for identity validation.
+    pub source_size_bytes: Option<i64>,
+    /// SHA-256 hash of source file content at enqueue time. Used for identity validation.
+    pub source_hash: Option<String>,
 }

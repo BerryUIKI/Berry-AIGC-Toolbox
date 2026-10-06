@@ -18,6 +18,8 @@ rayon = "1.10"
 tempfile = "3"
 trash = "5"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
+sha2 = "0.11.0"
+hex = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3"

@@ -14,6 +14,7 @@ use std::time::SystemTime;
 use omera_domain::{CleanupQueueItem, Container, ImageFile};
 use omera_storage::Database;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::transform::normalize_path_string;
@@ -49,6 +50,22 @@ pub fn files_have_identical_content(path_a: &Path, path_b: &Path) -> std::io::Re
             return Ok(true);
         }
     }
+}
+
+/// Computes SHA-256 hash of a file's contents.
+pub fn compute_file_hash(path: &Path) -> std::io::Result<String> {
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    let result = hasher.finalize();
+    Ok(hex::encode(result))
 }
 
 /// Errors arising during pipeline harvesting or cleanup processing.
@@ -412,7 +429,7 @@ pub fn harvest_pipeline_folder_with_cancellation(
                                     let _ = trash::delete(&src_json);
                                 }
                             } else if let Some(fid) = existing_file_id {
-                                if let Err(e) = db.enqueue_cleanup(&src_str, fid, grace) {
+                                if let Err(e) = db.enqueue_cleanup(&src_str, fid, grace, 0, "") {
                                     eprintln!(
                                         "Failed to enqueue cleanup for identical {src_str}: {e}"
                                     );
@@ -547,10 +564,24 @@ pub fn harvest_pipeline_folder_with_cancellation(
                 if src_json.exists() {
                     let _ = trash::delete(&src_json);
                 }
-            } else if let Err(e) = db.enqueue_cleanup(&src_str, inserted_id, grace) {
-                eprintln!("Failed to enqueue cleanup for {src_str}: {e}");
             } else {
-                cleanup_enqueued = true;
+                // Compute source identity for validation before cleanup
+                let source_size = file_path.metadata()?.len() as i64;
+                let source_hash = match compute_file_hash(&file_path) {
+                    Ok(hash) => hash,
+                    Err(e) => {
+                        eprintln!("Failed to compute hash for {src_str}: {e}");
+                        continue;
+                    }
+                };
+
+                if let Err(e) =
+                    db.enqueue_cleanup(&src_str, inserted_id, grace, source_size, &source_hash)
+                {
+                    eprintln!("Failed to enqueue cleanup for {src_str}: {e}");
+                } else {
+                    cleanup_enqueued = true;
+                }
             }
         }
 
@@ -748,7 +779,86 @@ pub fn process_pipeline_cleanups_at(
             continue;
         }
 
-        // 3. Move to trash safely:
+        // 3. Source identity validation:
+        // Verify the source file is still the same file that was originally ingested
+        if let (Some(expected_size), Some(expected_hash)) =
+            (item.source_size_bytes, &item.source_hash)
+        {
+            // Check size first (fast)
+            let actual_size = match src_p.metadata() {
+                Ok(meta) => meta.len() as i64,
+                Err(e) => {
+                    let outcome = PipelineCleanupItemOutcome::FailedSourceInvalid {
+                        queue_id: item.id,
+                        source_path: item.source_file_path.clone(),
+                        reason: format!("Failed to read source metadata: {e}"),
+                    };
+                    let _ = db.update_cleanup_status(item.id, "failed");
+                    report.failed_count += 1;
+                    if let Some(cb) = progress_callback {
+                        cb(&outcome);
+                    }
+                    report.items.push(outcome);
+                    continue;
+                }
+            };
+
+            if actual_size != expected_size {
+                let outcome = PipelineCleanupItemOutcome::FailedSourceInvalid {
+                    queue_id: item.id,
+                    source_path: item.source_file_path.clone(),
+                    reason: format!(
+                        "Source file size changed: expected {} bytes, found {} bytes",
+                        expected_size, actual_size
+                    ),
+                };
+                let _ = db.update_cleanup_status(item.id, "failed");
+                report.failed_count += 1;
+                if let Some(cb) = progress_callback {
+                    cb(&outcome);
+                }
+                report.items.push(outcome);
+                continue;
+            }
+
+            // Check hash (slower but definitive)
+            let actual_hash = match compute_file_hash(src_p) {
+                Ok(h) => h,
+                Err(e) => {
+                    let outcome = PipelineCleanupItemOutcome::FailedSourceInvalid {
+                        queue_id: item.id,
+                        source_path: item.source_file_path.clone(),
+                        reason: format!("Failed to compute source hash: {e}"),
+                    };
+                    let _ = db.update_cleanup_status(item.id, "failed");
+                    report.failed_count += 1;
+                    if let Some(cb) = progress_callback {
+                        cb(&outcome);
+                    }
+                    report.items.push(outcome);
+                    continue;
+                }
+            };
+
+            if actual_hash != *expected_hash {
+                let outcome = PipelineCleanupItemOutcome::FailedSourceInvalid {
+                    queue_id: item.id,
+                    source_path: item.source_file_path.clone(),
+                    reason:
+                        "Source file content changed: hash mismatch (file replaced at same path)"
+                            .to_string(),
+                };
+                let _ = db.update_cleanup_status(item.id, "failed");
+                report.failed_count += 1;
+                if let Some(cb) = progress_callback {
+                    cb(&outcome);
+                }
+                report.items.push(outcome);
+                continue;
+            }
+        }
+
+        // 4. Move to trash safely:
         match trash::delete(src_p) {
             Ok(()) => {
                 let txt = src_p.with_extension("txt");
@@ -1301,7 +1411,13 @@ mod tests {
         };
         let file_id_to_drop = db.upsert_file(&dummy_rec).unwrap();
         let q1 = db
-            .enqueue_cleanup(&src_file.to_string_lossy(), file_id_to_drop, 0)
+            .enqueue_cleanup(
+                &src_file.to_string_lossy(),
+                file_id_to_drop,
+                0,
+                100,
+                "test_hash",
+            )
             .unwrap();
 
         // Delete the file with FK checks temporarily bypassed to test dangling reference revalidation
@@ -1354,7 +1470,7 @@ mod tests {
         let file_id = db.upsert_file(&img_record).unwrap();
 
         let _q2 = db
-            .enqueue_cleanup(&src_file.to_string_lossy(), file_id, 0)
+            .enqueue_cleanup(&src_file.to_string_lossy(), file_id, 0, 100, "test_hash")
             .unwrap();
         let rep2 = process_pipeline_cleanups_at(&db, i64::MAX, None, None).unwrap();
         assert_eq!(rep2.deleted_count, 0);
@@ -1382,7 +1498,7 @@ mod tests {
         let empty_id = db.upsert_file(&img_empty_record).unwrap();
 
         let _q3 = db
-            .enqueue_cleanup(&src_file.to_string_lossy(), empty_id, 0)
+            .enqueue_cleanup(&src_file.to_string_lossy(), empty_id, 0, 0, "empty_hash")
             .unwrap();
         let rep3 = process_pipeline_cleanups_at(&db, i64::MAX, None, None).unwrap();
         assert_eq!(rep3.deleted_count, 0);
@@ -1430,7 +1546,7 @@ mod tests {
         let dir_source = tmp.path().join("media_root");
         std::fs::create_dir_all(&dir_source).unwrap();
         let _q1 = db
-            .enqueue_cleanup(&dir_source.to_string_lossy(), file_id, 0)
+            .enqueue_cleanup(&dir_source.to_string_lossy(), file_id, 0, 100, "dir_hash")
             .unwrap();
         let rep1 = process_pipeline_cleanups_at(&db, i64::MAX, None, None).unwrap();
         assert_eq!(rep1.failed_count, 1);
@@ -1438,7 +1554,7 @@ mod tests {
 
         // 2. Source is identical to destination
         let _q2 = db
-            .enqueue_cleanup(&dest_file.to_string_lossy(), file_id, 0)
+            .enqueue_cleanup(&dest_file.to_string_lossy(), file_id, 0, 100, "dest_hash")
             .unwrap();
         let rep2 = process_pipeline_cleanups_at(&db, i64::MAX, None, None).unwrap();
         assert_eq!(rep2.failed_count, 1);
@@ -1447,7 +1563,13 @@ mod tests {
         // 3. Source file was already removed by user
         let missing_src = tmp.path().join("already_gone.png");
         let _q3 = db
-            .enqueue_cleanup(&missing_src.to_string_lossy(), file_id, 0)
+            .enqueue_cleanup(
+                &missing_src.to_string_lossy(),
+                file_id,
+                0,
+                100,
+                "missing_hash",
+            )
             .unwrap();
         let rep3 = process_pipeline_cleanups_at(&db, i64::MAX, None, None).unwrap();
         assert_eq!(rep3.deleted_count, 1);

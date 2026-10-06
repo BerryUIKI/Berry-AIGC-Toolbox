@@ -5,6 +5,8 @@
 //! upserting library records, and safely managing delayed source cleanups with source
 //! and destination revalidation.
 
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
@@ -13,6 +15,41 @@ use omera_domain::{CleanupQueueItem, Container, ImageFile};
 use omera_storage::Database;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+use crate::transform::normalize_path_string;
+
+/// Checks whether two files on disk have identical byte contents.
+/// Compares file sizes first as a fast filter, then streams both files in chunks.
+pub fn files_have_identical_content(path_a: &Path, path_b: &Path) -> std::io::Result<bool> {
+    let meta_a = match path_a.metadata() {
+        Ok(m) => m,
+        Err(_) => return Ok(false),
+    };
+    let meta_b = match path_b.metadata() {
+        Ok(m) => m,
+        Err(_) => return Ok(false),
+    };
+    if meta_a.len() != meta_b.len() {
+        return Ok(false);
+    }
+    if meta_a.len() == 0 {
+        return Ok(true);
+    }
+    let mut file_a = File::open(path_a)?;
+    let mut file_b = File::open(path_b)?;
+    let mut buf_a = [0u8; 8192];
+    let mut buf_b = [0u8; 8192];
+    loop {
+        let n_a = file_a.read(&mut buf_a)?;
+        let n_b = file_b.read(&mut buf_b)?;
+        if n_a != n_b || buf_a[..n_a] != buf_b[..n_b] {
+            return Ok(false);
+        }
+        if n_a == 0 {
+            return Ok(true);
+        }
+    }
+}
 
 /// Errors arising during pipeline harvesting or cleanup processing.
 #[derive(Debug, Error)]
@@ -347,33 +384,54 @@ pub fn harvest_pipeline_folder_with_cancellation(
             PipelineCollisionPolicy::SkipIdentical => {
                 let candidate = dest_dir.join(&file_name);
                 if candidate.exists() {
-                    if let Ok(t_meta) = candidate.metadata() {
-                        if t_meta.len() == meta.len() {
-                            let outcome = PipelineHarvestItemOutcome::SkippedIdentical {
-                                source_path: src_str,
-                                target_path: candidate.display().to_string(),
-                            };
-                            report.skipped_count += 1;
-                            if let Some(cb) = progress_callback {
-                                cb(&outcome);
+                    let is_identical =
+                        files_have_identical_content(&file_path, &candidate).unwrap_or(false);
+                    if is_identical {
+                        // Content is verified identical: skip copying (#268).
+                        let candidate_norm = normalize_path_string(&candidate);
+                        let candidate_lossy = candidate.to_string_lossy();
+                        let candidate_display = candidate.display().to_string();
+                        let existing_file_id = db
+                            .get_file_by_path(&candidate_norm)
+                            .ok()
+                            .flatten()
+                            .or_else(|| db.get_file_by_path(&candidate_lossy).ok().flatten())
+                            .or_else(|| db.get_file_by_path(&candidate_display).ok().flatten())
+                            .and_then(|f| f.id);
+
+                        // If folder configured with ingest_action == "move", enqueue delayed cleanup
+                        // or trash immediately referencing the existing destination file ID.
+                        if folder.ingest_action.as_deref() == Some("move") {
+                            let grace = folder.grace_period_hours.unwrap_or(24);
+                            if grace <= 0 {
+                                let _ = trash::delete(&file_path);
+                                if src_txt.exists() {
+                                    let _ = trash::delete(&src_txt);
+                                }
+                                if src_json.exists() {
+                                    let _ = trash::delete(&src_json);
+                                }
+                            } else if let Some(fid) = existing_file_id {
+                                if let Err(e) = db.enqueue_cleanup(&src_str, fid, grace) {
+                                    eprintln!(
+                                        "Failed to enqueue cleanup for identical {src_str}: {e}"
+                                    );
+                                }
                             }
-                            report.items.push(outcome);
-                            continue;
-                        } else {
-                            // Non-identical collision: NEVER clobber existing bytes (#232)
-                            let outcome = PipelineHarvestItemOutcome::SkippedCollision {
-                                source_path: src_str,
-                                target_path: candidate.display().to_string(),
-                            };
-                            report.skipped_count += 1;
-                            if let Some(cb) = progress_callback {
-                                cb(&outcome);
-                            }
-                            report.items.push(outcome);
-                            continue;
                         }
+
+                        let outcome = PipelineHarvestItemOutcome::SkippedIdentical {
+                            source_path: src_str,
+                            target_path: candidate.display().to_string(),
+                        };
+                        report.skipped_count += 1;
+                        if let Some(cb) = progress_callback {
+                            cb(&outcome);
+                        }
+                        report.items.push(outcome);
+                        continue;
                     } else {
-                        // Could not read target metadata; treat as collision to avoid clobbering
+                        // Non-identical collision: NEVER clobber existing bytes (#232, #268)
                         let outcome = PipelineHarvestItemOutcome::SkippedCollision {
                             source_path: src_str,
                             target_path: candidate.display().to_string(),
@@ -1430,5 +1488,107 @@ mod tests {
 
         let cleanup_rep = process_pipeline_cleanups_at(&db, i64::MAX, Some(&cancel), None).unwrap();
         assert!(cleanup_rep.cancelled);
+    }
+
+    #[test]
+    fn test_harvest_skip_identical_dedup_content_identity() {
+        let db = Database::connect_in_memory().unwrap();
+        let tmp = tempdir().unwrap();
+
+        let src_dir = tmp.path().join("source");
+        let dest_dir = tmp.path().join("dest");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&dest_dir).unwrap();
+
+        let folder = db
+            .add_folder_with_mode(
+                &dest_dir.to_string_lossy(),
+                "pipeline",
+                Some(&src_dir.to_string_lossy()),
+                Some("move"),
+                Some(1),
+                true,
+            )
+            .unwrap();
+
+        // 1. Setup existing destination file: dest_dir/sample.png with bytes b"hello_world_123"
+        let dest_sample = dest_dir.join("sample.png");
+        let dest_bytes = b"hello_world_123456";
+        std::fs::write(&dest_sample, dest_bytes).unwrap();
+
+        // Register destination file in DB
+        let img_record = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: normalize_path_string(&dest_sample),
+            size_bytes: dest_bytes.len() as u64,
+            modified_at: 1000,
+            container: Container::Png,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        let existing_dest_id = db.upsert_file(&img_record).unwrap();
+
+        // 2. Setup source file with EQUAL length but DIFFERENT bytes
+        let src_sample = src_dir.join("sample.png");
+        let diff_bytes = b"different_bytes123";
+        assert_eq!(dest_bytes.len(), diff_bytes.len());
+        std::fs::write(&src_sample, diff_bytes).unwrap();
+
+        // Harvest under SkipIdentical collision policy
+        let opts = PipelineHarvestOptions {
+            collision_policy: PipelineCollisionPolicy::SkipIdentical,
+            debounce_seconds: Some(0),
+        };
+        let report = harvest_pipeline_folder_with_cancellation(
+            &db,
+            folder.id,
+            Some(opts.clone()),
+            None,
+            None,
+        )
+        .unwrap();
+
+        // Should NOT falsely treat as identical! Must emit SkippedCollision.
+        assert_eq!(report.harvested_count, 0);
+        assert_eq!(report.skipped_count, 1);
+        assert_eq!(report.failed_count, 0);
+        assert!(matches!(
+            report.items[0],
+            PipelineHarvestItemOutcome::SkippedCollision { .. }
+        ));
+        assert!(src_sample.exists());
+        assert_eq!(std::fs::read(&src_sample).unwrap(), diff_bytes);
+        assert_eq!(std::fs::read(&dest_sample).unwrap(), dest_bytes);
+
+        // Verify no cleanup queued for this collision
+        let pending = db.list_due_cleanups(i64::MAX).unwrap();
+        assert_eq!(pending.len(), 0);
+
+        // 3. Now update src_sample to have TRULY IDENTICAL bytes
+        std::fs::write(&src_sample, dest_bytes).unwrap();
+
+        let report2 =
+            harvest_pipeline_folder_with_cancellation(&db, folder.id, Some(opts), None, None)
+                .unwrap();
+
+        // Should be recognized as truly identical!
+        assert_eq!(report2.harvested_count, 0);
+        assert_eq!(report2.skipped_count, 1);
+        assert_eq!(report2.failed_count, 0);
+        assert!(matches!(
+            report2.items[0],
+            PipelineHarvestItemOutcome::SkippedIdentical { .. }
+        ));
+
+        // Cleanup should be queued because ingest_action == "move", targeting existing_dest_id
+        let pending2 = db.list_due_cleanups(i64::MAX).unwrap();
+        assert_eq!(pending2.len(), 1);
+        assert_eq!(pending2[0].target_image_id, existing_dest_id);
     }
 }

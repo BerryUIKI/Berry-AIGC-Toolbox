@@ -312,7 +312,7 @@ pub fn validate_managed_destination_folder(
 }
 
 /// Normalize path string to remove Windows verbatim `\\?\` prefix and canonicalize if possible.
-fn normalize_path_string(path: &Path) -> String {
+pub(crate) fn normalize_path_string(path: &Path) -> String {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     let text = canonical.to_string_lossy();
     text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
@@ -518,11 +518,11 @@ pub fn publish_managed_import_item(
 
         let initial_candidate = dest_dir.join(format!("{file_stem}.{raw_ext}"));
         let (pub_path, needs_copy) = if initial_candidate.exists() {
-            let is_same_size = initial_candidate
-                .metadata()
-                .map(|m| m.len() == meta.len())
-                .unwrap_or(false);
-            if is_same_size {
+            let is_identical =
+                crate::pipeline::files_have_identical_content(src_path, &initial_candidate)
+                    .unwrap_or(false);
+            if is_identical {
+                // Content is verified identical: reuse existing published file (#268).
                 (initial_candidate, false)
             } else {
                 match resolve_publication_path(dest_dir, file_stem, &raw_ext, collision_policy) {
@@ -1844,5 +1844,111 @@ mod tests {
             renamed_archived.exists(),
             "Collision in archive folder must be resolved via renaming"
         );
+    }
+
+    #[test]
+    fn test_managed_import_dedup_content_identity() {
+        // Issue #268: Managed import treats equal byte lengths as identical content.
+        // Equal-size different content must NOT be falsely deduplicated;
+        // Identical content must be verified via byte comparison and return existing identity.
+        let dir = tempdir().unwrap();
+        let managed_dir = dir.path().join("vault");
+        let ext_dir = dir.path().join("external");
+        fs::create_dir_all(&managed_dir).unwrap();
+        fs::create_dir_all(&ext_dir).unwrap();
+
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(
+                &managed_dir.to_string_lossy(),
+                "managed",
+                None,
+                None,
+                None,
+                true,
+            )
+            .unwrap();
+
+        // 1. Initial import of photo.png
+        let src1 = ext_dir.join("photo.png");
+        create_dummy_png(&src1, 50, 50);
+        let src1_bytes = fs::read(&src1).unwrap();
+        let initial_ids = import_files_to_managed_folder(
+            &db,
+            &[src1.to_string_lossy().to_string()],
+            folder.id,
+            None,
+        )
+        .unwrap();
+        assert_eq!(initial_ids.len(), 1);
+        let photo_file_id = initial_ids[0];
+        assert!(managed_dir.join("photo.png").exists());
+
+        // 2. Prepare equal-length DIFFERENT content with same basename
+        let src2_dir = ext_dir.join("other_source");
+        fs::create_dir_all(&src2_dir).unwrap();
+        let src2 = src2_dir.join("photo.png");
+        let mut different_bytes = src1_bytes.clone();
+        // Modify bytes in the middle while maintaining identical length
+        let mid = different_bytes.len() / 2;
+        different_bytes[mid] ^= 0xFF;
+        different_bytes[mid + 1] ^= 0xAA;
+        assert_eq!(src1_bytes.len(), different_bytes.len());
+        assert_ne!(src1_bytes, different_bytes);
+        fs::write(&src2, &different_bytes).unwrap();
+
+        // 3. Import equal-length different content with Rename policy
+        let rename_spec = TransformSpec {
+            collision_policy: TransformCollisionPolicy::Rename,
+            ..Default::default()
+        };
+        let rename_ids = import_files_to_managed_folder(
+            &db,
+            &[src2.to_string_lossy().to_string()],
+            folder.id,
+            Some(&rename_spec),
+        )
+        .unwrap();
+        assert_eq!(rename_ids.len(), 1);
+        assert_ne!(rename_ids[0], photo_file_id);
+        // photo.png preserved untouched; photo_1.png created with different bytes
+        assert_eq!(fs::read(managed_dir.join("photo.png")).unwrap(), src1_bytes);
+        assert_eq!(
+            fs::read(managed_dir.join("photo_1.png")).unwrap(),
+            different_bytes
+        );
+
+        // 4. Import equal-length different content with Skip policy
+        let skip_spec = TransformSpec {
+            collision_policy: TransformCollisionPolicy::Skip,
+            ..Default::default()
+        };
+        let skip_ids = import_files_to_managed_folder(
+            &db,
+            &[src2.to_string_lossy().to_string()],
+            folder.id,
+            Some(&skip_spec),
+        )
+        .unwrap();
+        // Distinct content skipped as a collision: must not return photo_file_id!
+        assert_eq!(skip_ids.len(), 0);
+
+        // 5. Import truly IDENTICAL content with same basename
+        let src3_dir = ext_dir.join("identical_source");
+        fs::create_dir_all(&src3_dir).unwrap();
+        let src3 = src3_dir.join("photo.png");
+        fs::write(&src3, &src1_bytes).unwrap();
+
+        let identical_ids = import_files_to_managed_folder(
+            &db,
+            &[src3.to_string_lossy().to_string()],
+            folder.id,
+            None,
+        )
+        .unwrap();
+        assert_eq!(identical_ids.len(), 1);
+        assert_eq!(identical_ids[0], photo_file_id);
+        // Original file on destination is still intact
+        assert_eq!(fs::read(managed_dir.join("photo.png")).unwrap(), src1_bytes);
     }
 }

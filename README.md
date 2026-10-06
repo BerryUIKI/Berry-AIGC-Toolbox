@@ -54,7 +54,7 @@ Organize, search, compare, and export tens of thousands of AIGC artworks — all
 
 - ☁️ **S3 / WebDAV Snapshot Backup & Restore** — Automated hot `VACUUM INTO` snapshots to AWS S3, R2, MinIO, Backblaze B2, and WebDAV (Nextcloud / Synology).
 - 📤 **Standalone HTML Showcase Export** — Zero-dependency single `index.html` with dark-theme gallery, fullscreen lightbox, prompt inspector, and keyword filter.
-- 🔄 **Incremental Remote Delta Sync** — ETag + streaming SHA-256 bidirectional sync with token-bucket bandwidth throttle.
+- 🔄 **Incremental Remote Media Mirroring** — One-way local-to-remote upload sync with fingerprint/SHA-256 change detection, token-bucket bandwidth throttle, and worker concurrency (bidirectional sync planned).
 - ⚡ **O(1) Keyset Cursor Pagination** — < 1 ms page traversal at 500,000+ assets (84× faster than OFFSET).
 - 👥 **Multi-Database Team Studio** — Abstract `StorageEngine` supporting SQLite, MySQL 8.0+, and PostgreSQL 14+ with optimistic concurrency and real-time collaboration sync.
 - 📦 **Batch Transcoding & Privacy Strip** — Multi-threaded WebP/JPEG/PNG conversion with 4-tier metadata stripping (`KeepAll` → `StripAll`).
@@ -107,7 +107,7 @@ Automatically extracts and indexes Prompt, Negative Prompt, Model, Hash, Sampler
 ### ☁️ Cloud Sync & Export
 
 - **S3 / WebDAV Snapshot Backup** — Hot `VACUUM INTO` snapshots to AWS S3, Cloudflare R2, MinIO, Backblaze B2, and WebDAV servers with schema verification and rollback safety.
-- **Incremental Remote Delta Sync** — ETag + streaming SHA-256 change detection, bidirectional mirroring, token-bucket bandwidth throttle, and atomic cancellation.
+- **Incremental Remote Media Mirroring (Upload-Only)** — One-way library media upload mirroring to S3, WebDAV, and network paths with file-size and SHA-256 change detection, token-bucket bandwidth throttling, dry-run simulation, and cancelable multi-threading. Remote-to-local pull, ETag delta reconciliation, and bidirectional synchronization are planned future capabilities.
 - **Batch Export & Transcoding** — Multi-threaded WebP/JPEG/PNG conversion with 4-tier privacy metadata stripping and customizable filename templates.
 - **HTML Showcase Generator** — Standalone zero-dependency `index.html` with responsive dark gallery, fullscreen lightbox, prompt inspector, and instant keyword filter.
 

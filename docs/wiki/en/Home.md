@@ -32,7 +32,7 @@ Omera is an open-source, local-first asset manager and prompt workbench engineer
 
 ### [Chapter 5: Export, Cloud Backup & Collaboration](05-export-and-collaboration/export-and-web-showcase.md)
 - **[Batch Export, Transcoding & Web Showcase](05-export-and-collaboration/export-and-web-showcase.md)**: Multi-threaded Rayon transcoding, 4-tier privacy metadata sanitization, dynamic filename templating, ZIP archives, and self-contained interactive single-file HTML showcase generation.
-- **[Cloud Snapshot Backup & Media Mirroring](05-export-and-collaboration/cloud-backup-and-sync.md)**: Hot SQLite `VACUUM INTO` snapshots to AWS S3, Cloudflare R2, MinIO, WebDAV, or local NAS; incremental delta sync with ETag/SHA-256 detection and bandwidth throttling.
+- **[Cloud Snapshot Backup & Media Mirroring](05-export-and-collaboration/cloud-backup-and-sync.md)**: Hot SQLite `VACUUM INTO` snapshots to AWS S3, Cloudflare R2, MinIO, WebDAV, or local NAS; one-way incremental upload mirroring with size/SHA-256 detection and bandwidth throttling (bidirectional sync planned).
 - **[Multi-Database Team Studio](05-export-and-collaboration/team-collaboration.md)**: Scaling beyond SQLite to shared MySQL 8.0+ or PostgreSQL 14+ servers; cross-platform storage root mapping (normalizing Windows drive letters to macOS/Linux paths), optimistic concurrency control, and client-side NVMe thumbnail caching.
 
 ### [Chapter 6: System Reference & Maintenance](06-reference-and-maintenance/settings-reference.md)

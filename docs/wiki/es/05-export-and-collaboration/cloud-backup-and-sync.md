@@ -44,13 +44,19 @@ sequenceDiagram
 
 ## 3. Reflejo incremental de medios y sincronización delta (`cloud_sync.rs`)
 
-Mientras que las instantáneas aseguran la base de datos, la **Sincronización delta** replica los archivos físicos de imagen y vídeo entre su almacenamiento local y el servidor en la nube.
+Mientras que las instantáneas aseguran la base de datos, la **Sincronización delta** proporciona una duplicación unidireccional de subida incremental de archivos físicos de imagen y vídeo desde su biblioteca local hacia almacenamiento remoto o en red.
 
-### Capacidades de sincronización:
+### Capacidades de sincronización (Implementadas):
 - **Estrategias de detección de cambios**:
-  - *Huella rápida*: Compara el tamaño del archivo local con la cabecera HTTP ETag remota (la más veloz, perfecta para enlaces lentos).
-  - *Suma de comprobación estricta*: Calcula hashes SHA-256 en flujo continuo para asegurar una correspondencia byte por byte absoluta.
+  - *Huella rápida*: Compara el tamaño del archivo local con el tamaño remoto mediante metadatos HTTP HEAD (la más veloz, perfecta para enlaces lentos).
+  - *Suma de comprobación estricta*: Calcula hashes SHA-256 locales para contrastar con cabeceras remotas (`x-amz-meta-sha256` en S3), asegurando correspondencia byte a byte.
 - **Limitador de ancho de banda (Token-Bucket)**: Configure un límite de velocidad de subida (KB/s) para que la sincronización en segundo plano no sature el ancho de banda del estudio.
-- **Hilos de transferencia concurrentes**: Ajuste el número de subprocesos paralelos (de 1 a 8 hilos).
-- **Modo de simulación de prueba (Dry-run)**: Analiza el proceso y reporta qué archivos se subirían, omitirían o eliminarían sin modificar el almacenamiento remoto.
-- **Reporte de progreso en tiempo real**: Emite eventos periódicos con los bytes transferidos, velocidad de transmisión, porcentaje completado y tiempo estimado (ETA).
+- **Hilos de transferencia concurrentes**: Ajuste el número de subprocesos paralelos (de 1 a 16 hilos, 4 por defecto).
+- **Modo de simulación de prueba (Dry-run)**: Analiza el proceso y reporta qué archivos se subirían u omitirían sin modificar el almacenamiento remoto.
+- **Reporte de progreso en tiempo real**: Emite eventos periódicos con los bytes transferidos, velocidad de transmisión, porcentaje completado y tiempo estimado (ETA), con cancelación atómica cooperativa.
+
+### Limitaciones actuales y capacidades planificadas:
+- **Solo subida unidireccional**: La ruta de sincronización actual envía los archivos indexados locales al destino remoto. La descarga o reconciliación de remoto a local no está implementada.
+- **Sin sincronización de eliminaciones remotas**: Eliminar un archivo local no borra el objeto remoto; los archivos remotos se conservan.
+- **Sin validación delta por ETag**: La detección de cambios emplea tamaño de archivo y SHA-256; las cabeceras HTTP ETag no se emplean para invalidación de caché.
+- **Sincronización bidireccional planificada**: Una reconciliación bidireccional completa con detección de cambios remotos, descargas pull y resolución de conflictos está planificada para futuras versiones.

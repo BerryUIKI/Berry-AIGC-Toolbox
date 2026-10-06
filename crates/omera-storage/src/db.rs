@@ -3156,6 +3156,8 @@ impl Database {
         source_path: &str,
         target_file_id: i64,
         grace_period_hours: i32,
+        source_size_bytes: i64,
+        source_hash: &str,
     ) -> Result<i64, DatabaseError> {
         let created_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -3164,12 +3166,14 @@ impl Database {
         let scheduled_delete_at = created_at + (grace_period_hours.max(0) as i64 * 3600);
 
         self.conn.execute(
-            "INSERT INTO pipeline_cleanup_queue (source_file_path, target_file_id, scheduled_delete_at, created_at, status)
-             VALUES (?1, ?2, ?3, ?4, 'pending')
+            "INSERT INTO pipeline_cleanup_queue (source_file_path, target_file_id, scheduled_delete_at, created_at, status, source_size_bytes, source_hash)
+             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?6)
              ON CONFLICT(source_file_path) DO UPDATE SET
                  scheduled_delete_at = excluded.scheduled_delete_at,
-                 status = 'pending'",
-            params![source_path, target_file_id, scheduled_delete_at, created_at],
+                 status = 'pending',
+                 source_size_bytes = excluded.source_size_bytes,
+                 source_hash = excluded.source_hash",
+            params![source_path, target_file_id, scheduled_delete_at, created_at, source_size_bytes, source_hash],
         )?;
 
         Ok(self.conn.last_insert_rowid())
@@ -3181,7 +3185,7 @@ impl Database {
         now_timestamp: i64,
     ) -> Result<Vec<CleanupQueueItem>, DatabaseError> {
         let mut stmt = self.conn.prepare_cached(
-            "SELECT id, source_file_path, target_file_id, scheduled_delete_at, created_at, status
+            "SELECT id, source_file_path, target_file_id, scheduled_delete_at, created_at, status, source_size_bytes, source_hash
              FROM pipeline_cleanup_queue
              WHERE status = 'pending' AND scheduled_delete_at <= ?1
              ORDER BY scheduled_delete_at ASC",
@@ -3194,6 +3198,8 @@ impl Database {
                 scheduled_delete_at: row.get(3)?,
                 created_at: row.get(4)?,
                 status: row.get(5)?,
+                source_size_bytes: row.get(6)?,
+                source_hash: row.get(7)?,
             })
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -3225,6 +3231,8 @@ impl Database {
                 scheduled_delete_at: row.get(3)?,
                 created_at: row.get(4)?,
                 status: row.get(5)?,
+                source_size_bytes: None,
+                source_hash: None,
             })
         })?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -3669,7 +3677,7 @@ mod tests {
         assert_eq!(album_files.len(), 1);
         assert_eq!(album_files[0].id, Some(id_a));
 
-        db.enqueue_cleanup("/source/a.png", returned_id_a, 0)
+        db.enqueue_cleanup("/source/a.png", returned_id_a, 0, 100, "hash_a")
             .unwrap();
         let pending = db.list_due_cleanups(i64::MAX).unwrap();
         assert_eq!(pending.len(), 1);
@@ -4618,7 +4626,7 @@ mod tests {
     fn migration_creates_revision_aware_embedding_failures() {
         let db = Database::connect_in_memory().unwrap();
         assert_eq!(db.user_version().unwrap(), LATEST_VERSION);
-        assert_eq!(LATEST_VERSION, 15);
+        assert_eq!(LATEST_VERSION, 16);
         db.connection()
             .prepare("SELECT file_id, model_id, modified_at, error FROM embedding_failures LIMIT 0")
             .unwrap();
@@ -5829,7 +5837,9 @@ mod tests {
         assert_eq!(cull_ids, vec![id3]);
 
         // 5. Cleanup queue
-        let q_id = db.enqueue_cleanup("/source/temp.png", id1, 24).unwrap();
+        let q_id = db
+            .enqueue_cleanup("/source/temp.png", id1, 24, 100, "test_hash")
+            .unwrap();
         assert!(q_id > 0);
 
         let due_now = db.list_due_cleanups(0).unwrap();

@@ -119,9 +119,9 @@ The storage-only Rust function `recovery::migrate_copy(source, destination)` is 
 - `harvest_pipeline_folder`:
   - Validates folder existence, type (`folder_type == "pipeline"`), and configured source directory existence.
   - Debounces newly modified files to prevent ingesting partially written images during local generation.
-  - Enforces collision policies (`SkipIdentical`, `Rename`, `SkipAlways`, `Overwrite`).
-  - Preserves sibling metadata sidecars (`.txt`, `.json`) alongside harvested images.
-  - Extracts metadata and indexes files into SQLite with transactional failure rollback / filesystem compensation.
+  - Enforces collision policies (`SkipIdentical`, `Rename`, `SkipAlways`, `Overwrite`). Under `SkipIdentical`, if a candidate destination exists with non-identical file size or content, it never clobbers pre-existing destination bytes and is emitted as `SkippedCollision`. Under `Rename`, generated non-colliding candidate names coordinate across both media files and any accompanying sidecars (`.txt`, `.json`) so neither media nor sidecars collide with existing files.
+  - Preserves sibling metadata sidecars (`.txt`, `.json`) alongside harvested images. Pre-existing destination sidecars are protected against accidental overwriting unless the collision policy is explicitly `Overwrite`.
+  - Extracts metadata and indexes files into SQLite with transactional failure rollback / filesystem compensation. Compensation removes only newly created destination files and sidecars, never pre-existing assets.
   - Ingest action support: when `ingest_action == "move"`, files are scheduled for delayed cleanup (`grace_period_hours > 0`) or trashed immediately (`grace_period_hours <= 0`).
 - `process_pipeline_cleanups`:
   - Enforces strict destination and source revalidation before any file is trashed.

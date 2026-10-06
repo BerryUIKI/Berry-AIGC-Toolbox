@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
-use omera_domain::{CleanupQueueItem, Container, ImageFile, TransformCollisionPolicy};
+use omera_domain::{CleanupQueueItem, Container, ImageFile};
 use omera_storage::Database;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -42,7 +42,7 @@ pub enum PipelineError {
 /// Collision resolution policy for pipeline harvesting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum PipelineCollisionPolicy {
-    /// Skip if target file exists with identical file size; otherwise overwrite (legacy behavior).
+    /// Skip if target file exists with identical file size; skip collision if different size (no-clobber).
     #[default]
     SkipIdentical,
     /// Generate a non-colliding filename (e.g. `image_1.png`) if target exists.
@@ -294,33 +294,39 @@ pub fn harvest_pipeline_folder_with_cancellation(
             None => continue,
         };
 
+        // Check for accompanying source sidecars so renaming can coordinate across all sibling files
+        let src_txt = file_path.with_extension("txt");
+        let has_src_txt = src_txt.is_file();
+        let src_json = file_path.with_extension("json");
+        let has_src_json = src_json.is_file();
+
         let target_path = match collision_policy {
             PipelineCollisionPolicy::Rename => {
                 let file_stem = file_path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("file");
-                match crate::transform::resolve_publication_path(
-                    dest_dir,
-                    file_stem,
-                    &ext,
-                    TransformCollisionPolicy::Rename,
-                ) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        let outcome = PipelineHarvestItemOutcome::FailedCopy {
-                            source_path: src_str,
-                            target_path: dest_dir.join(&file_name).display().to_string(),
-                            error: format!("Collision resolution failed: {e}"),
-                        };
-                        report.failed_count += 1;
-                        if let Some(cb) = progress_callback {
-                            cb(&outcome);
-                        }
-                        report.items.push(outcome);
-                        continue;
-                    }
+
+                // Coordinated rename: ensure candidate stem does not collide with existing
+                // destination media file OR existing destination sidecars (.txt, .json).
+                let mut candidate_stem = file_stem.to_string();
+                let mut candidate_media = dest_dir.join(format!("{candidate_stem}.{ext}"));
+                let mut candidate_txt = dest_dir.join(format!("{candidate_stem}.txt"));
+                let mut candidate_json = dest_dir.join(format!("{candidate_stem}.json"));
+                let mut counter = 1;
+
+                while candidate_media.exists()
+                    || (has_src_txt && candidate_txt.exists())
+                    || (has_src_json && candidate_json.exists())
+                {
+                    candidate_stem = format!("{file_stem}_{counter}");
+                    candidate_media = dest_dir.join(format!("{candidate_stem}.{ext}"));
+                    candidate_txt = dest_dir.join(format!("{candidate_stem}.txt"));
+                    candidate_json = dest_dir.join(format!("{candidate_stem}.json"));
+                    counter += 1;
                 }
+
+                candidate_media
             }
             PipelineCollisionPolicy::SkipAlways => {
                 let candidate = dest_dir.join(&file_name);
@@ -353,7 +359,31 @@ pub fn harvest_pipeline_folder_with_cancellation(
                             }
                             report.items.push(outcome);
                             continue;
+                        } else {
+                            // Non-identical collision: NEVER clobber existing bytes (#232)
+                            let outcome = PipelineHarvestItemOutcome::SkippedCollision {
+                                source_path: src_str,
+                                target_path: candidate.display().to_string(),
+                            };
+                            report.skipped_count += 1;
+                            if let Some(cb) = progress_callback {
+                                cb(&outcome);
+                            }
+                            report.items.push(outcome);
+                            continue;
                         }
+                    } else {
+                        // Could not read target metadata; treat as collision to avoid clobbering
+                        let outcome = PipelineHarvestItemOutcome::SkippedCollision {
+                            source_path: src_str,
+                            target_path: candidate.display().to_string(),
+                        };
+                        report.skipped_count += 1;
+                        if let Some(cb) = progress_callback {
+                            cb(&outcome);
+                        }
+                        report.items.push(outcome);
+                        continue;
                     }
                 }
                 candidate
@@ -378,17 +408,22 @@ pub fn harvest_pipeline_folder_with_cancellation(
         }
 
         // Sidecar preservation: .txt and .json
-        let src_txt = file_path.with_extension("txt");
+        // Pre-existing sidecars are never clobbered unless policy is explicitly Overwrite.
         let tgt_txt = target_path.with_extension("txt");
         let mut copied_txt = false;
-        if src_txt.is_file() && std::fs::copy(&src_txt, &tgt_txt).is_ok() {
+        if has_src_txt
+            && (collision_policy == PipelineCollisionPolicy::Overwrite || !tgt_txt.exists())
+            && std::fs::copy(&src_txt, &tgt_txt).is_ok()
+        {
             copied_txt = true;
         }
 
-        let src_json = file_path.with_extension("json");
         let tgt_json = target_path.with_extension("json");
         let mut copied_json = false;
-        if src_json.is_file() && std::fs::copy(&src_json, &tgt_json).is_ok() {
+        if has_src_json
+            && (collision_policy == PipelineCollisionPolicy::Overwrite || !tgt_json.exists())
+            && std::fs::copy(&src_json, &tgt_json).is_ok()
+        {
             copied_json = true;
         }
 
@@ -964,16 +999,161 @@ mod tests {
             PipelineHarvestItemOutcome::SkippedCollision { .. }
         ));
 
-        // 4. Collision with Rename: change source file content/size so size differs
-        std::fs::write(&src_img, b"different longer content for rename test").unwrap();
+        // 4. Collision with SkipIdentical where file size/content differs (Issue #232)
+        // Must never clobber existing destination bytes!
+        let orig_dest_bytes = std::fs::read(dest_dir.join("item.png")).unwrap();
+        std::fs::write(
+            &src_img,
+            b"different longer content for skip identical test",
+        )
+        .unwrap();
+        let opts_skip_identical = PipelineHarvestOptions {
+            collision_policy: PipelineCollisionPolicy::SkipIdentical,
+            debounce_seconds: Some(0),
+        };
+        let rep4 = harvest_pipeline_folder(&db, folder.id, Some(opts_skip_identical)).unwrap();
+        assert_eq!(rep4.harvested_count, 0);
+        assert_eq!(rep4.skipped_count, 1);
+        assert!(matches!(
+            rep4.items[0],
+            PipelineHarvestItemOutcome::SkippedCollision { .. }
+        ));
+        // Verify pre-existing destination file was NOT modified/overwritten
+        let current_dest_bytes = std::fs::read(dest_dir.join("item.png")).unwrap();
+        assert_eq!(orig_dest_bytes, current_dest_bytes);
+
+        // 5. Collision with Rename: creates item_1.png
         let opts_rename = PipelineHarvestOptions {
             collision_policy: PipelineCollisionPolicy::Rename,
             debounce_seconds: Some(0),
         };
-        let rep4 = harvest_pipeline_folder(&db, folder.id, Some(opts_rename)).unwrap();
-        assert_eq!(rep4.harvested_count, 1);
+        let rep5 = harvest_pipeline_folder(&db, folder.id, Some(opts_rename)).unwrap();
+        assert_eq!(rep5.harvested_count, 1);
         assert!(dest_dir.join("item.png").exists());
         assert!(dest_dir.join("item_1.png").exists());
+        assert_eq!(
+            std::fs::read(dest_dir.join("item.png")).unwrap(),
+            orig_dest_bytes
+        );
+        assert_eq!(
+            std::fs::read(dest_dir.join("item_1.png")).unwrap(),
+            b"different longer content for skip identical test"
+        );
+    }
+
+    #[test]
+    fn test_harvest_sidecar_collision_and_coordinated_rename() {
+        let db = Database::connect_in_memory().unwrap();
+        let tmp = tempdir().unwrap();
+
+        let src_dir = tmp.path().join("source");
+        let dest_dir = tmp.path().join("dest");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&dest_dir).unwrap();
+
+        let folder = db
+            .add_folder_with_mode(
+                &dest_dir.to_string_lossy(),
+                "pipeline",
+                Some(&src_dir.to_string_lossy()),
+                Some("copy"),
+                None,
+                true,
+            )
+            .unwrap();
+
+        // Scenario: destination already has a pre-existing sidecar item_1.txt
+        // When source "item.png" with "item.txt" is harvested with Rename policy:
+        // "item.png" exists -> candidate item_1.png
+        // But item_1.txt already exists in destination!
+        // Coordinated rename must skip item_1 and choose item_2 to avoid clobbering item_1.txt!
+        let dest_img0 = dest_dir.join("item.png");
+        write_dummy_png(&dest_img0);
+        let dest_txt0 = dest_dir.join("item.txt");
+        std::fs::write(&dest_txt0, b"original dest txt").unwrap();
+
+        let dest_txt1 = dest_dir.join("item_1.txt");
+        std::fs::write(&dest_txt1, b"pre-existing item_1 txt sidecar").unwrap();
+
+        // Source item with text sidecar
+        let src_img = src_dir.join("item.png");
+        std::fs::write(&src_img, b"new media content for coordinated rename").unwrap();
+        let src_txt = src_dir.join("item.txt");
+        std::fs::write(&src_txt, b"new sidecar content").unwrap();
+
+        let opts = PipelineHarvestOptions {
+            collision_policy: PipelineCollisionPolicy::Rename,
+            debounce_seconds: Some(0),
+        };
+        let rep = harvest_pipeline_folder(&db, folder.id, Some(opts)).unwrap();
+        assert_eq!(rep.harvested_count, 1);
+
+        // Verify pre-existing files are untouched
+        assert_eq!(
+            std::fs::read_to_string(&dest_txt0).unwrap(),
+            "original dest txt"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&dest_txt1).unwrap(),
+            "pre-existing item_1 txt sidecar"
+        );
+
+        // Verify coordinated rename chose item_2 for both image and sidecar
+        assert!(dest_dir.join("item_2.png").exists());
+        assert!(dest_dir.join("item_2.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(dest_dir.join("item_2.txt")).unwrap(),
+            "new sidecar content"
+        );
+    }
+
+    #[test]
+    fn test_harvest_sidecar_overwrite_protection() {
+        let db = Database::connect_in_memory().unwrap();
+        let tmp = tempdir().unwrap();
+
+        let src_dir = tmp.path().join("source");
+        let dest_dir = tmp.path().join("dest");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::create_dir_all(&dest_dir).unwrap();
+
+        let folder = db
+            .add_folder_with_mode(
+                &dest_dir.to_string_lossy(),
+                "pipeline",
+                Some(&src_dir.to_string_lossy()),
+                Some("copy"),
+                None,
+                true,
+            )
+            .unwrap();
+
+        // Destination has no image yet, but already has orphan "photo.txt" sidecar
+        let dest_txt = dest_dir.join("photo.txt");
+        std::fs::write(&dest_txt, b"pre-existing curated notes").unwrap();
+
+        // Source has "photo.png" and "photo.txt"
+        let src_img = src_dir.join("photo.png");
+        write_dummy_png(&src_img);
+        let src_txt = src_dir.join("photo.txt");
+        std::fs::write(&src_txt, b"new prompt txt").unwrap();
+
+        // Harvesting with default SkipIdentical:
+        // photo.png does not exist in destination, so it is harvested.
+        // However, photo.txt DOES exist in destination. It must NOT be overwritten!
+        let opts = PipelineHarvestOptions {
+            collision_policy: PipelineCollisionPolicy::SkipIdentical,
+            debounce_seconds: Some(0),
+        };
+        let rep = harvest_pipeline_folder(&db, folder.id, Some(opts)).unwrap();
+        assert_eq!(rep.harvested_count, 1);
+        assert!(dest_dir.join("photo.png").exists());
+
+        // Pre-existing sidecar was preserved
+        assert_eq!(
+            std::fs::read_to_string(&dest_txt).unwrap(),
+            "pre-existing curated notes"
+        );
     }
 
     #[test]

@@ -32,7 +32,7 @@ Omera 是一款開源、本機優先的資產管理器與提示詞工作台，�
 
 ### [第 5 章：匯出、雲端備份與團隊協同](05-export-and-collaboration/export-and-web-showcase.md)
 - **[批次匯出、轉碼與網頁畫冊](05-export-and-collaboration/export-and-web-showcase.md)**：多執行緒 Rayon 轉碼、4 級隱私元數據清洗脫敏、動態檔名範本、ZIP 壓縮封存，以及生成完全離線獨立互動單檔案 HTML 網頁畫冊。
-- **[雲端快照備份與媒體映像](05-export-and-collaboration/cloud-backup-and-sync.md)**：熱 SQLite `VACUUM INTO` 快照備份至 AWS S3、Cloudflare R2、MinIO、WebDAV 或本機 NAS；基於 ETag/SHA-256 差異比對與頻寬限速的增量差異同步。
+- **[雲端快照備份與媒體映像](05-export-and-collaboration/cloud-backup-and-sync.md)**：熱 SQLite `VACUUM INTO` 快照備份至 AWS S3、Cloudflare R2、MinIO、WebDAV 或本機 NAS；基於大小與 SHA-256 的單向增量鏡像上傳與頻寬限速（雙向同步規劃中）。
 - **[多資料庫團隊工作室](05-export-and-collaboration/team-collaboration.md)**：超越單機 SQLite，邁向共享 MySQL 8.0+ 或 PostgreSQL 14+ 伺服器；跨平台儲存根目錄對應（規格化 Windows 磁碟機代號至 macOS/Linux 掛載路徑）、樂觀並行控制（OCC）與用戶端 NVMe 縮圖快取。
 
 ### [第 6 章：系統參考與維護](06-reference-and-maintenance/settings-reference.md)

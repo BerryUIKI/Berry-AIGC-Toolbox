@@ -32,7 +32,7 @@ Omera est un gestionnaire d'actifs multimédias et un studio de prompts open-sou
 
 ### [Chapitre 5 : Exportation, Sauvegarde Cloud & Collaboration](05-export-and-collaboration/export-and-web-showcase.md)
 - **[Exportation par lots, Transcodage & Galerie Web](05-export-and-collaboration/export-and-web-showcase.md)** : Transcodage multithread avec Rayon, assainissement des métadonnées de confidentialité sur 4 niveaux, modèles dynamiques de noms de fichiers, archives ZIP et génération de vitrines HTML autonomes interactives en fichier unique.
-- **[Sauvegarde d'instantanés Cloud & Miroir multimédia](05-export-and-collaboration/cloud-backup-and-sync.md)** : Instantanés SQLite à chaud via `VACUUM INTO` vers AWS S3, Cloudflare R2, MinIO, WebDAV ou NAS local ; synchronisation différentielle incrémentielle avec détection ETag/SHA-256 et limitation de bande passante.
+- **[Sauvegarde d'instantanés Cloud & Miroir multimédia](05-export-and-collaboration/cloud-backup-and-sync.md)** : Instantanés SQLite à chaud via `VACUUM INTO` vers AWS S3, Cloudflare R2, MinIO, WebDAV ou NAS local ; miroir de téléversement incrémentiel unidirectionnel avec détection par taille/SHA-256 et limitation de bande passante (synchronisation bidirectionnelle planifiée).
 - **[Studio d'équipe multi-bases de données](05-export-and-collaboration/team-collaboration.md)** : Évolution au-delà de SQLite vers des serveurs partagés MySQL 8.0+ ou PostgreSQL 14+ ; mappage des racines de stockage multiplateformes (normalisation des lettres de lecteurs Windows en chemins macOS/Linux), contrôle de concurrence optimiste (OCC) et mise en cache des miniatures NVMe côté client.
 
 ### [Chapitre 6 : Référence système & Maintenance](06-reference-and-maintenance/settings-reference.md)

@@ -269,21 +269,25 @@ pub fn process_single_image(
     let sidecar = match options.sidecar {
         ExportSidecar::None => None,
         ExportSidecar::TextPrompt => {
-            if options.privacy == MetadataPrivacyMode::StripAll {
-                None
-            } else {
-                let prompt_text = file
-                    .metadata
-                    .as_ref()
-                    .and_then(|m| m.prompt.as_deref())
-                    .or_else(|| file.metadata.as_ref().and_then(|m| m.raw.as_deref()))
-                    .unwrap_or_default()
-                    .to_string();
-                if prompt_text.is_empty() {
-                    None
-                } else {
-                    let sidecar_filename = format!("{base_stem}.txt");
-                    Some((sidecar_filename, prompt_text.into_bytes()))
+            // TextPrompt sidecar must respect prompt-removal policies
+            match options.privacy {
+                MetadataPrivacyMode::StripAll
+                | MetadataPrivacyMode::StripPromptOnly
+                | MetadataPrivacyMode::StripAllAiMetadata => None,
+                MetadataPrivacyMode::KeepAll => {
+                    let prompt_text = file
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.prompt.as_deref())
+                        .or_else(|| file.metadata.as_ref().and_then(|m| m.raw.as_deref()))
+                        .unwrap_or_default()
+                        .to_string();
+                    if prompt_text.is_empty() {
+                        None
+                    } else {
+                        let sidecar_filename = format!("{base_stem}.txt");
+                        Some((sidecar_filename, prompt_text.into_bytes()))
+                    }
                 }
             }
         }
@@ -781,13 +785,10 @@ mod tests {
         assert_eq!(decoded.width(), 100);
         assert_eq!(decoded.height(), 50);
 
-        // Verify sidecar
-        assert!(processed.sidecar.is_some());
-        let (sidecar_name, sidecar_bytes) = processed.sidecar.unwrap();
-        assert_eq!(sidecar_name, "dreamshaper_v8_1_sample.txt");
-        assert_eq!(
-            String::from_utf8(sidecar_bytes).unwrap(),
-            "beautiful sunset, masterpiece"
+        // Verify sidecar - StripAllAiMetadata must not leak prompt
+        assert!(
+            processed.sidecar.is_none(),
+            "StripAllAiMetadata must not produce a prompt-bearing sidecar"
         );
 
         // Verify showcase item
@@ -899,5 +900,186 @@ mod tests {
         assert_eq!(estimate.output_width, 60);
         assert_eq!(estimate.output_height, 60);
         assert!(estimate.estimated_bytes > 0);
+    }
+
+    #[test]
+    fn test_privacy_policy_sidecar_combinations() {
+        let dir = tempfile::tempdir().unwrap();
+        let src_img_path = dir.path().join("test.png");
+
+        let mut img = RgbImage::new(64, 64);
+        for pixel in img.pixels_mut() {
+            *pixel = Rgb([100, 150, 200]);
+        }
+        img.save(&src_img_path).unwrap();
+
+        let metadata = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            parameters: Some("Steps: 20, CFG: 7".to_string()),
+            raw: Some("raw metadata string".to_string()),
+            prompt: Some("confidential prompt".to_string()),
+            negative_prompt: Some("private negative".to_string()),
+            width: Some(64),
+            height: Some(64),
+            seed: Some("12345".to_string()),
+            steps: Some(20),
+            cfg_scale: Some(7.0),
+            sampler: Some("Euler".to_string()),
+            model_name: Some("test-model".to_string()),
+            model_hash: Some("abc123".to_string()),
+            duration_seconds: None,
+            fps: None,
+            video_codec: None,
+        };
+
+        let file = ImageFile {
+            id: Some(1),
+            folder_id: 1,
+            path: src_img_path.to_string_lossy().to_string(),
+            container: Container::Png,
+            size_bytes: fs::metadata(&src_img_path).unwrap().len(),
+            modified_at: 1726000000,
+            metadata: Some(metadata),
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+
+        // Test all combinations of privacy modes with TextPrompt sidecar
+        for (privacy, should_have_prompt_sidecar) in [
+            (MetadataPrivacyMode::KeepAll, true),
+            (MetadataPrivacyMode::StripPromptOnly, false),
+            (MetadataPrivacyMode::StripAllAiMetadata, false),
+            (MetadataPrivacyMode::StripAll, false),
+        ] {
+            let options = ExportOptions {
+                file_ids: vec![1],
+                format: ExportFormat::Png,
+                quality: 85,
+                privacy,
+                sidecar: ExportSidecar::TextPrompt,
+                filename_template: "{name}".to_string(),
+                destination_path: dir.path().to_string_lossy().to_string(),
+                as_zip: false,
+                max_edge: None,
+                export_html_showcase: false,
+                html_title: None,
+            };
+
+            let processed = process_single_image(&file, &options, 0).unwrap();
+
+            if should_have_prompt_sidecar {
+                assert!(
+                    processed.sidecar.is_some(),
+                    "Privacy {privacy:?} + TextPrompt should produce sidecar"
+                );
+                let (_, sidecar_bytes) = processed.sidecar.unwrap();
+                let sidecar_text = String::from_utf8(sidecar_bytes).unwrap();
+                assert!(
+                    sidecar_text.contains("confidential"),
+                    "KeepAll should preserve prompt in sidecar"
+                );
+            } else {
+                assert!(
+                    processed.sidecar.is_none(),
+                    "Privacy {privacy:?} + TextPrompt must not leak prompt sidecar"
+                );
+            }
+        }
+
+        // Test JsonMetadata sidecar with prompt-stripping policies
+        for (privacy, should_have_prompt_fields) in [
+            (MetadataPrivacyMode::KeepAll, true),
+            (MetadataPrivacyMode::StripPromptOnly, false),
+            (MetadataPrivacyMode::StripAllAiMetadata, false),
+            (MetadataPrivacyMode::StripAll, false),
+        ] {
+            let options = ExportOptions {
+                file_ids: vec![1],
+                format: ExportFormat::Png,
+                quality: 85,
+                privacy,
+                sidecar: ExportSidecar::JsonMetadata,
+                filename_template: "{name}".to_string(),
+                destination_path: dir.path().to_string_lossy().to_string(),
+                as_zip: false,
+                max_edge: None,
+                export_html_showcase: false,
+                html_title: None,
+            };
+
+            let processed = process_single_image(&file, &options, 0).unwrap();
+
+            if privacy == MetadataPrivacyMode::StripAll {
+                assert!(
+                    processed.sidecar.is_none(),
+                    "StripAll + JsonMetadata should produce no sidecar"
+                );
+            } else if should_have_prompt_fields {
+                assert!(
+                    processed.sidecar.is_some(),
+                    "KeepAll + JsonMetadata should produce sidecar"
+                );
+                let (_, sidecar_bytes) = processed.sidecar.unwrap();
+                let sidecar_text = String::from_utf8(sidecar_bytes).unwrap();
+                assert!(
+                    sidecar_text.contains("confidential"),
+                    "KeepAll JSON should contain prompt"
+                );
+            } else {
+                // StripPromptOnly or StripAllAiMetadata with JSON sidecar
+                assert!(
+                    processed.sidecar.is_some(),
+                    "{privacy:?} + JsonMetadata should produce sanitized sidecar"
+                );
+                let (_, sidecar_bytes) = processed.sidecar.unwrap();
+                let sidecar_text = String::from_utf8(sidecar_bytes).unwrap();
+                assert!(
+                    !sidecar_text.contains("confidential"),
+                    "{privacy:?} JSON must not contain prompt"
+                );
+            }
+        }
+
+        // Test showcase output respects privacy
+        for (privacy, should_have_prompt_in_showcase) in [
+            (MetadataPrivacyMode::KeepAll, true),
+            (MetadataPrivacyMode::StripPromptOnly, false),
+            (MetadataPrivacyMode::StripAllAiMetadata, false),
+            (MetadataPrivacyMode::StripAll, false),
+        ] {
+            let options = ExportOptions {
+                file_ids: vec![1],
+                format: ExportFormat::Png,
+                quality: 85,
+                privacy,
+                sidecar: ExportSidecar::None,
+                filename_template: "{name}".to_string(),
+                destination_path: dir.path().to_string_lossy().to_string(),
+                as_zip: false,
+                max_edge: None,
+                export_html_showcase: true,
+                html_title: Some("Test Showcase".to_string()),
+            };
+
+            let processed = process_single_image(&file, &options, 0).unwrap();
+            let showcase = processed.showcase_item.unwrap();
+
+            if should_have_prompt_in_showcase {
+                assert!(
+                    showcase.prompt.is_some(),
+                    "KeepAll showcase should contain prompt"
+                );
+                assert!(showcase.prompt.unwrap().contains("confidential"));
+            } else {
+                assert!(
+                    showcase.prompt.is_none(),
+                    "{privacy:?} showcase must not contain prompt"
+                );
+            }
+        }
     }
 }

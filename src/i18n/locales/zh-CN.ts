@@ -372,6 +372,7 @@ export const zhCN: typeof en = {
     close: "关闭",
   },
   menu: {
+    applicationMenu: "应用程序菜单",
     file: "文件",
     addFolder: "添加文件夹...",
     scanActive: "扫描当前目录",

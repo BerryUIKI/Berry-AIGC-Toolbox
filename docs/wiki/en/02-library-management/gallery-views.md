@@ -56,6 +56,11 @@ In **Settings > Display & Safety**, you can toggle **Show Card Badges** on or of
 
 To protect privacy during presentations or working in public spaces, Omera includes built-in content protection:
 
-- **Automatic Blur (`blur_nsfw` setting)**: Any asset tagged as `is_nsfw` or identified with an adult content rating is masked with an aggressive CSS blur overlay.
-- **Click-to-Reveal**: Clicking the eye icon (`👁`) or the card unblurs that specific item temporarily for review.
+- **Automatic Blur (`blur_nsfw` setting)**: Any asset tagged as `is_nsfw` or identified with an adult content rating is masked with a blur overlay across all gallery presentation modes (Grid, Waterfall Masonry, and Table view).
+- **Consistent Masking & Mode Switching**: Masking and temporary reveal states are shared across all gallery views. Switching view modes (such as from Grid to Table or Waterfall) never reveals concealed items.
+- **Intentional Reveal & Re-masking**: Clicking the sensitive badge (`🔞`) or pressing `R` unblurs the selected item for review. Once revealed, an accessible re-mask button (`🔒`) allows immediate concealment. Pressing `R` toggles reveal state without clearing or altering file selection.
+- **Multi-Selection Keyboard Control**: When multiple items are selected, pressing `R` reveals or conceals all selected sensitive assets in unison.
+- **Underlying Data Integrity**: Concealing or temporarily revealing an item is strictly a client-side presentation preference; it never mutates the underlying `is_nsfw` classification flag or database records.
+- **Motion & Accessibility**: Blur filters, focus rings, and overlays respect `prefers-reduced-motion` preferences. Controls include explicit ARIA labels and keyboard accessibility for screen readers.
+- **Surface Boundaries**: Privacy masking applies to Omera's gallery and list surfaces. It does not alter external file system previews or third-party applications opened outside Omera.
 - **Global Sensitive Section**: The left sidebar includes a dedicated **Sensitive (18+) (🔞)** library filter to audit or recategorize flagged content in one place.

@@ -389,10 +389,14 @@ pub fn harvest_pipeline_folder_with_cancellation(
                     if is_identical {
                         // Content is verified identical: skip copying (#268).
                         let candidate_norm = normalize_path_string(&candidate);
+                        let candidate_lossy = candidate.to_string_lossy();
+                        let candidate_display = candidate.display().to_string();
                         let existing_file_id = db
                             .get_file_by_path(&candidate_norm)
                             .ok()
                             .flatten()
+                            .or_else(|| db.get_file_by_path(&candidate_lossy).ok().flatten())
+                            .or_else(|| db.get_file_by_path(&candidate_display).ok().flatten())
                             .and_then(|f| f.id);
 
                         // If folder configured with ingest_action == "move", enqueue delayed cleanup
@@ -1516,7 +1520,7 @@ mod tests {
         let img_record = ImageFile {
             id: None,
             folder_id: folder.id,
-            path: dest_sample.to_string_lossy().to_string(),
+            path: normalize_path_string(&dest_sample),
             size_bytes: dest_bytes.len() as u64,
             modified_at: 1000,
             container: Container::Png,

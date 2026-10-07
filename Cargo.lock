@@ -3485,6 +3485,7 @@ dependencies = [
  "omera-domain",
  "omera-metadata",
  "omera-storage",
+ "png 0.18.1",
  "rayon",
  "rusqlite",
  "serde",

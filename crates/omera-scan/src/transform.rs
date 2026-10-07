@@ -73,6 +73,16 @@ pub fn transform_file_staged(
 
     fs::create_dir_all(staging_dir)?;
 
+    // Extract source metadata for potential preservation
+    let source_metadata = {
+        let mut file = File::open(source_path)?;
+        let mut header = [0u8; 32];
+        use std::io::Read;
+        let _ = file.read(&mut header);
+        omera_metadata::detect_container(&header)
+            .and_then(|c| omera_metadata::extract_metadata(c, source_path))
+    };
+
     let mut img = image::open(source_path)
         .map_err(|e| TransformError::DecodeFailed(format!("Failed to open image: {e}")))?;
 
@@ -120,9 +130,32 @@ pub fn transform_file_staged(
     );
     let staged_path = staging_dir.join(staged_file_name);
 
+    // Determine metadata to preserve based on policy
+    let metadata_to_write = match spec.metadata_policy {
+        TransformMetadataPolicy::StripAll => None,
+        TransformMetadataPolicy::StripAi => {
+            // Strip AI-specific fields but keep other metadata
+            source_metadata.as_ref().map(|m| {
+                let mut stripped = m.clone();
+                stripped.prompt = None;
+                stripped.negative_prompt = None;
+                stripped.parameters = None;
+                stripped.raw = None;
+                stripped
+            })
+        }
+        TransformMetadataPolicy::KeepSupported => source_metadata.as_ref().cloned(),
+    };
+
     // Initial encode to staged path
     let mut current_quality = spec.quality;
-    encode_image_to_path(&img, &staged_path, &ext, current_quality)?;
+    encode_image_to_path(
+        &img,
+        &staged_path,
+        &ext,
+        current_quality,
+        metadata_to_write.as_ref(),
+    )?;
 
     // Bounded target-size search (T4)
     if let Some(target_kb) = spec.target_size_kb {
@@ -142,7 +175,13 @@ pub fn transform_file_staged(
                         let new_q = ((cur_q as f64 * ratio.sqrt() * 0.95).round() as u8)
                             .clamp(15, cur_q.saturating_sub(8));
                         current_quality = Some(new_q);
-                        let _ = encode_image_to_path(&img, &staged_path, &ext, current_quality);
+                        let _ = encode_image_to_path(
+                            &img,
+                            &staged_path,
+                            &ext,
+                            current_quality,
+                            metadata_to_write.as_ref(),
+                        );
                     } else {
                         // Quality is already low, downscale dimensions slightly (0.85x)
                         let (w, h) = img.dimensions();
@@ -150,7 +189,13 @@ pub fn transform_file_staged(
                             let new_w = ((w as f64 * 0.85).round() as u32).max(32);
                             let new_h = ((h as f64 * 0.85).round() as u32).max(32);
                             img = img.resize_exact(new_w, new_h, FilterType::Lanczos3);
-                            let _ = encode_image_to_path(&img, &staged_path, &ext, current_quality);
+                            let _ = encode_image_to_path(
+                                &img,
+                                &staged_path,
+                                &ext,
+                                current_quality,
+                                metadata_to_write.as_ref(),
+                            );
                         } else {
                             break;
                         }
@@ -211,49 +256,106 @@ pub fn transform_file_staged(
 }
 
 /// Encode dynamic image to a destination path based on extension and optional quality.
+/// For PNG files with KeepSupported policy, preserves generation metadata in text chunks.
 fn encode_image_to_path(
     img: &DynamicImage,
     target_path: &Path,
     ext: &str,
     quality: Option<u8>,
+    metadata: Option<&omera_domain::ExtractedMetadata>,
 ) -> Result<(), TransformError> {
-    let file = File::create(target_path)?;
-    let mut writer = BufWriter::new(file);
-
     match ext {
         "jpg" | "jpeg" => {
+            let file = File::create(target_path)?;
+            let mut writer = BufWriter::new(file);
             let q = quality.unwrap_or(85).clamp(1, 100);
             let rgb = img.to_rgb8();
             let mut encoder = JpegEncoder::new_with_quality(&mut writer, q);
             encoder
                 .encode_image(&rgb)
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+            writer.flush()?;
         }
         "webp" => {
+            let file = File::create(target_path)?;
+            let mut writer = BufWriter::new(file);
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut writer);
             img.write_with_encoder(encoder)
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+            writer.flush()?;
         }
         "avif" => {
+            let file = File::create(target_path)?;
+            let mut writer = BufWriter::new(file);
             let q = quality.unwrap_or(80).clamp(1, 100);
             let speed: u8 = 6;
             let encoder =
                 image::codecs::avif::AvifEncoder::new_with_speed_quality(&mut writer, speed, q);
             img.write_with_encoder(encoder)
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+            writer.flush()?;
         }
         "png" => {
-            img.write_to(&mut writer, image::ImageFormat::Png)
-                .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+            // PNG with optional metadata preservation
+            encode_png_with_metadata(img, target_path, metadata)?;
         }
         _ => {
             // Default to PNG encoding
-            img.write_to(&mut writer, image::ImageFormat::Png)
-                .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
+            encode_png_with_metadata(img, target_path, metadata)?;
         }
     }
 
-    writer.flush()?;
+    Ok(())
+}
+
+/// Encode a PNG image with optional embedded metadata preservation.
+fn encode_png_with_metadata(
+    img: &DynamicImage,
+    target_path: &Path,
+    metadata: Option<&omera_domain::ExtractedMetadata>,
+) -> Result<(), TransformError> {
+    let file = File::create(target_path)?;
+    let mut encoder = png::Encoder::new(file, img.width(), img.height());
+
+    // Configure color type and bit depth based on image
+    let color_type = match img.color() {
+        image::ColorType::L8 => png::ColorType::Grayscale,
+        image::ColorType::La8 => png::ColorType::GrayscaleAlpha,
+        image::ColorType::Rgb8 => png::ColorType::Rgb,
+        image::ColorType::Rgba8 => png::ColorType::Rgba,
+        _ => png::ColorType::Rgba, // Default to RGBA for other types
+    };
+    encoder.set_color(color_type);
+    encoder.set_depth(png::BitDepth::Eight);
+
+    // Add metadata text chunks if present
+    if let Some(meta) = metadata {
+        // Preserve the original parameters chunk if available (A1111 format)
+        if let Some(ref params) = meta.parameters {
+            encoder
+                .add_text_chunk("parameters".into(), params.clone())
+                .map_err(|e| {
+                    TransformError::EncodeFailed(format!("Failed to add parameters chunk: {e}"))
+                })?;
+        }
+    }
+
+    let mut writer = encoder
+        .write_header()
+        .map_err(|e| TransformError::EncodeFailed(format!("Failed to write PNG header: {e}")))?;
+
+    // Write image data
+    let buf = match img.color() {
+        image::ColorType::L8 => img.to_luma8().into_raw(),
+        image::ColorType::La8 => img.to_luma_alpha8().into_raw(),
+        image::ColorType::Rgb8 => img.to_rgb8().into_raw(),
+        _ => img.to_rgba8().into_raw(),
+    };
+
+    writer.write_image_data(&buf).map_err(|e| {
+        TransformError::EncodeFailed(format!("Failed to write PNG image data: {e}"))
+    })?;
+
     Ok(())
 }
 

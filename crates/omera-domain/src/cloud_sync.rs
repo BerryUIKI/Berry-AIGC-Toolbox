@@ -17,10 +17,31 @@ pub enum CloudSyncDirection {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CloudSyncStrategy {
-    /// Compares file size and modified timestamp / remote ETag without reading the entire file.
+    /// Compares file size and modification time or ETag without reading entire files.
+    ///
+    /// **Guarantees:**
+    /// - Detects size changes immediately
+    /// - For LocalPath: Detects content changes via mtime comparison (remote mtime >= local mtime indicates synchronized)
+    /// - For S3/WebDAV: Uses ETag as a weak content fingerprint when available
+    ///
+    /// **Limitations:**
+    /// - LocalPath: Same-length content changes with earlier or equal mtime may be missed
+    /// - S3/WebDAV: Relies on ETag presence; missing ETag causes re-upload despite possible equality
+    /// - Not cryptographically secure; timestamp/ETag manipulation could cause false matches
+    ///
+    /// Use Sha256Checksum for strict verification when correctness is critical.
     #[default]
     FastFingerprint,
     /// Calculates complete SHA-256 hash for strict delta verification.
+    ///
+    /// **Guarantees:**
+    /// - Cryptographically verifies content equality
+    /// - Detects any content change regardless of size or metadata
+    ///
+    /// **Limitations:**
+    /// - Reads entire local file for hashing
+    /// - S3: Requires custom `x-amz-meta-sha256` header on remote objects
+    /// - WebDAV: Must download entire remote file for comparison
     Sha256Checksum,
 }
 

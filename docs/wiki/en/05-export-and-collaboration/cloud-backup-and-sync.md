@@ -48,8 +48,12 @@ While snapshots protect your database, **Delta Sync** provides one-way increment
 
 ### Sync Capabilities (Shipped):
 - **Change Detection Strategies**:
-  - *Fast Fingerprint*: Compares local file size against remote file size via HTTP HEAD metadata (fastest, ideal for slow connections).
-  - *Strict Checksum*: Computes local SHA-256 hashes to verify against remote hashes (custom `x-amz-meta-sha256` header on S3) to guarantee byte-for-byte fidelity.
+  - *Fast Fingerprint*: Lightweight comparison without reading entire files.
+    - **LocalPath**: Compares file size AND modification time (mtime). Detects same-length content changes when local mtime is newer than remote.
+    - **S3/WebDAV**: Compares file size AND ETag presence as a weak content fingerprint.
+    - **Guarantees**: Detects size changes immediately. For LocalPath, detects content changes via mtime. For S3/WebDAV, ETag presence indicates synchronized state.
+    - **Limitations**: LocalPath may miss same-length changes with backdated or equal mtime. S3/WebDAV relies on ETag availability; missing ETag triggers re-upload. Not cryptographically secure.
+  - *Strict Checksum*: Computes local SHA-256 hashes to verify against remote hashes (custom `x-amz-meta-sha256` header on S3, full download for WebDAV) to guarantee byte-for-byte fidelity. Cryptographically verifies content equality but reads entire files.
 - **Token-Bucket Bandwidth Limiter**: Set an upload speed ceiling (KB/s) so background cloud syncing does not saturate your studio's internet bandwidth.
 - **Worker Concurrency**: Configure upload thread counts (1 to 16 threads, default 4).
 - **Dry-Run Mode**: Simulates sync execution and reports files to upload or skip without modifying remote storage.
@@ -58,5 +62,4 @@ While snapshots protect your database, **Delta Sync** provides one-way increment
 ### Current Limitations & Planned Capabilities:
 - **Upload-Only Mirroring**: Current runtime synchronizes local indexed files to the remote target. Remote-to-local pull/download reconciliation is not implemented in the current runtime.
 - **No Remote Deletion Sync**: Local file deletions do not delete remote objects; remote storage retains uploaded media.
-- **No ETag Delta Logic**: Change detection uses file size and SHA-256 headers; provider HTTP ETags are not used for cache invalidation.
 - **Planned Bidirectional Sync**: Full two-way reconciliation with remote change detection, download pulls, and conflict resolution policies is planned for future releases.

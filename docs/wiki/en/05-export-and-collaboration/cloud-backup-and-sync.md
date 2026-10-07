@@ -50,9 +50,9 @@ While snapshots protect your database, **Delta Sync** provides one-way increment
 - **Change Detection Strategies**:
   - *Fast Fingerprint*: Lightweight comparison without reading entire files.
     - **LocalPath**: Compares file size AND modification time (mtime). Detects same-length content changes when local mtime is newer than remote.
-    - **S3/WebDAV**: Compares file size AND ETag presence as a weak content fingerprint.
-    - **Guarantees**: Detects size changes immediately. For LocalPath, detects content changes via mtime. For S3/WebDAV, ETag presence indicates synchronized state.
-    - **Limitations**: LocalPath may miss same-length changes with backdated or equal mtime. S3/WebDAV relies on ETag availability; missing ETag triggers re-upload. Not cryptographically secure.
+    - **S3/WebDAV**: Compares file size only. Cannot safely determine content equality without comparable metadata, so same-size files are always re-uploaded to avoid missing changes.
+    - **Guarantees**: Detects size changes immediately. For LocalPath, detects content changes via mtime.
+    - **Limitations**: LocalPath may miss same-length changes with backdated or equal mtime. S3/WebDAV re-upload all same-size files (no skip optimization). Not cryptographically secure.
   - *Strict Checksum*: Computes local SHA-256 hashes to verify against remote hashes (custom `x-amz-meta-sha256` header on S3, full download for WebDAV) to guarantee byte-for-byte fidelity. Cryptographically verifies content equality but reads entire files.
 - **Token-Bucket Bandwidth Limiter**: Set an upload speed ceiling (KB/s) so background cloud syncing does not saturate your studio's internet bandwidth.
 - **Worker Concurrency**: Configure upload thread counts (1 to 16 threads, default 4).

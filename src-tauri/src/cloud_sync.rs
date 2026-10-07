@@ -1204,4 +1204,484 @@ mod tests {
         // - Size matches, local_mtime > remote_mtime: sync (content may have changed)
         // - Size matches, local_mtime <= remote_mtime: skip (remote is newer or equal)
     }
+
+    #[test]
+    fn test_s3_checksum_missing_digest_metadata() {
+        // S3 Sha256Checksum: missing x-amz-meta-sha256 must not skip (treat as unknown).
+        // Equal-size objects without digest evidence cannot be verified.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_missing_digest_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"test content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns matching size, ETag, but NO x-amz-meta-sha256
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"abc123def456\"")
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: missing digest metadata means unknown equality, must sync
+            }
+            other => panic!(
+                "Expected DryRun (missing digest), got: {:?}. \
+                 Missing x-amz-meta-sha256 must never become a verified match.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_empty_digest_metadata() {
+        // S3 Sha256Checksum: empty x-amz-meta-sha256 must not skip (treat as unusable).
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_empty_digest_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"test content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns matching size with empty digest header
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"abc123\"")
+            .with_header("x-amz-meta-sha256", "")
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: empty digest is unusable, must sync
+            }
+            other => panic!(
+                "Expected DryRun (empty digest), got: {:?}. \
+                 Empty digest must not become a verified match.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_matching_digest() {
+        // S3 Sha256Checksum: valid matching x-amz-meta-sha256 skips upload.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_matching_digest_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"matching content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let local_sha = sha256_hex(local_content);
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns matching size and matching digest
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"xyz789\"")
+            .with_header("x-amz-meta-sha256", &local_sha)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::Skipped) => {
+                // Expected: matching SHA-256, skip upload
+            }
+            other => panic!(
+                "Expected Skipped (digest match), got: {:?}. \
+                 Matching SHA-256 must skip upload.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_mismatching_digest() {
+        // S3 Sha256Checksum: mismatching x-amz-meta-sha256 triggers re-upload.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_mismatch_digest_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"AAAA";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let wrong_sha = sha256_hex(b"BBBB"); // Different content, same length
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns matching size but mismatching digest
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"multipart-etag\"")
+            .with_header("x-amz-meta-sha256", &wrong_sha)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: digest mismatch detected, needs sync
+            }
+            other => panic!(
+                "Expected DryRun (digest mismatch), got: {:?}. \
+                 Mismatching SHA-256 must trigger re-upload.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_malformed_digest() {
+        // S3 Sha256Checksum: malformed x-amz-meta-sha256 must not skip.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_malformed_digest_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"test content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns matching size with malformed digest (wrong length)
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"abc\"")
+            .with_header("x-amz-meta-sha256", "not-a-valid-hex-sha256")
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: malformed digest is unusable, must sync
+            }
+            other => panic!(
+                "Expected DryRun (malformed digest), got: {:?}. \
+                 Malformed digest must not become a verified match.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_object_not_found() {
+        // S3 Sha256Checksum: missing remote object (404) triggers upload.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_not_found_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"new file";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "new.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns 404
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/new.txt")
+            .with_status(404)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: object doesn't exist, needs sync
+            }
+            other => panic!("Expected DryRun (object not found), got: {:?}", other),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_s3_checksum_multipart_etag_ignored() {
+        // S3 Sha256Checksum: multipart ETag (contains dash) is opaque, not used for verification.
+        // Only x-amz-meta-sha256 provides verification; multipart ETags cannot substitute.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_s3_multipart_etag_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"large multipart content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // S3 HEAD returns multipart ETag but no digest metadata
+        let _mock_head = mock_server
+            .mock("HEAD", "/test-bucket/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"abc123-5\"") // Multipart ETag format
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::S3,
+            s3_endpoint: Some(mock_url),
+            s3_bucket: Some("test-bucket".to_string()),
+            s3_region: Some("us-east-1".to_string()),
+            s3_access_key: Some("test-access".to_string()),
+            s3_secret_key: Some("test-secret".to_string()),
+            s3_prefix: Some("".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: multipart ETag is opaque, no digest metadata, must sync
+            }
+            other => panic!(
+                "Expected DryRun (no digest, ETag opaque), got: {:?}. \
+                 Multipart ETags must never substitute for SHA-256.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
 }

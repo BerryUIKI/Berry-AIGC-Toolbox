@@ -75,17 +75,32 @@ pub fn parse_parameters(text: &str) -> ParsedParameters {
                 ..parse_settings(settings_text)
             }
         }
-        // No settings line: the whole string is the prompt.
-        None => ParsedParameters {
-            prompt: non_empty(normalized.trim()),
-            ..ParsedParameters::default()
-        },
+        // No settings line: check if there is a negative prompt before falling back.
+        None => {
+            let (prompt, negative_prompt) = split_prompt_and_negative(&normalized, "");
+            ParsedParameters {
+                prompt,
+                negative_prompt,
+                ..ParsedParameters::default()
+            }
+        }
     }
 }
 
 /// Index of the first parameter key in `line`, if any.
 fn first_param_key_pos(line: &str) -> Option<usize> {
     PARAM_PREFIXES.iter().filter_map(|p| line.find(p)).min()
+}
+
+/// Find the start and length of a negative prompt marker in `text`.
+fn find_negative_prompt(text: &str) -> Option<(usize, usize)> {
+    const MARKERS: &[&str] = &["Negative prompt:", "Negative Prompt:", "negative prompt:"];
+    for marker in MARKERS {
+        if let Some(pos) = text.find(marker) {
+            return Some((pos, marker.len()));
+        }
+    }
+    None
 }
 
 /// Split the region before the settings line into prompt and negative prompt.
@@ -102,10 +117,10 @@ fn split_prompt_and_negative(head: &str, settings: &str) -> (Option<String>, Opt
         head
     };
 
-    match before_settings.find("Negative prompt:") {
-        Some(pos) => {
+    match find_negative_prompt(before_settings) {
+        Some((pos, len)) => {
             let prompt = non_empty(before_settings[..pos].trim());
-            let negative = non_empty(before_settings[pos + "Negative prompt:".len()..].trim());
+            let negative = non_empty(before_settings[pos + len..].trim());
             (prompt, negative)
         }
         None => (non_empty(before_settings.trim()), None),
@@ -276,5 +291,23 @@ mod tests {
         let p = parse_parameters(text);
         assert_eq!(p.negative_prompt, None);
         assert_eq!(p.prompt.as_deref(), Some("a prompt"));
+    }
+
+    #[test]
+    fn parses_negative_prompt_without_settings_line() {
+        let text = "a cat in a garden\nNegative prompt: blurry, bad hands";
+        let p = parse_parameters(text);
+        assert_eq!(p.prompt.as_deref(), Some("a cat in a garden"));
+        assert_eq!(p.negative_prompt.as_deref(), Some("blurry, bad hands"));
+        assert_eq!(p.steps, None);
+    }
+
+    #[test]
+    fn parses_negative_prompt_casing_variants() {
+        let text = "a robot\nnegative prompt: watermark\nSteps: 10";
+        let p = parse_parameters(text);
+        assert_eq!(p.prompt.as_deref(), Some("a robot"));
+        assert_eq!(p.negative_prompt.as_deref(), Some("watermark"));
+        assert_eq!(p.steps, Some(10));
     }
 }

@@ -22,12 +22,11 @@ pub enum CloudSyncStrategy {
     /// **Guarantees:**
     /// - Detects size changes immediately
     /// - For LocalPath: Detects content changes via mtime comparison (remote mtime >= local mtime indicates synchronized)
-    /// - For S3/WebDAV: Uses ETag as a weak content fingerprint when available
     ///
     /// **Limitations:**
     /// - LocalPath: Same-length content changes with earlier or equal mtime may be missed
-    /// - S3/WebDAV: Relies on ETag presence; missing ETag causes re-upload despite possible equality
-    /// - Not cryptographically secure; timestamp/ETag manipulation could cause false matches
+    /// - S3/WebDAV: No comparable metadata available; FastFingerprint always re-uploads same-size files to avoid missing changes
+    /// - Not cryptographically secure; timestamp manipulation could cause false matches (LocalPath only)
     ///
     /// Use Sha256Checksum for strict verification when correctness is critical.
     #[default]

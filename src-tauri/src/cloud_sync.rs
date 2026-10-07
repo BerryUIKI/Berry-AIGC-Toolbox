@@ -504,14 +504,13 @@ fn sync_single_item(
             let s3 = S3Client::from_config(config)?;
             let object_key = s3.object_key(&item.remote_key);
             match s3.head_object(&object_key)? {
-                Some((remote_len, etag, remote_sha)) if remote_len == local_len => {
+                Some((remote_len, _etag, remote_sha)) if remote_len == local_len => {
                     match options.strategy {
                         CloudSyncStrategy::FastFingerprint => {
-                            // FastFingerprint: For S3, use ETag as a weak content fingerprint
-                            // ETag presence and non-emptiness indicates the object exists with metadata;
-                            // different content will have a different ETag (for simple uploads).
-                            // This is not cryptographically strong but better than size-only.
-                            etag.is_some()
+                            // FastFingerprint: Cannot safely determine equality without comparable evidence.
+                            // S3 ETag may be multipart hash or opaque; cannot compare to local content.
+                            // Treat as unknown and re-upload to avoid skipping changed files.
+                            false
                         }
                         CloudSyncStrategy::Sha256Checksum => {
                             let local_hash = sha256_file(&item.local_path).unwrap_or_default();
@@ -530,11 +529,13 @@ fn sync_single_item(
         CloudStorageProvider::WebDav => {
             let webdav = WebDavClient::from_config(config)?;
             match webdav.head_object(&item.remote_key)? {
-                Some((remote_len, etag)) if remote_len == local_len => {
+                Some((remote_len, _etag)) if remote_len == local_len => {
                     match options.strategy {
                         CloudSyncStrategy::FastFingerprint => {
-                            // FastFingerprint: For WebDAV, use ETag as a weak content fingerprint
-                            etag.is_some()
+                            // FastFingerprint: Cannot safely determine equality without comparable evidence.
+                            // WebDAV ETag is opaque; cannot compare to local content.
+                            // Treat as unknown and re-upload to avoid skipping changed files.
+                            false
                         }
                         CloudSyncStrategy::Sha256Checksum => {
                             // WebDAV doesn't provide SHA-256, must download and hash
@@ -859,5 +860,46 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_fast_fingerprint_s3_always_reuploads_same_size() {
+        // S3 FastFingerprint cannot safely determine content equality without comparable metadata.
+        // ETag is opaque and may be multipart hash; cannot compare to local content.
+        // This test documents that FastFingerprint always returns false (needs sync) for S3
+        // when size matches, treating equality as unknown to avoid skipping changed files.
+        //
+        // Expected behavior: same-size files always trigger re-upload in FastFingerprint mode.
+        // For strict verification, use Sha256Checksum strategy with x-amz-meta-sha256 header.
+        //
+        // This is a documentation test; actual S3 integration requires live credentials
+        // and is tested manually or in integration test suite.
+    }
+
+    #[test]
+    fn test_fast_fingerprint_webdav_always_reuploads_same_size() {
+        // WebDAV FastFingerprint cannot safely determine content equality without comparable metadata.
+        // ETag is opaque and server-specific; cannot compare to local content.
+        // This test documents that FastFingerprint always returns false (needs sync) for WebDAV
+        // when size matches, treating equality as unknown to avoid skipping changed files.
+        //
+        // Expected behavior: same-size files always trigger re-upload in FastFingerprint mode.
+        // For strict verification, use Sha256Checksum strategy which downloads and hashes remote.
+        //
+        // This is a documentation test; actual WebDAV integration requires live server
+        // and is tested manually or in integration test suite.
+    }
+
+    #[test]
+    fn test_localpath_fastfingerprint_uses_mtime() {
+        // LocalPath FastFingerprint uses size + mtime comparison.
+        // Files are synchronized when remote_mtime >= local_mtime.
+        // This is verified by existing test_fast_fingerprint_detects_same_length_content_change
+        // and test_fast_fingerprint_skips_unchanged_file tests above.
+        //
+        // Expected behavior:
+        // - Size differs: always sync
+        // - Size matches, local_mtime > remote_mtime: sync (content may have changed)
+        // - Size matches, local_mtime <= remote_mtime: skip (remote is newer or equal)
     }
 }

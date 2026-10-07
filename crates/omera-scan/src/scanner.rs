@@ -1154,4 +1154,93 @@ mod tests {
         drop(db);
         std::fs::remove_dir_all(&env.dir).unwrap();
     }
+
+    #[test]
+    fn nsfw_negative_prompt_exclusions_and_override_preservation() {
+        let env = setup("nsfw_neg_override");
+        // 1. Image with safe positive and adult negative prompt
+        write(
+            &env.images.join("safe_landscape.png"),
+            &a1111_png(
+                "landscape, mountain, daylight\nNegative prompt: nsfw, nude\nSteps: 20, Sampler: Euler, Size: 512x512",
+            ),
+        );
+        // 2. Image with adult positive and safe negative prompt
+        write(
+            &env.images.join("adult_portrait.png"),
+            &a1111_png(
+                "1girl, nude, masterpiece\nNegative prompt: lowres, blurry, safe\nSteps: 20, Sampler: Euler, Size: 512x512",
+            ),
+        );
+
+        let db = Database::connect(&env.db).unwrap();
+        let folder = db.add_folder(env.images.to_str().unwrap()).unwrap();
+
+        // Initial scan
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let files = db.list_files(folder.id).unwrap();
+        assert_eq!(files.len(), 2);
+
+        let safe_file = files
+            .iter()
+            .find(|f| f.path.contains("safe_landscape"))
+            .unwrap();
+        let adult_file = files
+            .iter()
+            .find(|f| f.path.contains("adult_portrait"))
+            .unwrap();
+
+        assert!(
+            !safe_file.is_nsfw,
+            "Safe positive prompt with adult terms in negative prompt must be indexed as safe"
+        );
+        assert!(
+            adult_file.is_nsfw,
+            "Adult positive prompt must be indexed as NSFW"
+        );
+
+        let safe_id = safe_file.id.unwrap();
+        let adult_id = adult_file.id.unwrap();
+
+        // User manual overrides:
+        // Set safe file to NSFW (true)
+        db.set_file_nsfw(safe_id, true).unwrap();
+        // Set adult file to SFW (false)
+        db.set_file_nsfw(adult_id, false).unwrap();
+
+        // Incremental rescan
+        Scanner::with_default_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let rescanned_safe = db.get_file_by_id(safe_id).unwrap().unwrap();
+        let rescanned_adult = db.get_file_by_id(adult_id).unwrap().unwrap();
+        assert!(
+            rescanned_safe.is_nsfw,
+            "Incremental rescan must preserve user override to NSFW"
+        );
+        assert!(
+            !rescanned_adult.is_nsfw,
+            "Incremental rescan must preserve user override to SFW"
+        );
+
+        // Forced rescan
+        Scanner::with_forced_extractor(env.db.clone())
+            .scan_folder(folder.id, &env.images, |_| {})
+            .unwrap();
+        let forced_safe = db.get_file_by_id(safe_id).unwrap().unwrap();
+        let forced_adult = db.get_file_by_id(adult_id).unwrap().unwrap();
+        assert!(
+            forced_safe.is_nsfw,
+            "Forced rescan must preserve user override to NSFW"
+        );
+        assert!(
+            !forced_adult.is_nsfw,
+            "Forced rescan must preserve user override to SFW"
+        );
+
+        drop(db);
+        std::fs::remove_dir_all(&env.dir).unwrap();
+    }
 }

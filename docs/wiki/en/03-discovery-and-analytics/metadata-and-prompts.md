@@ -83,3 +83,14 @@ Generative tools often embed short model hashes (e.g. `31e35c80`) or full SHA256
 For advanced users and technical directors who need to examine node links:
 - Expand the **Raw Metadata** accordion at the bottom of the inspector to inspect the unedited JSON payload.
 - You can copy the entire JSON workflow block to paste directly into text editors or share with colleagues.
+
+---
+
+## 6. Content Classification & Negative Prompt Policy
+
+Omera's metadata scanner includes automated content classification (`detect_nsfw_from_metadata`):
+- **Structured Positive Prompt & Rating Fields**: Classification inspects structured positive prompts and explicit booru rating tags (e.g. `rating:explicit`, `rating:e`, `rating:questionable`, `rating:q`), as well as top-level generator rating fields. Safe rating tags (`rating:safe`, `rating:general`, `rating:s`, `rating:g`) do not trigger classification.
+- **Exclusion of Negative Prompts**: Negative prompt parameters (e.g. `Negative prompt: nsfw, nude` or NovelAI `uc`) define unwanted terms to exclude during generation. Terms appearing solely in negative prompt fields are exclusions and are never counted as positive NSFW signals.
+- **Deliberate Fallback & Resilience**: For unparsed or legacy metadata, fallback inspection isolates positive content from negative prompt segments before keyword evaluation.
+- **Manual User Override Precedence**: Manual classification toggles performed by the user take precedence over automated extraction and are preserved across incremental and forced library rescans.
+

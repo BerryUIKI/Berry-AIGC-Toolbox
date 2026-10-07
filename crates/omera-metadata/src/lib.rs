@@ -210,56 +210,211 @@ fn from_parameters(parameters: String) -> ExtractedMetadata {
     }
 }
 
-/// Inspect metadata prompt, raw text, or parameters to auto-detect adult / NSFW content.
-pub fn detect_nsfw_from_metadata(meta: &ExtractedMetadata) -> bool {
-    const EXACT_KEYWORDS: &[&str] = &[
-        "nsfw",
-        "nude",
-        "naked",
-        "nipples",
-        "pussy",
-        "penis",
-        "vagina",
-        "uncensored",
-        "explicit",
-        "hentai",
-        "erotic",
-        "sex",
-        "blowjob",
-        "fellatio",
-        "penetration",
-        "orgasm",
-        "cum",
-        "rating:explicit",
-        "rating:questionable",
-        "rating:e",
-        "rating:q",
-    ];
+const EXACT_KEYWORDS: &[&str] = &[
+    "nsfw",
+    "nude",
+    "naked",
+    "nipples",
+    "pussy",
+    "penis",
+    "vagina",
+    "uncensored",
+    "explicit",
+    "hentai",
+    "erotic",
+    "sex",
+    "blowjob",
+    "fellatio",
+    "penetration",
+    "orgasm",
+    "cum",
+    "rating:explicit",
+    "rating:questionable",
+    "rating:e",
+    "rating:q",
+];
 
-    let mut texts = Vec::new();
-    if let Some(ref p) = meta.prompt {
-        texts.push(p.as_str());
-    }
-    if let Some(ref r) = meta.raw {
-        texts.push(r.as_str());
-    }
-    if let Some(ref params) = meta.parameters {
-        texts.push(params.as_str());
+/// Check whether a text slice contains adult / NSFW keywords or explicit rating tags.
+fn text_contains_nsfw(text: &str) -> bool {
+    let lower = text.to_ascii_lowercase();
+    if lower.contains("rating:explicit")
+        || lower.contains("rating:questionable")
+        || lower.contains("nsfw")
+    {
+        return true;
     }
 
-    for text in texts {
-        let lower = text.to_ascii_lowercase();
-        if lower.contains("rating:explicit")
-            || lower.contains("rating:questionable")
-            || lower.contains("nsfw")
-        {
+    // Normalize "rating: " with space to "rating:" so "rating: explicit", "rating: e", "rating: q" match.
+    let normalized = lower.replace("rating: ", "rating:");
+
+    for token in normalized.split(|c: char| !c.is_alphanumeric() && c != ':') {
+        let t = token.trim();
+        if !t.is_empty() && EXACT_KEYWORDS.contains(&t) {
             return true;
         }
+    }
 
-        for token in lower.split(|c: char| !c.is_alphanumeric() && c != ':') {
-            let t = token.trim();
-            if !t.is_empty() && EXACT_KEYWORDS.contains(&t) {
-                return true;
+    false
+}
+
+/// Check if a rating value represents an adult / explicit rating.
+fn is_explicit_rating(val: &str) -> bool {
+    let lower = val.trim().to_ascii_lowercase();
+    matches!(
+        lower.as_str(),
+        "explicit"
+            | "questionable"
+            | "e"
+            | "q"
+            | "nsfw"
+            | "rating:explicit"
+            | "rating:questionable"
+            | "rating:e"
+            | "rating:q"
+    )
+}
+
+/// Check if metadata carries an explicit rating in structured fields outside the negative prompt.
+fn has_explicit_rating(meta: &ExtractedMetadata) -> bool {
+    // 1. Top-level rating field in JSON metadata (NovelAI / Swarm / JSON containers)
+    for text in [meta.raw.as_deref(), meta.parameters.as_deref()]
+        .into_iter()
+        .flatten()
+    {
+        let trimmed = text.trim();
+        if trimmed.starts_with('{') {
+            if let Ok(serde_json::Value::Object(map)) =
+                serde_json::from_str::<serde_json::Value>(trimmed)
+            {
+                if let Some(r) = map.get("rating").and_then(|v| v.as_str()) {
+                    if is_explicit_rating(r) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Settings line rating in A1111 parameter strings (e.g. "Rating: explicit")
+    if let Some(ref params) = meta.parameters {
+        for line in params.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("Negative prompt:")
+                || trimmed.starts_with("Negative Prompt:")
+                || trimmed.starts_with("negative prompt:")
+                || trimmed.starts_with("Negative:")
+                || trimmed.starts_with("negative_prompt:")
+            {
+                continue;
+            }
+            for segment in trimmed.split(',') {
+                if let Some((k, v)) = segment.split_once(':') {
+                    if k.trim().eq_ignore_ascii_case("rating") && is_explicit_rating(v) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
+/// Extract candidate positive text from raw/unstructured metadata during fallback,
+/// explicitly stripping negative-prompt sections.
+fn extract_fallback_positive_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // A. Check JSON formats
+    if trimmed.starts_with('{') {
+        if let Ok(serde_json::Value::Object(map)) =
+            serde_json::from_str::<serde_json::Value>(trimmed)
+        {
+            if let Some(p) = map
+                .get("prompt")
+                .or_else(|| map.get("positive_prompt"))
+                .or_else(|| map.get("positive"))
+                .and_then(|v| v.as_str())
+            {
+                return Some(p.to_string());
+            }
+        }
+        if let Some(comfy) = comfyui::parse_comfyui(trimmed) {
+            return comfy.prompt;
+        }
+        return None;
+    }
+
+    // B. Check Fooocus format
+    if let Some(fooocus_meta) = fooocus::parse_fooocus(trimmed) {
+        if fooocus_meta.prompt.is_some() {
+            return fooocus_meta.prompt;
+        }
+    }
+
+    // C. Check A1111 / parameters parser
+    let parsed = parameters::parse_parameters(trimmed);
+    if parsed.prompt.is_some() {
+        return parsed.prompt;
+    }
+
+    // D. If neither positive nor negative was separated, check for any negative marker
+    const NEG_MARKERS: &[&str] = &[
+        "Negative prompt:",
+        "Negative Prompt:",
+        "negative prompt:",
+        "Negative:",
+        "negative_prompt:",
+    ];
+    for marker in NEG_MARKERS {
+        if let Some(pos) = trimmed.find(marker) {
+            let positive_slice = trimmed[..pos].trim();
+            if !positive_slice.is_empty() {
+                return Some(positive_slice.to_string());
+            } else {
+                return None;
+            }
+        }
+    }
+
+    Some(trimmed.to_string())
+}
+
+/// Inspect structured metadata prompt or explicit rating fields to auto-detect adult / NSFW content.
+///
+/// Negative prompt exclusions are excluded from positive classification.
+/// Explicit rating fields follow the established policy (e.g. `rating:explicit`, `rating:e`,
+/// `rating:questionable`, `rating:q` flag as NSFW; `rating:safe`, `rating:general`, `rating:s` do not).
+/// When structured prompts are absent or malformed, falls back to deliberate inspection
+/// of candidate positive text while preserving negative exclusions.
+pub fn detect_nsfw_from_metadata(meta: &ExtractedMetadata) -> bool {
+    // 1. Structured positive prompt check
+    if let Some(ref p) = meta.prompt {
+        if text_contains_nsfw(p) {
+            return true;
+        }
+    }
+
+    // 2. Structured explicit rating fields check (JSON rating or settings Rating: ...)
+    if has_explicit_rating(meta) {
+        return true;
+    }
+
+    // 3. Fallback when structured positive prompt is absent
+    // If a structured negative prompt was already identified, the positive prompt was empty/absent;
+    // negative prompt exclusions must not count as positive NSFW signals.
+    if meta.prompt.is_none() && meta.negative_prompt.is_none() {
+        for text in [meta.parameters.as_deref(), meta.raw.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(pos_text) = extract_fallback_positive_text(text) {
+                if text_contains_nsfw(&pos_text) {
+                    return true;
+                }
             }
         }
     }
@@ -508,5 +663,247 @@ mod tests {
 
         meta.prompt = Some("anime girl, rating:explicit".to_string());
         assert!(detect_nsfw_from_metadata(&meta));
+    }
+
+    #[test]
+    fn negative_prompt_exclusions_must_not_classify_a_safe_prompt_as_nsfw() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("safe-landscape.png");
+        let png_bytes = png_with_parameters(
+            "landscape, mountain, daylight\nNegative prompt: nsfw, nude\nSteps: 20, Sampler: Euler, Seed: 123, Size: 16x16",
+        );
+        std::fs::write(&path, png_bytes).unwrap();
+
+        let metadata = extract_metadata(Container::Png, &path).expect("metadata extracted");
+        assert_eq!(
+            metadata.prompt.as_deref(),
+            Some("landscape, mountain, daylight")
+        );
+        assert_eq!(metadata.negative_prompt.as_deref(), Some("nsfw, nude"));
+        assert!(
+            !detect_nsfw_from_metadata(&metadata),
+            "Safe positive prompt with adult terms in negative prompt must remain safe"
+        );
+    }
+
+    #[test]
+    fn adult_positive_prompt_remains_flagged_with_safe_negative() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("adult-portrait.png");
+        let png_bytes = png_with_parameters(
+            "1girl, nude, masterpiece\nNegative prompt: lowres, blurry, safe\nSteps: 20, Sampler: Euler, Size: 512x512",
+        );
+        std::fs::write(&path, png_bytes).unwrap();
+
+        let metadata = extract_metadata(Container::Png, &path).expect("metadata extracted");
+        assert_eq!(metadata.prompt.as_deref(), Some("1girl, nude, masterpiece"));
+        assert!(
+            detect_nsfw_from_metadata(&metadata),
+            "Adult positive prompt must remain flagged even with safe negative prompt"
+        );
+    }
+
+    #[test]
+    fn explicit_rating_fields_follow_policy() {
+        let mut meta = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            ..Default::default()
+        };
+
+        // Adult rating tags in positive prompt flag as NSFW
+        for adult_tag in &[
+            "rating:explicit",
+            "rating:questionable",
+            "rating:e",
+            "rating:q",
+            "rating: explicit",
+            "rating: questionable",
+            "rating: e",
+            "rating: q",
+        ] {
+            meta.prompt = Some(format!("anime girl, {adult_tag}"));
+            assert!(
+                detect_nsfw_from_metadata(&meta),
+                "Tag {adult_tag} in positive prompt must flag as NSFW"
+            );
+        }
+
+        // Safe rating tags in positive prompt do not flag as NSFW
+        for safe_tag in &[
+            "rating:safe",
+            "rating:general",
+            "rating:s",
+            "rating:g",
+            "rating: safe",
+            "rating: general",
+        ] {
+            meta.prompt = Some(format!("anime girl, {safe_tag}"));
+            meta.negative_prompt =
+                Some("rating:explicit, rating:questionable, rating:e, nsfw, nude".to_string());
+            assert!(
+                !detect_nsfw_from_metadata(&meta),
+                "Safe tag {safe_tag} with adult negative prompt must remain safe"
+            );
+        }
+
+        // JSON metadata with top-level rating
+        let json_explicit = ExtractedMetadata {
+            format: MetadataFormat::NovelAI,
+            raw: Some(
+                r#"{"prompt": "anime girl", "rating": "explicit", "uc": "nsfw"}"#.to_string(),
+            ),
+            prompt: Some("anime girl".to_string()),
+            negative_prompt: Some("nsfw".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            detect_nsfw_from_metadata(&json_explicit),
+            "Top-level explicit rating in JSON must flag as NSFW"
+        );
+
+        let json_safe = ExtractedMetadata {
+            format: MetadataFormat::NovelAI,
+            raw: Some(r#"{"prompt": "anime girl", "rating": "safe", "uc": "nsfw, nude, rating:explicit"}"#.to_string()),
+            prompt: Some("anime girl".to_string()),
+            negative_prompt: Some("nsfw, nude, rating:explicit".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            !detect_nsfw_from_metadata(&json_safe),
+            "Top-level safe rating in JSON must remain safe despite adult uc"
+        );
+
+        // A1111 parameters with Rating: explicit in settings line
+        let params_meta = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            prompt: Some("anime girl".to_string()),
+            negative_prompt: Some("lowres".to_string()),
+            parameters: Some(
+                "anime girl\nNegative prompt: lowres\nSteps: 20, Rating: explicit".to_string(),
+            ),
+            ..Default::default()
+        };
+        assert!(
+            detect_nsfw_from_metadata(&params_meta),
+            "Rating: explicit in settings line must flag as NSFW"
+        );
+    }
+
+    #[test]
+    fn malformed_and_raw_fallback_behavior() {
+        // Raw text with adult keywords and no negative prompt
+        let raw_adult = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            raw: Some("an uncensored nude portrait, masterpiece".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            detect_nsfw_from_metadata(&raw_adult),
+            "Fallback raw text with adult keywords must flag"
+        );
+
+        // Raw text with safe keywords
+        let raw_safe = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            raw: Some("a peaceful landscape with green trees".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            !detect_nsfw_from_metadata(&raw_safe),
+            "Fallback raw text with safe content must not flag"
+        );
+
+        // Raw text with negative prompt marker isolating adult terms
+        let raw_neg = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            raw: Some("a peaceful landscape\nNegative prompt: nsfw, nude".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            !detect_nsfw_from_metadata(&raw_neg),
+            "Fallback raw text with adult terms only in negative prompt must not flag"
+        );
+
+        // Parameters with adult positive and safe negative in unparsed fallback
+        let params_adult = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            parameters: Some("an erotic painting\nNegative prompt: lowres".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            detect_nsfw_from_metadata(&params_adult),
+            "Fallback parameters with adult positive must flag"
+        );
+
+        // Negative-only metadata with no positive prompt
+        let neg_only = ExtractedMetadata {
+            format: MetadataFormat::A1111,
+            negative_prompt: Some("nsfw, nude, bad anatomy".to_string()),
+            ..Default::default()
+        };
+        assert!(
+            !detect_nsfw_from_metadata(&neg_only),
+            "Metadata with only negative prompt must not flag as NSFW"
+        );
+
+        // ComfyUI JSON raw text in fallback: safe positive, adult negative
+        let comfy_json_safe = r#"{
+            "prompt": {
+                "3": {
+                    "class_type": "KSampler",
+                    "inputs": {
+                        "positive": ["6", 0],
+                        "negative": ["7", 0]
+                    }
+                },
+                "6": {
+                    "class_type": "CLIPTextEncode",
+                    "inputs": {"text": "a cute kitten"}
+                },
+                "7": {
+                    "class_type": "CLIPTextEncode",
+                    "inputs": {"text": "nsfw, nude"}
+                }
+            }
+        }"#;
+        let comfy_meta_safe = ExtractedMetadata {
+            format: MetadataFormat::ComfyUI,
+            raw: Some(comfy_json_safe.to_string()),
+            ..Default::default()
+        };
+        assert!(
+            !detect_nsfw_from_metadata(&comfy_meta_safe),
+            "ComfyUI raw JSON fallback with safe positive must not flag"
+        );
+
+        // ComfyUI JSON raw text in fallback: adult positive
+        let comfy_json_adult = r#"{
+            "prompt": {
+                "3": {
+                    "class_type": "KSampler",
+                    "inputs": {
+                        "positive": ["6", 0],
+                        "negative": ["7", 0]
+                    }
+                },
+                "6": {
+                    "class_type": "CLIPTextEncode",
+                    "inputs": {"text": "nude model"}
+                },
+                "7": {
+                    "class_type": "CLIPTextEncode",
+                    "inputs": {"text": "lowres"}
+                }
+            }
+        }"#;
+        let comfy_meta_adult = ExtractedMetadata {
+            format: MetadataFormat::ComfyUI,
+            raw: Some(comfy_json_adult.to_string()),
+            ..Default::default()
+        };
+        assert!(
+            detect_nsfw_from_metadata(&comfy_meta_adult),
+            "ComfyUI raw JSON fallback with adult positive must flag"
+        );
     }
 }

@@ -877,17 +877,319 @@ mod tests {
     }
 
     #[test]
-    fn test_fast_fingerprint_webdav_always_reuploads_same_size() {
-        // WebDAV FastFingerprint cannot safely determine content equality without comparable metadata.
-        // ETag is opaque and server-specific; cannot compare to local content.
-        // This test documents that FastFingerprint always returns false (needs sync) for WebDAV
-        // when size matches, treating equality as unknown to avoid skipping changed files.
-        //
-        // Expected behavior: same-size files always trigger re-upload in FastFingerprint mode.
-        // For strict verification, use Sha256Checksum strategy which downloads and hashes remote.
-        //
-        // This is a documentation test; actual WebDAV integration requires live server
-        // and is tested manually or in integration test suite.
+    fn test_webdav_fast_fingerprint_same_size_different_content() {
+        // WebDAV FastFingerprint: same-size files with different content must trigger sync.
+        // Even with matching size, cannot verify equality without comparable metadata.
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_webdav_fp_diff_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create local file with content "AAAA"
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, b"AAAA").unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: 4,
+            mtime_secs: 1000,
+        };
+
+        // Mock WebDAV server returns same size but we don't know if content matches
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // HEAD request returns 200 with same size and an ETag
+        let _mock = mock_server
+            .mock("HEAD", "/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", "4")
+            .with_header("ETag", "\"abc123\"")
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::WebDav,
+            webdav_endpoint: Some(mock_url),
+            webdav_username: Some("user".to_string()),
+            webdav_password: Some("pass".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::FastFingerprint,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        // FastFingerprint should return false (needs sync) because we cannot verify equality
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: cannot verify equality, must sync
+            }
+            other => panic!(
+                "Expected DryRun (needs sync), got: {:?}. FastFingerprint must not skip same-size WebDAV files.",
+                other
+            ),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_webdav_checksum_same_size_matching_content() {
+        // WebDAV Sha256Checksum: downloads remote and verifies hash match.
+
+        let temp_dir = std::env::temp_dir().join(format!(
+            "omera_test_webdav_sha_match_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let content = b"matching content";
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // HEAD returns matching size
+        let _mock_head = mock_server
+            .mock("HEAD", "/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &content.len().to_string())
+            .with_header("ETag", "\"def456\"")
+            .create();
+
+        // GET returns identical content
+        let _mock_get = mock_server
+            .mock("GET", "/test.txt")
+            .with_status(200)
+            .with_body(content)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::WebDav,
+            webdav_endpoint: Some(mock_url),
+            webdav_username: Some("user".to_string()),
+            webdav_password: Some("pass".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::Skipped) => {
+                // Expected: hashes match, skip sync
+            }
+            other => panic!("Expected Skipped (hashes match), got: {:?}", other),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_webdav_checksum_same_size_different_content() {
+        // WebDAV Sha256Checksum: detects same-size content mismatch.
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_webdav_sha_diff_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_content = b"AAAA";
+        let remote_content = b"BBBB"; // Same length, different content
+
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, local_content).unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: local_content.len() as u64,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // HEAD returns matching size
+        let _mock_head = mock_server
+            .mock("HEAD", "/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", &local_content.len().to_string())
+            .with_header("ETag", "\"ghi789\"")
+            .create();
+
+        // GET returns different content
+        let _mock_get = mock_server
+            .mock("GET", "/test.txt")
+            .with_status(200)
+            .with_body(remote_content)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::WebDav,
+            webdav_endpoint: Some(mock_url),
+            webdav_username: Some("user".to_string()),
+            webdav_password: Some("pass".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: hashes differ, needs sync
+            }
+            other => panic!("Expected DryRun (content mismatch), got: {:?}", other),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_webdav_checksum_remote_not_found() {
+        // WebDAV with missing remote file must trigger sync regardless of strategy.
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_webdav_404_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, b"new file").unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "new.txt".to_string(),
+            size_bytes: 8,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // HEAD returns 404
+        let _mock_head = mock_server
+            .mock("HEAD", "/new.txt")
+            .with_status(404)
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::WebDav,
+            webdav_endpoint: Some(mock_url),
+            webdav_username: Some("user".to_string()),
+            webdav_password: Some("pass".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::Sha256Checksum,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: remote doesn't exist, needs sync
+            }
+            other => panic!("Expected DryRun (remote not found), got: {:?}", other),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_webdav_fast_fingerprint_changed_etag() {
+        // WebDAV FastFingerprint with changed ETag still cannot verify equality.
+        // ETag is opaque; even if it changed, we treat same-size as unknown.
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_webdav_etag_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).unwrap();
+
+        let local_file = temp_dir.join("local.txt");
+        fs::write(&local_file, b"content").unwrap();
+
+        let item = SyncItem {
+            local_path: local_file.clone(),
+            remote_key: "test.txt".to_string(),
+            size_bytes: 7,
+            mtime_secs: 1000,
+        };
+
+        let mut mock_server = mockito::Server::new();
+        let mock_url = mock_server.url();
+
+        // HEAD returns same size with different ETag
+        let _mock = mock_server
+            .mock("HEAD", "/test.txt")
+            .with_status(200)
+            .with_header("Content-Length", "7")
+            .with_header("ETag", "\"changed-etag-xyz\"")
+            .create();
+
+        let config = CloudBackupConfig {
+            provider: CloudStorageProvider::WebDav,
+            webdav_endpoint: Some(mock_url),
+            webdav_username: Some("user".to_string()),
+            webdav_password: Some("pass".to_string()),
+            ..Default::default()
+        };
+
+        let options = CloudSyncOptions {
+            strategy: CloudSyncStrategy::FastFingerprint,
+            dry_run: true,
+            ..Default::default()
+        };
+
+        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+
+        let result = sync_single_item(&config, &options, &item, &rate_limiter);
+
+        match result {
+            Ok(SyncOutcome::DryRun(_)) => {
+                // Expected: FastFingerprint cannot use ETag to verify equality
+            }
+            other => panic!("Expected DryRun (ETag is opaque), got: {:?}", other),
+        }
+
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

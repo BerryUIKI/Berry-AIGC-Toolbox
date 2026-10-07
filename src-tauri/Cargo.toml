@@ -45,4 +45,5 @@ base64 = "0.22"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 libc = "0.2"
 
-
+[dev-dependencies]
+mockito = "1.6"

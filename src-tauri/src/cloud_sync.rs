@@ -1278,10 +1278,8 @@ mod tests {
     fn test_s3_checksum_empty_digest_metadata() {
         // S3 Sha256Checksum: empty x-amz-meta-sha256 must not skip (treat as unusable).
 
-        let temp_dir = std::env::temp_dir().join(format!(
-            "omera_test_s3_empty_digest_{}",
-            std::process::id()
-        ));
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_s3_empty_digest_{}", std::process::id()));
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir).unwrap();
 
@@ -1558,10 +1556,8 @@ mod tests {
     fn test_s3_checksum_object_not_found() {
         // S3 Sha256Checksum: missing remote object (404) triggers upload.
 
-        let temp_dir = std::env::temp_dir().join(format!(
-            "omera_test_s3_not_found_{}",
-            std::process::id()
-        ));
+        let temp_dir =
+            std::env::temp_dir().join(format!("omera_test_s3_not_found_{}", std::process::id()));
         let _ = fs::remove_dir_all(&temp_dir);
         fs::create_dir_all(&temp_dir).unwrap();
 

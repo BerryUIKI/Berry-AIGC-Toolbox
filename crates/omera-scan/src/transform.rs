@@ -1179,14 +1179,22 @@ where
 
         let container = Container::from_id(&ext).unwrap_or(file.container);
 
+        let mut derivative = file.clone();
+        derivative.path = final_str.clone();
+        derivative.container = container;
+        derivative.size_bytes = size_bytes;
+        derivative.modified_at = modified_at;
+        // Read the published derivative, never restore stale source generation
+        // fields from the indexed row when the selected policy strips them.
+        derivative.metadata = match request.spec.metadata_policy {
+            TransformMetadataPolicy::KeepSupported => {
+                omera_metadata::extract_metadata(container, &final_path)
+            }
+            TransformMetadataPolicy::StripAi | TransformMetadataPolicy::StripAll => None,
+        };
+
         let target_file_id = file.id.unwrap_or(*file_id);
-        if let Err(e) = db.update_file_transformed(
-            target_file_id,
-            &final_str,
-            container.id(),
-            size_bytes,
-            modified_at,
-        ) {
+        if let Err(e) = db.update_file_transformed_with_metadata(target_file_id, &derivative) {
             // Compensation: if DB update fails and published file is separate from source, remove published derivative
             if src_path != final_path {
                 let _ = fs::remove_file(&final_path);

@@ -1117,8 +1117,13 @@ where
             .and_then(|s| s.to_str())
             .unwrap_or("image");
         let ext = resolve_extension(&src_path, request.spec.format);
-        let final_path_res =
-            resolve_publication_path(parent_dir, file_stem, &ext, request.spec.collision_policy);
+        // Avoid inheriting orphan sidecars when the derivative is re-imported.
+        let final_path_res = resolve_import_publication_path(
+            parent_dir,
+            file_stem,
+            &ext,
+            request.spec.collision_policy,
+        );
         let final_path = match final_path_res {
             Ok(p) => p,
             Err(TransformError::DestinationExistsSkipped) => {

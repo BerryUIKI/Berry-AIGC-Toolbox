@@ -108,3 +108,89 @@ fn batch_transform_privacy_matches_bytes_without_losing_curation() {
         assert!(dir.path().join("source_1.png").exists());
     }
 }
+
+#[test]
+fn rejected_privacy_update_preserves_original_record_and_source() {
+    let (_dir, db, id) = fixture();
+    let before = db.get_file_by_id(id).unwrap().unwrap();
+    let bytes = fs::read(&before.path).unwrap();
+    db.connection().execute_batch("CREATE TRIGGER reject_privacy BEFORE UPDATE ON files BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+    let receipt = execute_library_batch_transform(
+        &db,
+        &LibraryTransformRequest {
+            file_ids: vec![id],
+            spec: TransformSpec {
+                format: TransformFormat::Png,
+                metadata_policy: TransformMetadataPolicy::StripAll,
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Archive,
+        },
+        None::<fn(usize, usize, &str)>,
+    )
+    .unwrap();
+    assert_eq!((receipt.succeeded, receipt.failed), (0, 1));
+    assert_eq!(db.get_file_by_id(id).unwrap().unwrap(), before);
+    assert_eq!(fs::read(&before.path).unwrap(), bytes);
+    assert!(!Path::new(&before.path)
+        .with_file_name("source_1.png")
+        .exists());
+    assert_eq!(db.get_file_tags(id).unwrap()[0].name, "curated");
+    assert_eq!(db.list_album_files(1).unwrap()[0].id, Some(id));
+}
+
+#[test]
+fn keep_supported_uses_published_metadata_instead_of_stale_index() {
+    let (_dir, db, id) = fixture();
+    db.update_file_prompt(id, "stale indexed prompt", false, true)
+        .unwrap();
+    let receipt = execute_library_batch_transform(
+        &db,
+        &LibraryTransformRequest {
+            file_ids: vec![id],
+            spec: TransformSpec {
+                format: TransformFormat::Png,
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Keep,
+        },
+        None::<fn(usize, usize, &str)>,
+    )
+    .unwrap();
+    assert_eq!(receipt.succeeded, 1);
+    assert_eq!(
+        db.get_file_by_id(id)
+            .unwrap()
+            .unwrap()
+            .metadata
+            .unwrap()
+            .prompt
+            .as_deref(),
+        Some("private source prompt")
+    );
+}
+
+#[test]
+fn stripping_derivative_does_not_inherit_an_orphan_private_sidecar() {
+    let (dir, db, id) = fixture();
+    let orphan = dir.path().join("source_1.txt");
+    fs::write(&orphan, "orphan private prompt").unwrap();
+    let receipt = execute_library_batch_transform(
+        &db,
+        &LibraryTransformRequest {
+            file_ids: vec![id],
+            spec: TransformSpec {
+                format: TransformFormat::Png,
+                metadata_policy: TransformMetadataPolicy::StripAll,
+                ..Default::default()
+            },
+            original_disposition: OriginalDisposition::Keep,
+        },
+        None::<fn(usize, usize, &str)>,
+    )
+    .unwrap();
+    assert_eq!(receipt.succeeded, 1);
+    let after = db.get_file_by_id(id).unwrap().unwrap();
+    assert!(omera_metadata::extract_metadata(Container::Png, Path::new(&after.path)).is_none());
+    assert_eq!(fs::read_to_string(orphan).unwrap(), "orphan private prompt");
+}

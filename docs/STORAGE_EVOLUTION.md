@@ -49,6 +49,18 @@ legacy remote objects and source media, identify ambiguous legacy mappings, and
 never infer authorization to delete or adopt them. This table is separate from
 `storage_roots`, whose workstation mappings are not linked to registered folders.
 
+`omera_scan::cloud_sync` now provides the prepared planning services:
+`build_namespace_manifest`, `collect_sync_plan`, and `save_namespace_manifest`.
+They map selected roots to `<prefix>/v2/roots/<uuid>`, flag ambiguous legacy
+basenames (including unselected registered roots), and reject unsafe paths or
+case-insensitive duplicate keys before returning any transfer queue. The plan
+requires acknowledgement of the current manifest's SHA-256 ID. Manifests are
+atomically saved under `cloud-sync-manifests/layout-<id>.json` without replacing
+earlier evidence; a damaged existing manifest fails closed.
+
+These services are not yet connected to the cloud IPC or Settings caller. The
+runtime transition and provider acceptance tests remain the next #244 increment.
+
 ## Benchmark and acceptance plan
 
 Benchmark production query and cache functions on reproducible 1k, 10k, 50k and 100k fixtures; add 500k where resources permit. Include metadata-heavy rows, sparse fields, multiple tags/albums, stacked files, cold/warm caches, concurrent indexing, and deep pagination. Record hardware, commit, dataset generation, query plans, database/index bytes, peak memory, startup-to-first-page time, IPC bytes and p50/p95 latency.

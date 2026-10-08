@@ -66,6 +66,20 @@ impl Default for TransformSpec {
     }
 }
 
+impl TransformSpec {
+    /// Only an unmodified Original/KeepSupported request can copy source bytes.
+    /// Collision policy affects publication, not whether pixels/metadata need processing.
+    pub fn requires_processing(&self) -> bool {
+        self.format != TransformFormat::Original
+            || self.quality.is_some()
+            || self.max_edge.is_some()
+            || self.scale_percent.is_some()
+            || self.align_multiple.is_some()
+            || self.target_size_kb.is_some()
+            || self.metadata_policy != TransformMetadataPolicy::KeepSupported
+    }
+}
+
 /// Source disposition for managed import transformation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]

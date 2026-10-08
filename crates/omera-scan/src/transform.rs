@@ -586,18 +586,8 @@ fn publish_managed_import_item_with_sidecars(
         .unwrap_or(now_ts);
 
     let is_video = raw_ext == "mp4" || raw_ext == "webm";
-    let should_transform = match transform_spec {
-        Some(spec) => {
-            !is_video
-                && (spec.format != TransformFormat::Original
-                    || spec.max_edge.is_some()
-                    || spec.quality.is_some()
-                    || spec.scale_percent.is_some()
-                    || spec.align_multiple.is_some()
-                    || spec.target_size_kb.is_some())
-        }
-        None => false,
-    };
+    let should_transform =
+        !is_video && transform_spec.is_some_and(TransformSpec::requires_processing);
 
     let file_stem = src_path
         .file_stem()
@@ -961,17 +951,7 @@ pub fn import_files_to_managed_folder(
     let target_folder = validate_managed_destination_folder(db, target_folder_id)?;
     let dest_dir = PathBuf::from(&target_folder.path);
 
-    let should_transform = match transform_spec {
-        Some(spec) => {
-            spec.format != TransformFormat::Original
-                || spec.max_edge.is_some()
-                || spec.quality.is_some()
-                || spec.scale_percent.is_some()
-                || spec.align_multiple.is_some()
-                || spec.target_size_kb.is_some()
-        }
-        None => false,
-    };
+    let should_transform = transform_spec.is_some_and(TransformSpec::requires_processing);
 
     let staging_dir = dest_dir.join(".omera_staging");
     if should_transform {

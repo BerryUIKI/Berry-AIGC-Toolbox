@@ -722,6 +722,36 @@ impl Database {
         Ok(())
     }
 
+    /// Atomically replace derivative facts and policy-filtered metadata while
+    /// retaining the file identity and all user curation/relationships.
+    pub fn update_file_transformed_with_metadata(
+        &self,
+        file_id: i64,
+        derivative: &ImageFile,
+    ) -> Result<(), DatabaseError> {
+        let metadata = derivative
+            .metadata
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let affected = self.conn.execute(
+            "UPDATE files SET path = ?1, container = ?2, size_bytes = ?3, modified_at = ?4,
+             metadata = ?5 WHERE id = ?6",
+            params![
+                derivative.path,
+                derivative.container.id(),
+                derivative.size_bytes as i64,
+                derivative.modified_at,
+                metadata,
+                file_id
+            ],
+        )?;
+        if affected == 0 {
+            return Err(DatabaseError::FileNotFound(file_id));
+        }
+        Ok(())
+    }
+
     /// Delete a file record by path (e.g. after trashing).
     pub fn delete_file_by_path(&self, path: &str) -> Result<(), DatabaseError> {
         self.conn
@@ -3624,6 +3654,46 @@ mod tests {
         let files = db.list_files(folder.id).unwrap();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].size_bytes, 200);
+    }
+
+    #[test]
+    fn transformed_metadata_and_path_commit_together_without_replacing_curation() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/img").unwrap();
+        let mut source = image(folder.id, "/img/private.png");
+        source.metadata = Some(ExtractedMetadata {
+            prompt: Some("private".into()),
+            ..Default::default()
+        });
+        source.rating = Some(8);
+        source.is_favorite = true;
+        source.is_nsfw = true;
+        let id = db.upsert_file(&source).unwrap();
+        let tag = db.create_tag("curated", None).unwrap();
+        db.tag_file(id, tag.id).unwrap();
+        let album = db.create_album("curated", None).unwrap();
+        db.add_file_to_album(album.id, id).unwrap();
+        let mut derivative = image(folder.id, "/img/clean.png");
+        derivative.size_bytes = 123;
+        // An unrelated caller's defaults must not overwrite manual curation.
+        db.update_file_transformed_with_metadata(id, &derivative)
+            .unwrap();
+        let updated = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(updated.path, derivative.path);
+        assert_eq!(updated.size_bytes, 123);
+        assert!(updated.metadata.is_none());
+        assert_eq!(updated.rating, Some(8));
+        assert!(updated.is_favorite && updated.is_nsfw);
+        assert_eq!(db.get_file_tags(id).unwrap()[0].id, tag.id);
+        assert_eq!(db.list_album_files(album.id).unwrap()[0].id, Some(id));
+
+        derivative.path = "/img/rejected.png".into();
+        derivative.metadata = source.metadata;
+        db.connection().execute_batch("CREATE TRIGGER reject_transform BEFORE UPDATE ON files BEGIN SELECT RAISE(ABORT, 'injected'); END;").unwrap();
+        assert!(db
+            .update_file_transformed_with_metadata(id, &derivative)
+            .is_err());
+        assert_eq!(db.get_file_by_id(id).unwrap().unwrap(), updated);
     }
 
     #[test]

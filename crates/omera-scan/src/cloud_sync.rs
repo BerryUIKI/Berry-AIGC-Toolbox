@@ -1,10 +1,13 @@
 //! Stable cloud namespace planning. No remote requests or source mutations.
 
-use omera_domain::{CloudSyncNamespaceManifest, CloudSyncOptions, CloudSyncRootMapping};
+use omera_domain::{
+    CloudSyncNamespaceManifest, CloudSyncNamespacePreview, CloudSyncOptions, CloudSyncRootMapping,
+};
 use omera_storage::Database;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct SyncItem {
@@ -135,6 +138,41 @@ pub fn namespace_manifest_id(manifest: &CloudSyncNamespaceManifest) -> Result<St
     Ok(hex::encode(Sha256::digest(bytes)))
 }
 
+/// Persist a content-addressed compatibility manifest without replacing earlier plans.
+/// Call outside the shared database guard and before starting any remote transfer.
+pub fn save_namespace_manifest(
+    data_dir: &Path,
+    manifest: CloudSyncNamespaceManifest,
+) -> Result<CloudSyncNamespacePreview, String> {
+    let manifest_id = namespace_manifest_id(&manifest)?;
+    let bytes = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
+    let dir = data_dir.join("cloud-sync-manifests");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Cannot save cloud layout manifest: {e}"))?;
+    let path = dir.join(format!("layout-{manifest_id}.json"));
+    let mut staged = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
+    staged.write_all(&bytes).map_err(|e| e.to_string())?;
+    staged.as_file().sync_all().map_err(|e| e.to_string())?;
+    match staged.persist_noclobber(&path) {
+        Ok(_) => {}
+        Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if std::fs::read(&path).map_err(|e| e.to_string())? != bytes {
+                return Err("Existing cloud layout manifest is damaged; it was preserved".into());
+            }
+        }
+        Err(error) => {
+            return Err(format!(
+                "Cannot publish cloud layout manifest: {}",
+                error.error
+            ))
+        }
+    }
+    Ok(CloudSyncNamespacePreview {
+        manifest_id,
+        manifest_path: path.to_string_lossy().into_owned(),
+        manifest,
+    })
+}
+
 /// Preflight the complete selection before handing any item to a transfer worker.
 pub fn collect_sync_plan(
     db: &Database,
@@ -186,6 +224,41 @@ pub fn collect_sync_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persisted_manifest_is_repeatable_and_never_overwrites_previous_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::connect_in_memory().unwrap();
+        db.add_folder("/a/outputs").unwrap();
+        let manifest = build_namespace_manifest(&db, &CloudSyncOptions::default()).unwrap();
+        let saved = save_namespace_manifest(dir.path(), manifest.clone()).unwrap();
+        let before = std::fs::read(&saved.manifest_path).unwrap();
+        let decoded: CloudSyncNamespaceManifest = serde_json::from_slice(&before).unwrap();
+        assert_eq!(decoded, manifest);
+        let repeated = save_namespace_manifest(dir.path(), manifest).unwrap();
+        assert_eq!(repeated.manifest_path, saved.manifest_path);
+        let changed = build_namespace_manifest(
+            &db,
+            &CloudSyncOptions {
+                remote_prefix: "new-target".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let second = save_namespace_manifest(dir.path(), changed).unwrap();
+        assert_ne!(second.manifest_path, saved.manifest_path);
+        assert_eq!(std::fs::read(&saved.manifest_path).unwrap(), before);
+        std::fs::write(&saved.manifest_path, b"existing damaged evidence").unwrap();
+        assert!(save_namespace_manifest(dir.path(), saved.manifest).is_err());
+        assert_eq!(
+            std::fs::read(&saved.manifest_path).unwrap(),
+            b"existing damaged evidence"
+        );
+        let blocker = dir.path().join("blocked-data-dir");
+        std::fs::write(&blocker, b"unrelated file").unwrap();
+        assert!(save_namespace_manifest(&blocker, second.manifest).is_err());
+        assert_eq!(std::fs::read(blocker).unwrap(), b"unrelated file");
+    }
 
     fn index(db: &Database, folder_id: i64, path: &str) {
         db.upsert_file(&omera_domain::ImageFile {

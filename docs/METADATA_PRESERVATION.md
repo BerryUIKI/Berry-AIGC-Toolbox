@@ -190,6 +190,16 @@ sidecars are retained. These safeguards cover copied and re-encoded imports.
 Metadata-only raw-image dispatch is tracked separately in #254; sidecar
 suppression alone does not establish that embedded image metadata was stripped.
 
+Library batch transformations replace SQLite generation metadata in the same
+statement as the derivative path, container, size, and modification time.
+`KeepSupported` reads metadata from the published derivative; it does not restore
+stale indexed fields or unsupported metadata from the source record. `StripAi`
+and `StripAll` clear indexed generation metadata. Ratings, favorite/NSFW choices,
+aesthetic scores, tags, albums, and stack membership remain attached to the same
+file ID. Failure preserves the original row and source and compensates the
+unindexed derivative before archive/trash disposition. Derivative names also
+avoid orphan sidecar stems, preventing private metadata from being re-imported.
+
 The `StripAi`, `StripPromptOnly`, `StripAllAiMetadata`, and `StripAll` policies are designed for privacy-sensitive workflows:
 - **Export workflows:** Strip metadata before sharing images publicly
 - **Batch transformations:** Remove identifying generation parameters from library copies

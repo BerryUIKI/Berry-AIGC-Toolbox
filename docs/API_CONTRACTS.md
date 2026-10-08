@@ -114,6 +114,7 @@ The storage-only Rust function `recovery::migrate_copy(source, destination)` is 
 - Metadata policy (`KeepSupported`, `StripAi`, `StripAll`) is applied consistently.
 - In-flight failure compensation: if file publication succeeds but database record upserting fails, the published file and any copied sidecars are compensated (cleaned up) from the managed vault directory, leaving source files completely intact.
 - Library batch transform (`execute_library_batch_transform`): updates and commits the SQLite file record prior to original file disposition (`Archive` or `Trash`). If the database update fails, the indexed source file remains completely intact and un-disposed, unpublished derivatives are compensated from the filesystem, and collisions in `.omera_archive` are renamed automatically.
+- The batch path update atomically replaces indexed generation metadata: `KeepSupported` re-extracts from the published derivative, while `StripAi`/`StripAll` clear generation fields. No stale source-record fallback is used. User curation and relationships remain attached to the original file ID; orphan sidecar stems are excluded from derivative naming.
 
 
 `harvest_pipeline_folder({ folderId })` and `process_pipeline_cleanups()` manage local AI generator outputs (ComfyUI, SD WebUI, Fooocus) and delayed trash disposal. They delegate directly to reusable Rust services in `crates/omera-scan::pipeline`:

@@ -426,6 +426,61 @@ pub struct PublishedImportItem {
     pub file_id: Option<i64>,
 }
 
+// Reserve the whole media/sidecar stem, including orphan destination sidecars.
+fn resolve_import_publication_path(
+    dest_dir: &Path,
+    stem: &str,
+    extension: &str,
+    collision: TransformCollisionPolicy,
+) -> Result<PathBuf, TransformError> {
+    let mut counter = 0;
+    loop {
+        let name = if counter == 0 {
+            stem.to_string()
+        } else {
+            format!("{stem}_{counter}")
+        };
+        let candidate = dest_dir.join(format!("{name}.{extension}"));
+        if ![
+            candidate.clone(),
+            candidate.with_extension("txt"),
+            candidate.with_extension("json"),
+        ]
+        .iter()
+        .any(|p| p.symlink_metadata().is_ok())
+        {
+            return Ok(candidate);
+        }
+        if collision == TransformCollisionPolicy::Skip {
+            return Err(TransformError::DestinationExistsSkipped);
+        }
+        counter += 1;
+    }
+}
+
+fn copy_import_sidecars(
+    source: &Path,
+    output: &Path,
+    copied: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+    for extension in ["txt", "json"] {
+        let src = source.with_extension(extension);
+        if src == source || !src.is_file() {
+            continue;
+        }
+        let mut reader = File::open(&src)?;
+        let dst = output.with_extension(extension);
+        let mut writer = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&dst)?;
+        copied.push(dst); // Compensation owns only files successfully created here.
+        std::io::copy(&mut reader, &mut writer)?;
+        writer.flush()?;
+    }
+    Ok(())
+}
+
 /// Publish a single file into a managed vault folder with metadata policy,
 /// sidecar preservation, and interruption compensation.
 pub fn publish_managed_import_item(
@@ -435,6 +490,26 @@ pub fn publish_managed_import_item(
     staging_dir: &Path,
     folder_id: i64,
     transform_spec: Option<&TransformSpec>,
+) -> PublishedImportItem {
+    publish_managed_import_item_with_sidecars(
+        db,
+        src_path_str,
+        dest_dir,
+        staging_dir,
+        folder_id,
+        transform_spec,
+        copy_import_sidecars,
+    )
+}
+
+fn publish_managed_import_item_with_sidecars(
+    db: &Database,
+    src_path_str: &str,
+    dest_dir: &Path,
+    staging_dir: &Path,
+    folder_id: i64,
+    transform_spec: Option<&TransformSpec>,
+    copy_sidecars: impl FnOnce(&Path, &Path, &mut Vec<PathBuf>) -> std::io::Result<()>,
 ) -> PublishedImportItem {
     let src_path = Path::new(src_path_str);
     if !src_path.is_file() {
@@ -532,6 +607,7 @@ pub fn publish_managed_import_item(
     let final_ext: String;
     let published_path: PathBuf;
     let mut copied_sidecars = Vec::new();
+    let published_new;
 
     if should_transform {
         let spec = transform_spec.unwrap();
@@ -553,8 +629,12 @@ pub fn publish_managed_import_item(
             }
         };
 
-        let pub_res =
-            resolve_publication_path(dest_dir, file_stem, &target_ext, spec.collision_policy);
+        let pub_res = resolve_import_publication_path(
+            dest_dir,
+            file_stem,
+            &target_ext,
+            spec.collision_policy,
+        );
         let pub_path = match pub_res {
             Ok(p) => p,
             Err(TransformError::DestinationExistsSkipped) => {
@@ -599,18 +679,7 @@ pub fn publish_managed_import_item(
             };
         }
 
-        if spec.metadata_policy != TransformMetadataPolicy::StripAll {
-            for sidecar_ext in ["txt", "json"] {
-                let src_sidecar = src_path.with_extension(sidecar_ext);
-                if src_sidecar != src_path && src_sidecar.is_file() {
-                    let dest_sidecar = pub_path.with_extension(sidecar_ext);
-                    if fs::copy(&src_sidecar, &dest_sidecar).is_ok() {
-                        copied_sidecars.push(dest_sidecar);
-                    }
-                }
-            }
-        }
-
+        published_new = true;
         published_path = pub_path;
         final_ext = target_ext;
     } else {
@@ -619,7 +688,16 @@ pub fn publish_managed_import_item(
             .unwrap_or(TransformCollisionPolicy::Rename);
 
         let initial_candidate = dest_dir.join(format!("{file_stem}.{raw_ext}"));
-        let (pub_path, needs_copy) = if initial_candidate.exists() {
+        let (pub_path, needs_copy) = if initial_candidate.symlink_metadata().is_ok()
+            || initial_candidate
+                .with_extension("txt")
+                .symlink_metadata()
+                .is_ok()
+            || initial_candidate
+                .with_extension("json")
+                .symlink_metadata()
+                .is_ok()
+        {
             let is_identical =
                 crate::pipeline::files_have_identical_content(src_path, &initial_candidate)
                     .unwrap_or(false);
@@ -627,7 +705,12 @@ pub fn publish_managed_import_item(
                 // Content is verified identical: reuse existing published file (#268).
                 (initial_candidate, false)
             } else {
-                match resolve_publication_path(dest_dir, file_stem, &raw_ext, collision_policy) {
+                match resolve_import_publication_path(
+                    dest_dir,
+                    file_stem,
+                    &raw_ext,
+                    collision_policy,
+                ) {
                     Ok(p) => (p, true),
                     Err(TransformError::DestinationExistsSkipped) => {
                         return PublishedImportItem {
@@ -672,26 +755,33 @@ pub fn publish_managed_import_item(
                     file_id: None,
                 };
             }
-
-            let allow_sidecars = transform_spec
-                .map(|s| s.metadata_policy != TransformMetadataPolicy::StripAll)
-                .unwrap_or(true);
-
-            if allow_sidecars {
-                for sidecar_ext in ["txt", "json"] {
-                    let src_sidecar = src_path.with_extension(sidecar_ext);
-                    if src_sidecar != src_path && src_sidecar.is_file() {
-                        let dest_sidecar = pub_path.with_extension(sidecar_ext);
-                        if fs::copy(&src_sidecar, &dest_sidecar).is_ok() {
-                            copied_sidecars.push(dest_sidecar);
-                        }
-                    }
-                }
-            }
         }
-
+        published_new = needs_copy;
         published_path = pub_path;
         final_ext = raw_ext;
+    }
+
+    // Unknown sidecar schemas can nest private generation fields anywhere.
+    let preserve_sidecars = transform_spec
+        .map(|s| s.metadata_policy == TransformMetadataPolicy::KeepSupported)
+        .unwrap_or(true);
+    if published_new && preserve_sidecars {
+        if let Err(e) = copy_sidecars(src_path, &published_path, &mut copied_sidecars) {
+            let _ = fs::remove_file(&published_path);
+            for sidecar in copied_sidecars {
+                let _ = fs::remove_file(sidecar);
+            }
+            return PublishedImportItem {
+                receipt: TransformItemReceipt {
+                    source_id_or_path: src_path_str.to_string(),
+                    output_id_or_path: None,
+                    status: TransformItemStatus::Failed,
+                    error_code: Some(format!("Sidecar publication failed: {e}")),
+                    original_action: Some("kept_intact".to_string()),
+                },
+                file_id: None,
+            };
+        }
     }
 
     let container = match final_ext.as_str() {
@@ -752,7 +842,9 @@ pub fn publish_managed_import_item(
         Ok(id) => id,
         Err(e) => {
             // Compensation / rollback: clean up newly published file and copied sidecars
-            let _ = fs::remove_file(&published_path);
+            if published_new {
+                let _ = fs::remove_file(&published_path);
+            }
             for sidecar in copied_sidecars {
                 let _ = fs::remove_file(sidecar);
             }
@@ -1178,6 +1270,82 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn sidecar_failure_rolls_back_only_owned_publication() {
+        use super::*;
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.png");
+        image::RgbImage::new(16, 8).save(&source).unwrap();
+        fs::write(source.with_extension("txt"), "private prompt").unwrap();
+        let vault = dir.path().join("vault");
+        fs::create_dir(&vault).unwrap();
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(&vault.to_string_lossy(), "managed", None, None, None, true)
+            .unwrap();
+        let item = publish_managed_import_item_with_sidecars(
+            &db,
+            &source.to_string_lossy(),
+            &vault,
+            &dir.path().join("staging"),
+            folder.id,
+            Some(&TransformSpec {
+                format: TransformFormat::Png,
+                ..Default::default()
+            }),
+            |src, output, copied| {
+                // Deterministic collision after image publication, before sidecar copy.
+                fs::write(output.with_extension("json"), "concurrent owner's data")?;
+                fs::write(src.with_extension("json"), "private workflow")?;
+                copy_import_sidecars(src, output, copied)
+            },
+        );
+        assert_eq!(item.receipt.status, TransformItemStatus::Failed);
+        assert!(item
+            .receipt
+            .error_code
+            .unwrap()
+            .contains("Sidecar publication failed"));
+        assert!(item.file_id.is_none());
+        assert!(!vault.join("source.png").exists());
+        assert!(!vault.join("source.txt").exists());
+        assert_eq!(
+            fs::read_to_string(vault.join("source.json")).unwrap(),
+            "concurrent owner's data"
+        );
+        assert!(source.exists());
+        assert_eq!(
+            fs::read_to_string(source.with_extension("txt")).unwrap(),
+            "private prompt"
+        );
+    }
+
+    #[test]
+    fn failed_image_transform_publishes_no_sidecars() {
+        use super::*;
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("broken.png");
+        fs::write(&source, "invalid pixels").unwrap();
+        fs::write(source.with_extension("txt"), "private prompt").unwrap();
+        let vault = dir.path().join("vault");
+        fs::create_dir(&vault).unwrap();
+        let db = Database::connect_in_memory().unwrap();
+        let item = publish_managed_import_item(
+            &db,
+            &source.to_string_lossy(),
+            &vault,
+            &dir.path().join("staging"),
+            1,
+            Some(&TransformSpec {
+                format: TransformFormat::Png,
+                ..Default::default()
+            }),
+        );
+        assert_eq!(item.receipt.status, TransformItemStatus::Failed);
+        assert_eq!(fs::read_dir(vault).unwrap().count(), 0);
+        assert_eq!(fs::read(source).unwrap(), b"invalid pixels");
+    }
+
     use super::*;
     use image::{Rgb, RgbImage};
     use omera_domain::ImageFile;

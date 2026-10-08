@@ -6,6 +6,7 @@
 //! `omera-metadata`), persist rows through `omera-storage`, and drop rows for
 //! files that disappeared from disk. The Tauri shell only wires this up.
 
+pub mod cloud_sync;
 pub mod export;
 pub mod file_operations;
 pub mod html_showcase;

@@ -4,6 +4,21 @@ use omera_domain::{CloudSyncNamespaceManifest, CloudSyncOptions, CloudSyncRootMa
 use omera_storage::Database;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+
+#[derive(Debug, Clone)]
+pub struct SyncItem {
+    pub local_path: PathBuf,
+    pub remote_key: String,
+    pub size_bytes: u64,
+    pub mtime_secs: i64,
+}
+
+pub struct CloudSyncPlan {
+    pub manifest: CloudSyncNamespaceManifest,
+    pub items: Vec<SyncItem>,
+    pub total_bytes: u64,
+}
 
 fn basename(path: &str) -> String {
     path.replace('\\', "/")
@@ -120,9 +135,122 @@ pub fn namespace_manifest_id(manifest: &CloudSyncNamespaceManifest) -> Result<St
     Ok(hex::encode(Sha256::digest(bytes)))
 }
 
+/// Preflight the complete selection before handing any item to a transfer worker.
+pub fn collect_sync_plan(
+    db: &Database,
+    options: &CloudSyncOptions,
+) -> Result<CloudSyncPlan, String> {
+    let manifest = build_namespace_manifest(db, options)?;
+    let manifest_id = namespace_manifest_id(&manifest)?;
+    if options.namespace_manifest_id.as_deref() != Some(&manifest_id) {
+        return Err("Preview and confirm the current cloud folder layout before syncing".into());
+    }
+    let mut items = Vec::new();
+    let mut keys = HashSet::new();
+    let mut total_bytes = 0u64;
+    for root in &manifest.roots {
+        let normalized_root = root.source_path.replace('\\', "/");
+        let boundary = format!("{}/", normalized_root.trim_end_matches('/'));
+        let files = db
+            .list_file_fingerprints(root.folder_id)
+            .map_err(|e| e.to_string())?;
+        for (file_path, size_bytes, mtime_secs, _) in files {
+            let normalized_file = file_path.replace('\\', "/");
+            let relative = normalized_file
+                .strip_prefix(&boundary)
+                .ok_or_else(|| format!("Indexed file is outside its cloud root: {file_path}"))?;
+            validate_object_path(relative)?;
+            let remote_key = format!("{}/{relative}", root.new_prefix);
+            // Conservative comparison also protects case-insensitive LocalPath targets.
+            if !keys.insert(remote_key.to_lowercase()) {
+                return Err(format!("Cloud object keys collide: {remote_key}"));
+            }
+            total_bytes = total_bytes
+                .checked_add(size_bytes)
+                .ok_or("Cloud sync byte total overflow")?;
+            items.push(SyncItem {
+                local_path: PathBuf::from(file_path),
+                remote_key,
+                size_bytes,
+                mtime_secs,
+            });
+        }
+    }
+    Ok(CloudSyncPlan {
+        manifest,
+        items,
+        total_bytes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn index(db: &Database, folder_id: i64, path: &str) {
+        db.upsert_file(&omera_domain::ImageFile {
+            id: None,
+            folder_id,
+            path: path.into(),
+            size_bytes: 4,
+            modified_at: 1,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        })
+        .unwrap();
+    }
+
+    fn acknowledge(db: &Database, options: &mut CloudSyncOptions) {
+        options.namespace_manifest_id =
+            Some(namespace_manifest_id(&build_namespace_manifest(db, options).unwrap()).unwrap());
+    }
+
+    #[test]
+    fn plan_requires_current_acknowledgement_and_isolates_duplicate_relative_names() {
+        let db = Database::connect_in_memory().unwrap();
+        let a = db.add_folder("/a/outputs").unwrap();
+        let b = db.add_folder("/b/outputs").unwrap();
+        index(&db, a.id, "/a/outputs/image.png");
+        index(&db, b.id, "/b/outputs/image.png");
+        let mut options = CloudSyncOptions::default();
+        assert!(collect_sync_plan(&db, &options).is_err());
+        acknowledge(&db, &mut options);
+        let plan = collect_sync_plan(&db, &options).unwrap();
+        assert_eq!(plan.total_bytes, 8);
+        assert_eq!(plan.items.len(), 2);
+        assert_ne!(plan.items[0].remote_key, plan.items[1].remote_key);
+        assert!(plan
+            .items
+            .iter()
+            .all(|item| item.remote_key.ends_with("/image.png")));
+        options.remote_prefix = "changed".into();
+        assert!(collect_sync_plan(&db, &options).is_err());
+    }
+
+    #[test]
+    fn plan_rejects_case_collisions_and_root_escape_before_transfer() {
+        for paths in [
+            vec!["/a/outputs/A.png", "/a/outputs/a.png"],
+            vec!["/a/outputs-extra/image.png"],
+            vec!["/a/outputs/../secret.png"],
+            vec!["/a/outputs/%2e%2e/image.png"],
+        ] {
+            let db = Database::connect_in_memory().unwrap();
+            let folder = db.add_folder("/a/outputs").unwrap();
+            for path in paths {
+                index(&db, folder.id, path);
+            }
+            let mut options = CloudSyncOptions::default();
+            acknowledge(&db, &mut options);
+            assert!(collect_sync_plan(&db, &options).is_err());
+        }
+    }
 
     #[test]
     fn manifest_is_stable_and_flags_unselected_legacy_ambiguity() {

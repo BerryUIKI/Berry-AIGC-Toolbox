@@ -326,6 +326,29 @@ mod tests {
     }
 
     #[test]
+    fn corrupt_or_case_colliding_root_identities_are_rejected() {
+        let db = Database::connect_in_memory().unwrap();
+        let a = db.add_folder("/a/outputs").unwrap();
+        let b = db.add_folder("/b/outputs").unwrap();
+        db.ensure_cloud_sync_root(a.id).unwrap();
+        db.ensure_cloud_sync_root(b.id).unwrap();
+        db.connection().execute(
+            "UPDATE cloud_sync_roots SET root_uuid = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' WHERE folder_id = ?1", [a.id],
+        ).unwrap();
+        db.connection().execute(
+            "UPDATE cloud_sync_roots SET root_uuid = 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA' WHERE folder_id = ?1", [b.id],
+        ).unwrap();
+        assert!(build_namespace_manifest(&db, &CloudSyncOptions::default()).is_err());
+        db.connection()
+            .execute(
+                "UPDATE cloud_sync_roots SET root_uuid = '../unsafe' WHERE folder_id = ?1",
+                [b.id],
+            )
+            .unwrap();
+        assert!(build_namespace_manifest(&db, &CloudSyncOptions::default()).is_err());
+    }
+
+    #[test]
     fn manifest_is_stable_and_flags_unselected_legacy_ambiguity() {
         let db = Database::connect_in_memory().unwrap();
         let a = db.add_folder("/a/outputs").unwrap();

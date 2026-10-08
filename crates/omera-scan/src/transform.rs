@@ -426,6 +426,38 @@ pub struct PublishedImportItem {
     pub file_id: Option<i64>,
 }
 
+// Reserve the whole media/sidecar stem, including orphan destination sidecars.
+fn resolve_import_publication_path(
+    dest_dir: &Path,
+    stem: &str,
+    extension: &str,
+    collision: TransformCollisionPolicy,
+) -> Result<PathBuf, TransformError> {
+    let mut counter = 0;
+    loop {
+        let name = if counter == 0 {
+            stem.to_string()
+        } else {
+            format!("{stem}_{counter}")
+        };
+        let candidate = dest_dir.join(format!("{name}.{extension}"));
+        if ![
+            candidate.clone(),
+            candidate.with_extension("txt"),
+            candidate.with_extension("json"),
+        ]
+        .iter()
+        .any(|p| p.symlink_metadata().is_ok())
+        {
+            return Ok(candidate);
+        }
+        if collision == TransformCollisionPolicy::Skip {
+            return Err(TransformError::DestinationExistsSkipped);
+        }
+        counter += 1;
+    }
+}
+
 /// Publish a single file into a managed vault folder with metadata policy,
 /// sidecar preservation, and interruption compensation.
 pub fn publish_managed_import_item(
@@ -553,8 +585,12 @@ pub fn publish_managed_import_item(
             }
         };
 
-        let pub_res =
-            resolve_publication_path(dest_dir, file_stem, &target_ext, spec.collision_policy);
+        let pub_res = resolve_import_publication_path(
+            dest_dir,
+            file_stem,
+            &target_ext,
+            spec.collision_policy,
+        );
         let pub_path = match pub_res {
             Ok(p) => p,
             Err(TransformError::DestinationExistsSkipped) => {
@@ -621,7 +657,16 @@ pub fn publish_managed_import_item(
             .unwrap_or(TransformCollisionPolicy::Rename);
 
         let initial_candidate = dest_dir.join(format!("{file_stem}.{raw_ext}"));
-        let (pub_path, needs_copy) = if initial_candidate.exists() {
+        let (pub_path, needs_copy) = if initial_candidate.symlink_metadata().is_ok()
+            || initial_candidate
+                .with_extension("txt")
+                .symlink_metadata()
+                .is_ok()
+            || initial_candidate
+                .with_extension("json")
+                .symlink_metadata()
+                .is_ok()
+        {
             let is_identical =
                 crate::pipeline::files_have_identical_content(src_path, &initial_candidate)
                     .unwrap_or(false);
@@ -629,7 +674,12 @@ pub fn publish_managed_import_item(
                 // Content is verified identical: reuse existing published file (#268).
                 (initial_candidate, false)
             } else {
-                match resolve_publication_path(dest_dir, file_stem, &raw_ext, collision_policy) {
+                match resolve_import_publication_path(
+                    dest_dir,
+                    file_stem,
+                    &raw_ext,
+                    collision_policy,
+                ) {
                     Ok(p) => (p, true),
                     Err(TransformError::DestinationExistsSkipped) => {
                         return PublishedImportItem {

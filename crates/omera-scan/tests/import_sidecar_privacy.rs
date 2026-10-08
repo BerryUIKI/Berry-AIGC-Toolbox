@@ -5,6 +5,60 @@ use std::fs;
 use tempfile::tempdir;
 
 #[test]
+fn orphan_sidecars_are_preserved_and_the_whole_import_stem_is_renamed() {
+    for policy in [
+        TransformMetadataPolicy::KeepSupported,
+        TransformMetadataPolicy::StripAi,
+    ] {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("art.png");
+        image::RgbImage::new(16, 8).save(&source).unwrap();
+        fs::write(source.with_extension("txt"), "new private prompt").unwrap();
+        let vault = dir.path().join("vault");
+        fs::create_dir(&vault).unwrap();
+        fs::write(vault.join("art.txt"), "existing private prompt").unwrap();
+        fs::write(vault.join("art_1.json"), "existing JSON").unwrap();
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db
+            .add_folder_with_mode(&vault.to_string_lossy(), "managed", None, None, None, true)
+            .unwrap();
+        let spec = TransformSpec {
+            format: TransformFormat::Png,
+            metadata_policy: policy,
+            ..Default::default()
+        };
+        let ids = import_files_to_managed_folder(
+            &db,
+            &[source.to_string_lossy().into_owned()],
+            folder.id,
+            Some(&spec),
+        )
+        .unwrap();
+        assert_eq!(ids.len(), 1);
+        assert!(vault.join("art_2.png").exists());
+        assert_eq!(
+            fs::read_to_string(vault.join("art.txt")).unwrap(),
+            "existing private prompt"
+        );
+        assert_eq!(
+            fs::read_to_string(vault.join("art_1.json")).unwrap(),
+            "existing JSON"
+        );
+        if policy == TransformMetadataPolicy::StripAi {
+            assert!(
+                omera_metadata::extract_metadata(Container::Png, &vault.join("art_2.png"))
+                    .is_none()
+            );
+        } else {
+            assert_eq!(
+                fs::read_to_string(vault.join("art_2.txt")).unwrap(),
+                "new private prompt"
+            );
+        }
+    }
+}
+
+#[test]
 fn import_sidecars_obey_policy_with_and_without_reencoding() {
     for reencode in [false, true] {
         for policy in [

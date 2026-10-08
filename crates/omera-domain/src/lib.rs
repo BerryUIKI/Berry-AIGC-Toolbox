@@ -36,8 +36,9 @@ pub use cloud_backup::{
     CloudStorageProvider,
 };
 pub use cloud_sync::{
-    CloudSyncDirection, CloudSyncOptions, CloudSyncPhase, CloudSyncProgress, CloudSyncResult,
-    CloudSyncRootIdentity, CloudSyncStrategy,
+    CloudSyncDirection, CloudSyncNamespaceManifest, CloudSyncNamespacePreview, CloudSyncOptions,
+    CloudSyncPhase, CloudSyncProgress, CloudSyncResult, CloudSyncRootIdentity,
+    CloudSyncRootMapping, CloudSyncStrategy,
 };
 pub use collaboration::{
     ChangeLogEntry, ChangeLogSyncQuery, DatabasePingResult, MigrationOptions, MigrationSummary,

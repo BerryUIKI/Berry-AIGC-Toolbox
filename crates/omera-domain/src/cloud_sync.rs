@@ -2,6 +2,16 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Persistent cloud namespace identity for one registered library folder.
+/// Stored in the library database, so path changes and snapshots retain it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudSyncRootIdentity {
+    pub folder_id: i64,
+    pub root_uuid: String,
+    /// Basename observed when identity was first allocated; never rewritten.
+    pub legacy_basename: String,
+}
+
 /// Direction of incremental mirroring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

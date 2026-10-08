@@ -4696,7 +4696,6 @@ mod tests {
     fn migration_creates_revision_aware_embedding_failures() {
         let db = Database::connect_in_memory().unwrap();
         assert_eq!(db.user_version().unwrap(), LATEST_VERSION);
-        assert_eq!(LATEST_VERSION, 16);
         db.connection()
             .prepare("SELECT file_id, model_id, modified_at, error FROM embedding_failures LIMIT 0")
             .unwrap();

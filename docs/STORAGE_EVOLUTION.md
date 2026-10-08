@@ -32,6 +32,23 @@ Do not add indexes for every column or introduce a second authoritative database
 - Store migration receipts outside the source database so failure never requires modifying the only good copy. Legacy discovery and cleanup follow [OMERA_MIGRATION.md](OMERA_MIGRATION.md).
 - Keep authoritative databases on local storage; media may reside on network shares. A shared multi-user service is a separate future architecture, not a connection-string toggle.
 
+### Cloud root identity foundation (schema v17)
+
+`cloud_sync_roots` maps each registered folder ID to an immutable random UUID
+and the basename observed at first allocation. `Database::ensure_cloud_sync_root`
+allocates lazily; repeated calls, folder path changes, restart, and SQLite snapshots
+retain the mapping. Folder removal cascades the mapping so registering another
+folder with a reused numeric ID creates a new UUID. Existing folders, files,
+curation, and migrations remain intact; there is no eager library backfill.
+
+This is the storage prerequisite for #244, not the runtime namespace transition.
+The existing sync collector still uses basename keys until its separate integration
+lands. That transition must provide a compatibility manifest and explicit user
+acknowledgement before publishing under a versioned UUID namespace. It must retain
+legacy remote objects and source media, identify ambiguous legacy mappings, and
+never infer authorization to delete or adopt them. This table is separate from
+`storage_roots`, whose workstation mappings are not linked to registered folders.
+
 ## Benchmark and acceptance plan
 
 Benchmark production query and cache functions on reproducible 1k, 10k, 50k and 100k fixtures; add 500k where resources permit. Include metadata-heavy rows, sparse fields, multiple tags/albums, stacked files, cold/warm caches, concurrent indexing, and deep pagination. Record hardware, commit, dataset generation, query plans, database/index bytes, peak memory, startup-to-first-page time, IPC bytes and p50/p95 latency.

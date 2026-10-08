@@ -7,6 +7,7 @@
 #![allow(unknown_lints)]
 #![allow(clippy::chunks_exact_to_as_chunks)]
 
+mod cloud_sync_roots;
 mod db;
 mod engine;
 pub mod legacy_migration;

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "test:stack": "node scripts/run-tests.mjs",
-    "test:memory": "node --test tests/memory-audit.test.mjs",
+    "test:memory": "tsx --test tests/memory-audit.test.mjs",
     "bench:scroll": "tsx --test tests/frontend-scroll-bench.mjs",
     "preview": "vite preview",
     "tauri": "tauri"

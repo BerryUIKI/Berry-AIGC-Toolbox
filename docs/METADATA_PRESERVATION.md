@@ -187,8 +187,12 @@ Imports reserve media and sidecar stems together, including orphan destination
 sidecars. Sidecar writes refuse overwrite; a publication failure reports failure
 and compensates only newly created files. Pre-existing or concurrently created
 sidecars are retained. These safeguards cover copied and re-encoded imports.
-Metadata-only raw-image dispatch is tracked separately in #254; sidecar
-suppression alone does not establish that embedded image metadata was stripped.
+Metadata-only `StripAi`/`StripAll` image imports re-encode even in `Original`
+format with no resize/quality options. A shared processing predicate includes
+all pixel/quality/target-size fields and stripping policies. Only default
+`Original`/`KeepSupported` imports copy source bytes unchanged. Video processing
+and metadata stripping are unsupported and return failure with no published
+media or sidecars; callers can import videos unchanged with the default spec.
 
 Library batch transformations replace SQLite generation metadata in the same
 statement as the derivative path, container, size, and modification time.

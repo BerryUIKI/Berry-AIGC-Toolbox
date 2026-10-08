@@ -178,6 +178,18 @@ Transform tests:
 
 ## Privacy and Security
 
+Managed imports suppress both `.txt` and `.json` sidecars under `StripAi`
+and `StripAll`. Unknown JSON schemas may contain nested prompts or workflows,
+so these files are suppressed rather than partially filtered. `KeepSupported`
+copies sidecars byte-for-byte. Sources remain unchanged.
+
+Imports reserve media and sidecar stems together, including orphan destination
+sidecars. Sidecar writes refuse overwrite; a publication failure reports failure
+and compensates only newly created files. Pre-existing or concurrently created
+sidecars are retained. These safeguards cover copied and re-encoded imports.
+Metadata-only raw-image dispatch is tracked separately in #254; sidecar
+suppression alone does not establish that embedded image metadata was stripped.
+
 The `StripAi`, `StripPromptOnly`, `StripAllAiMetadata`, and `StripAll` policies are designed for privacy-sensitive workflows:
 - **Export workflows:** Strip metadata before sharing images publicly
 - **Batch transformations:** Remove identifying generation parameters from library copies

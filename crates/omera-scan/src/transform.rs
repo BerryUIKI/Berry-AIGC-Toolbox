@@ -586,8 +586,22 @@ fn publish_managed_import_item_with_sidecars(
         .unwrap_or(now_ts);
 
     let is_video = raw_ext == "mp4" || raw_ext == "webm";
-    let should_transform =
-        !is_video && transform_spec.is_some_and(TransformSpec::requires_processing);
+    let should_transform = transform_spec.is_some_and(TransformSpec::requires_processing);
+    if is_video && should_transform {
+        return PublishedImportItem {
+            receipt: TransformItemReceipt {
+                source_id_or_path: src_path_str.to_string(),
+                output_id_or_path: None,
+                status: TransformItemStatus::Failed,
+                error_code: Some(
+                    "Video transformation/metadata stripping is unsupported; source preserved"
+                        .into(),
+                ),
+                original_action: Some("kept_intact".into()),
+            },
+            file_id: None,
+        };
+    }
 
     let file_stem = src_path
         .file_stem()

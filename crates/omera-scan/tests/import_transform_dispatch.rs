@@ -84,3 +84,37 @@ fn metadata_only_import_strips_source_bytes_through_both_entry_points() {
         }
     }
 }
+
+#[test]
+fn unsupported_video_stripping_cannot_succeed_via_raw_copy() {
+    for extension in ["mp4", "webm"] {
+        for policy in [
+            TransformMetadataPolicy::StripAi,
+            TransformMetadataPolicy::StripAll,
+        ] {
+            let dir = tempdir().unwrap();
+            let source = dir.path().join(format!("source.{extension}"));
+            fs::write(&source, "synthetic video fixture").unwrap();
+            let vault = dir.path().join("vault");
+            fs::create_dir(&vault).unwrap();
+            let db = Database::connect_in_memory().unwrap();
+            let folder = db
+                .add_folder_with_mode(&vault.to_string_lossy(), "managed", None, None, None, true)
+                .unwrap();
+            let error = import_files_to_managed_folder(
+                &db,
+                &[source.to_string_lossy().into_owned()],
+                folder.id,
+                Some(&TransformSpec {
+                    metadata_policy: policy,
+                    ..Default::default()
+                }),
+            )
+            .unwrap_err();
+            assert!(error.contains("unsupported"));
+            assert_eq!(fs::read_dir(vault).unwrap().count(), 0);
+            assert!(db.list_files(folder.id).unwrap().is_empty());
+            assert_eq!(fs::read(source).unwrap(), b"synthetic video fixture");
+        }
+    }
+}

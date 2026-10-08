@@ -599,7 +599,9 @@ pub fn publish_managed_import_item(
             };
         }
 
-        if spec.metadata_policy != TransformMetadataPolicy::StripAll {
+        // Unknown sidecar schemas may nest private prompts/workflows anywhere.
+        // Preserve them only when preservation is explicitly requested.
+        if spec.metadata_policy == TransformMetadataPolicy::KeepSupported {
             for sidecar_ext in ["txt", "json"] {
                 let src_sidecar = src_path.with_extension(sidecar_ext);
                 if src_sidecar != src_path && src_sidecar.is_file() {
@@ -674,7 +676,7 @@ pub fn publish_managed_import_item(
             }
 
             let allow_sidecars = transform_spec
-                .map(|s| s.metadata_policy != TransformMetadataPolicy::StripAll)
+                .map(|s| s.metadata_policy == TransformMetadataPolicy::KeepSupported)
                 .unwrap_or(true);
 
             if allow_sidecars {

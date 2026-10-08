@@ -231,7 +231,72 @@ pub const MIGRATIONS: &[&str] = &[
     ALTER TABLE pipeline_cleanup_queue ADD COLUMN source_size_bytes INTEGER;
     ALTER TABLE pipeline_cleanup_queue ADD COLUMN source_hash TEXT;
     "#,
+    // v17: stable cloud namespaces independent of folder names and local IDs.
+    r#"
+    CREATE TABLE cloud_sync_roots (
+        folder_id       INTEGER PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
+        root_uuid       TEXT NOT NULL UNIQUE,
+        legacy_basename TEXT NOT NULL
+    ) STRICT;
+    "#,
 ];
 
 /// The schema version the current code migrates databases to.
 pub const LATEST_VERSION: i64 = MIGRATIONS.len() as i64;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Database;
+    use rusqlite::Connection;
+
+    #[test]
+    fn cloud_root_migration_preserves_v16_library() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.db");
+        {
+            let conn = Connection::open(&path).unwrap();
+            for migration in &MIGRATIONS[..16] {
+                conn.execute_batch(migration).unwrap();
+            }
+            conn.pragma_update(None, "user_version", 16).unwrap();
+            conn.execute_batch(
+                "INSERT INTO meta VALUES ('fixture', 'preserved');
+                 INSERT INTO folders(id, path) VALUES (42, '/a/outputs');
+                 INSERT INTO files(id, folder_id, path, container, size_bytes, modified_at, rating)
+                 VALUES (73, 42, '/a/outputs/image.png', 'png', 100, 20, 7);",
+            )
+            .unwrap();
+        }
+        let db = Database::connect(&path).unwrap();
+        assert_eq!(db.user_version().unwrap(), LATEST_VERSION);
+        assert_eq!(
+            db.meta_get("fixture").unwrap().as_deref(),
+            Some("preserved")
+        );
+        let record = db.get_file_by_id(73).unwrap().unwrap();
+        assert_eq!(record.folder_id, 42);
+        assert_eq!(record.rating, Some(7));
+        let count: i64 = db
+            .connection()
+            .query_row("SELECT count(*) FROM cloud_sync_roots", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 0); // No eager backfill or existing namespace switch.
+        let integrity: String = db
+            .connection()
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(integrity, "ok");
+        assert!(db
+            .connection()
+            .prepare("PRAGMA foreign_key_check")
+            .unwrap()
+            .query([])
+            .unwrap()
+            .next()
+            .unwrap()
+            .is_none());
+    }
+}

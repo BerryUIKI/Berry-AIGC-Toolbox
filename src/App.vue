@@ -850,14 +850,22 @@ async function loadAlbumsAndTags() {
   }
 }
 
-function onFolderAdded(folder: Folder) {
-  void reloadFolders();
-  void refreshCounts();
-  void reloadFiltersMeta();
+async function onFolderAdded(folder: Folder) {
+  await reloadFolders();
   activeTarget.value = { type: "folder", folder };
   selectedFile.value = null;
   lightboxFile.value = null;
-  void loadFiles();
+
+  // Trigger initial scan for the newly added folder
+  try {
+    await invoke("scan_folder", { folderId: folder.id });
+  } catch (e) {
+    console.error(`Failed to start initial scan for folder ${folder.path}:`, e);
+  }
+
+  await refreshCounts();
+  await reloadFiltersMeta();
+  await loadFiles();
 }
 
 function onFolderRemoved(folderId: number) {

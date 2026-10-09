@@ -92,6 +92,8 @@ const saved = await invoke<AppConfig>('save_app_config', {
 
 The in-progress persistence service writes atomically, rejects corrupt JSON without silently replacing it, and stores secret references in configuration while resolving credentials for authorized internal use. Do not log full configs, credential values, or imported exports. Credentials are not safe browser localStorage content.
 
+Settings retains its loaded revision and form edits after rejection, displays an accessible error, and prevents duplicate submissions. Locale, theme, thumbnail preferences and success/close events apply only after persistence succeeds; failed saves leave the localStorage mirror unchanged. Production-handler tests cover rejection, retry state and overlapping submissions.
+
 `legacy_migration_complete` currently refers to the old config/localStorage migration. It is **not** an Omera migration receipt, proof of database validation, or authorization to delete a directory. New Omera values take precedence over imported legacy values; false/zero/empty values are not evidence of absence.
 
 `get_storage_paths()` returns `data_dir`, `config_file`, `database_file`, `thumbnails_dir`, `models_dir`, and `updates_dir`. UI code must use returned paths rather than reconstructing them from product names. `open_storage_dir({ target })` accepts the named categories in the reference. The active runtime uses the target Omera application identity and locations (`com.berryuiki.omera`).

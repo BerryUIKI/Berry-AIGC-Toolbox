@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, MutexGuard, RwLock};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 
 static MODEL_CACHE_FACETS: RwLock<Option<Vec<String>>> = RwLock::new(None);
 static SAMPLER_CACHE_FACETS: RwLock<Option<Vec<String>>> = RwLock::new(None);
@@ -1559,17 +1559,34 @@ pub async fn export_files_batch(
 
 /// Instant preview and size estimation for a selected file without writing to destination.
 #[tauri::command]
-pub fn estimate_export_file(
+pub async fn estimate_export_file(
     file_id: i64,
     options: ExportOptions,
-    state: State<'_, AppState>,
+    app_handle: AppHandle,
 ) -> Result<ExportEstimateResult, String> {
-    let db_guard = db(&state)?;
-    let file = db_guard
-        .get_file_by_id(file_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("File id {file_id} not found"))?;
-    omera_scan::estimate_export_single_image(&file, &options)
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        with_export_file_snapshot(&state.db, file_id, |file| {
+            omera_scan::estimate_export_single_image(&file, &options)
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn with_export_file_snapshot<T>(
+    database: &Mutex<Database>,
+    file_id: i64,
+    process: impl FnOnce(ImageFile) -> Result<T, String>,
+) -> Result<T, String> {
+    let file = {
+        let guard = database.lock().map_err(|_| "database lock poisoned")?;
+        guard
+            .get_file_by_id(file_id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("File id {file_id} not found"))?
+    };
+    process(file)
 }
 
 /// Batch transcode and optimize existing library images in managed vaults (IMAGE_TRANSFORM_PLAN T3).
@@ -4549,6 +4566,61 @@ pub fn defer_legacy_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn export_estimate_snapshot_releases_shared_lock_during_processing() {
+        let database = Database::connect_in_memory().unwrap();
+        let folder = database.add_folder("/synthetic").unwrap();
+        let file = ImageFile {
+            id: None,
+            folder_id: folder.id,
+            path: "/synthetic/image.png".into(),
+            size_bytes: 10,
+            modified_at: 100,
+            container: omera_domain::Container::Png,
+            metadata: None,
+            rating: None,
+            aesthetic_score: None,
+            is_favorite: false,
+            is_nsfw: false,
+            stack_id: None,
+            stack_order: 0,
+        };
+        database.upsert_file(&file).unwrap();
+        let id = database.list_files(folder.id).unwrap()[0].id.unwrap();
+        let shared = Arc::new(Mutex::new(database));
+        let worker_db = shared.clone();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            with_export_file_snapshot(&worker_db, id, |snapshot| {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                assert_eq!(snapshot.path, "/synthetic/image.png");
+                Err::<(), _>("synthetic codec failure".into())
+            })
+        });
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        let start = std::time::Instant::now();
+        let query = shared.try_lock().map(|db| db.get_file_by_id(id).unwrap());
+        eprintln!("Concurrent estimate snapshot query: {:?}", start.elapsed());
+        release_tx.send(()).unwrap();
+        assert_eq!(
+            worker.join().unwrap().unwrap_err(),
+            "synthetic codec failure"
+        );
+        assert!(
+            query.unwrap().is_some(),
+            "processing must not retain the database mutex"
+        );
+        assert!(shared.try_lock().is_ok());
+        assert!(with_export_file_snapshot::<()>(&shared, -1, |_| {
+            panic!("missing records must reject before processing")
+        })
+        .is_err());
+    }
     use omera_domain::TransformFormat;
 
     #[test]

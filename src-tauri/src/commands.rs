@@ -4414,7 +4414,6 @@ pub async fn cloud_sync_start(
             .app_data_dir()
             .map_err(|e| e.to_string())?;
         omera_scan::cloud_sync::save_namespace_manifest(&data_dir, plan.manifest)?;
-        drop(state);
         // The runner checks/sets busy atomically after preflight, before transfer.
         crate::cloud_sync::start_cloud_sync(
             app_handle,

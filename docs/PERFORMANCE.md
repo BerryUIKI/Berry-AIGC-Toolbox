@@ -84,6 +84,16 @@ Use browser performance traces for WebView work, Rust timing spans for commands,
 
 ## Prioritized Follow-Up Work
 
+### Batch flag mutation refresh contract
+
+Favorite/NSFW execute, undo and redo share one completion path. Each confirmed
+boolean group patches visible/selected/lightbox records and detail-cache flags;
+completion (including a rejected group after partial success) reloads current
+filtered pages and library counts. The refresh restores surviving selection and
+its selection anchor, using at most the previously loaded page extent. It stops
+on query-context changes, end of results or a non-advancing page. Metadata facets
+and album/tag sidebars are not reloaded for these flag-only changes.
+
 ### P0: Query pagination and incremental result delivery — Phase 2 complete
 
 The gallery fetches bounded pages and extends them near the viewport boundary. Virtual scrolling seamlessly connects directly to keyset cursor deep pagination (`search_files_cursor_page` and `search_files_by_query_cursor_page`). The initial page computes the exact filtered window total, and subsequent scroll requests use `PageCursor` (sort value + row ID) to bypass offset traversal and avoid repeating window counts. Keyset cursor access achieves O(1) row traversal (< 1 ms at 40,000+ items, an 84x speedup over offset paging).

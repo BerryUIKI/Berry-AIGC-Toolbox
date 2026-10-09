@@ -576,13 +576,9 @@ onUnmounted(() => {
 });
 
 async function saveSettings() {
+  if (savingSettings.value) return;
   savingSettings.value = true;
   saveError.value = "";
-
-  setLocale(selectedLocale.value);
-  setThumbnailMaxEdge(thumbnailMaxEdge.value);
-  setThumbnailCacheBudgetMb(thumbnailCacheBudgetMb.value);
-  applyTheme(selectedTheme.value);
 
   // Write to persistent config.json using the originally loaded config
   try {
@@ -617,6 +613,11 @@ async function saveSettings() {
     await saveAppConfig(updatedConfig);
     // Update loadedConfig to the newly saved version
     loadedConfig.value = updatedConfig;
+
+    setLocale(selectedLocale.value);
+    setThumbnailMaxEdge(thumbnailMaxEdge.value);
+    setThumbnailCacheBudgetMb(thumbnailCacheBudgetMb.value);
+    applyTheme(selectedTheme.value);
 
     void loadCacheStats();
 
@@ -1791,7 +1792,7 @@ async function saveSettings() {
 
       <!-- Footer -->
       <div class="dialog-footer">
-        <div v-if="saveError" class="error-message">{{ saveError }}</div>
+        <div v-if="saveError" class="error-message" role="alert">{{ saveError }}</div>
         <button type="button" class="btn secondary" @click="emit('close')">{{ t.settings.cancel }}</button>
         <button type="button" class="btn primary" @click="saveSettings" :disabled="savingSettings">
           {{ savingSettings ? "..." : t.settings.save }}

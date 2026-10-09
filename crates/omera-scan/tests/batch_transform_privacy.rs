@@ -77,23 +77,45 @@ fn batch_transform_privacy_matches_bytes_without_losing_curation() {
             execute_library_batch_transform(&db, &request, None::<fn(usize, usize, &str)>).unwrap();
         assert_eq!(receipt.succeeded, 1);
         let after = db.get_file_by_id(id).unwrap().unwrap();
-        let output_metadata =
+        let mut output_metadata =
             omera_metadata::extract_metadata(Container::Png, Path::new(&after.path));
-        assert_eq!(after.metadata, output_metadata, "{policy:?}");
+        let geometry = after.metadata.as_ref().unwrap();
+        assert_eq!((geometry.width, geometry.height), (Some(8), Some(4)));
         if policy == TransformMetadataPolicy::KeepSupported {
+            let embedded = output_metadata.as_mut().unwrap();
+            embedded.width = Some(8);
+            embedded.height = Some(4);
+            assert_eq!(after.metadata, output_metadata);
             assert_eq!(
                 after.metadata.as_ref().unwrap().prompt.as_deref(),
                 Some("private source prompt")
             );
         } else {
-            assert!(after.metadata.is_none(), "{policy:?}");
+            assert!(output_metadata.is_none(), "{policy:?}");
             let stored: Option<String> = db
                 .connection()
                 .query_row("SELECT metadata FROM files WHERE id = ?1", [id], |r| {
                     r.get(0)
                 })
                 .unwrap();
-            assert!(stored.is_none());
+            let stored = stored.unwrap();
+            assert!(!stored.contains("private"));
+            let fields: serde_json::Value = serde_json::from_str(&stored).unwrap();
+            for field in [
+                "format",
+                "prompt",
+                "negative_prompt",
+                "parameters",
+                "raw",
+                "seed",
+                "model_name",
+                "model_hash",
+                "steps",
+                "cfg_scale",
+                "sampler",
+            ] {
+                assert!(fields[field].is_null(), "{policy:?}: {field}");
+            }
         }
         assert_eq!(after.rating, before.rating);
         assert_eq!(after.aesthetic_score, before.aesthetic_score);

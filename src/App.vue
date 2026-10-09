@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, shallowRef, triggerRef, watch } from "vue";
 import { GalleryPages } from "./utils/gallery-state";
-import { FileDetailsManager } from "./utils/file-details";
+import { FileDetailsManager, refreshPublishedSelections } from "./utils/file-details";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -1507,6 +1507,21 @@ async function onBatchTransformCompleted(receipt: TransformJobReceipt) {
     await loadAlbumsAndTags();
     await refreshCounts();
     await loadFiles();
+    try {
+      await refreshPublishedSelections(
+        receipt.items, fileDetailsManager,
+        () => [selectedFile.value, lightboxFile.value],
+        (fileId) => invoke<ImageFile>("get_file_details", { fileId }),
+        (previous, published) => {
+          const matches = (file: ImageFile | null) => file?.id === previous.id &&
+            FileDetailsManager.revisionKey(file) === FileDetailsManager.revisionKey(previous);
+          if (matches(selectedFile.value)) selectedFile.value = { ...published };
+          if (matches(lightboxFile.value)) lightboxFile.value = { ...published };
+        },
+      );
+    } catch (detailError) {
+      console.warn("Failed to refresh transformed selection details:", detailError);
+    }
   }
 }
 

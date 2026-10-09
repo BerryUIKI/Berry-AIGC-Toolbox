@@ -12,7 +12,7 @@ use crate::MetadataFormat;
 /// original text survives even as structured fields are added.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ExtractedMetadata {
-    /// The generator platform this metadata came from.
+    /// The generator platform, or Unspecified (JSON null) for technical facts only.
     pub format: MetadataFormat,
     /// Raw A1111/SD.Next-style parameter string, if present.
     pub parameters: Option<String>,
@@ -23,9 +23,9 @@ pub struct ExtractedMetadata {
     pub prompt: Option<String>,
     /// The negative prompt, if any.
     pub negative_prompt: Option<String>,
-    /// Image width in pixels.
+    /// Current image width in pixels; transformed records use decoded output geometry.
     pub width: Option<u32>,
-    /// Image height in pixels.
+    /// Current image height in pixels; raw parameters may retain generation geometry.
     pub height: Option<u32>,
     /// Seed (kept as a string: seeds can be 64-bit values or hashes).
     pub seed: Option<String>,

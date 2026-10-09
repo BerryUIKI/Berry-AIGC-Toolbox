@@ -60,6 +60,8 @@ Verify the exact `SearchCriteria` properties against the Rust definition before 
 
 Gallery rows omit raw workflow/parameter payloads. `get_file_details({ fileId })` returns the full `ImageFile`. Cache details by file identity and revision, and use an invalidation generation for requests already in flight. A metadata hydration result must not overwrite newer mutable flags or ratings in the UI.
 
+`ExtractedMetadata.format` is a known generator string or `null` for technical image facts without generation metadata. Library batch transformations store the published image's width/height atomically with its path. Raw preserved generation parameters may describe the original generation size; they are not current pixel dimensions. Stripping policies retain only technical dimensions in SQLite, with generation fields and format null. Existing generator strings/defaults remain unchanged; no schema migration is required.
+
 `list_filtered_stacks({ query, context })` and `get_filtered_stack_members({ stackId, query, context })` share gallery filters. Do not replace these with unfiltered stack APIs inside a scoped search.
 
 ## Semantic search and indexing

@@ -1,8 +1,36 @@
-import type { ImageFile } from "../types";
+import type { ImageFile, TransformItemReceipt } from "../types";
 
 export interface FileDetailsCacheEntry {
   file: ImageFile;
   revisionKey: string;
+}
+
+/** Refresh only open selections affected by successful publication (at most two).
+ * A normal hydration cannot accept a new path/revision. Fence this explicit
+ * replacement across reloads/navigation and preserve edits made while fetching.
+ */
+export async function refreshPublishedSelections(
+  items: TransformItemReceipt[],
+  manager: FileDetailsManager,
+  getSelections: () => (ImageFile | null)[],
+  fetchDetails: (id: number) => Promise<ImageFile>,
+  replaceSelection: (previous: ImageFile, published: ImageFile) => void,
+): Promise<void> {
+  const outputs = new Map(items.filter((item) => item.status === "succeeded" && item.output_id_or_path)
+    .map((item) => [item.source_id_or_path, item.output_id_or_path]));
+  const targets = new Map(getSelections().filter((file): file is ImageFile =>
+    file?.id != null && outputs.has(file.path)).map((file) => [file.id!, file]));
+  const generation = manager.currentGeneration;
+  await Promise.all(Array.from(targets, async ([id, previous]) => {
+    const details = await fetchDetails(id);
+    if (generation !== manager.currentGeneration || details.id !== id || details.path !== outputs.get(previous.path)) return;
+    const revision = FileDetailsManager.revisionKey(previous);
+    const current = getSelections().find((file) => file?.id === id && FileDetailsManager.revisionKey(file) === revision);
+    if (!current) return;
+    const published = { ...manager.merge(current, details), path: details.path };
+    manager.set(published);
+    replaceSelection(current, published);
+  }));
 }
 
 /**

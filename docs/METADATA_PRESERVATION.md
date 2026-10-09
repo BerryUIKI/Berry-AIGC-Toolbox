@@ -198,7 +198,12 @@ Library batch transformations replace SQLite generation metadata in the same
 statement as the derivative path, container, size, and modification time.
 `KeepSupported` reads metadata from the published derivative; it does not restore
 stale indexed fields or unsupported metadata from the source record. `StripAi`
-and `StripAll` clear indexed generation metadata. Ratings, favorite/NSFW choices,
+and `StripAll` clear indexed generation metadata. All policies persist actual
+published width/height as technical facts; metadata `format` is null when no
+generation metadata remains. Raw preserved parameters retain provenance and may
+contain the original generation size, while structured dimensions describe the
+current decoded pixels. These technical facts do not restore prompts, raw text,
+model, seed, sampler, or other generation fields. Ratings, favorite/NSFW choices,
 aesthetic scores, tags, albums, and stack membership remain attached to the same
 file ID. Failure preserves the original row and source and compensates the
 unindexed derivative before archive/trash disposition. Derivative names also

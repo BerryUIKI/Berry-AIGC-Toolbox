@@ -2,6 +2,8 @@
 
 Status: design direction; optimizations require measurements and append-only migrations.
 
+Current transformed records: the existing files.metadata JSON stores verified published pixel dimensions in the same update as path/container/size/mtime. Raw generator Size parameters remain provenance; metadata.format is null for dimension-only records after stripping or unsupported metadata extraction. No schema version change, new index, or curation identity change is needed.
+
 Ownership: lead maintainer/Codex. General engineers may supply fixtures and benchmark results; authoritative schema, migration, recovery and database-layout changes remain lead-owned.
 
 ## Decision

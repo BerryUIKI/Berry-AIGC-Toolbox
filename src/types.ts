@@ -24,7 +24,8 @@ export interface Folder {
 export type Container = "png" | "jpg" | "webp" | "mp4" | "webm" | "txt";
 
 export interface ExtractedMetadata {
-  format: string;
+  /** null for technical image facts without a generation platform. */
+  format: string | null;
   parameters: string | null;
   raw: string | null;
   prompt: string | null;

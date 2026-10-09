@@ -179,3 +179,88 @@ fn webdav_uploads_use_distinct_uuid_keys_and_exact_source_bodies() {
     no_delete.assert();
     fixture.assert_sources_unchanged();
 }
+
+#[test]
+fn renamed_root_keeps_remote_keys_after_restart_and_staged_backup_restore() {
+    let fixture = Fixture::new();
+    let Fixture {
+        dir,
+        db,
+        mut options,
+        plan,
+    } = fixture;
+    let original = &plan.manifest.roots[0];
+    let old_root = PathBuf::from(&original.source_path);
+    let new_root = dir.path().join("renamed");
+    assert!(old_root.starts_with(dir.path()) && new_root.starts_with(dir.path()));
+    fs::rename(&old_root, &new_root).unwrap();
+    db.connection()
+        .execute(
+            "UPDATE folders SET path = ?1 WHERE id = ?2",
+            (new_root.to_str().unwrap(), original.folder_id),
+        )
+        .unwrap();
+    db.connection()
+        .execute(
+            "UPDATE files SET path = ?1 WHERE folder_id = ?2",
+            (
+                new_root.join("image.png").to_str().unwrap(),
+                original.folder_id,
+            ),
+        )
+        .unwrap();
+    // Source paths changed: the previous acknowledgement must be refreshed.
+    assert!(collect_sync_plan(&db, &options).is_err());
+    let manifest = build_namespace_manifest(&db, &options).unwrap();
+    assert_eq!(manifest.roots[0].root_uuid, original.root_uuid);
+    assert_eq!(manifest.roots[0].legacy_prefix, original.legacy_prefix);
+    let preview = save_namespace_manifest(dir.path(), manifest).unwrap();
+    options.namespace_manifest_id = Some(preview.manifest_id);
+    let keys: Vec<_> = plan
+        .items
+        .iter()
+        .map(|item| item.remote_key.clone())
+        .collect();
+    let backup = dir.path().join("backup.db");
+    let active = dir.path().join("omera.db");
+    db.backup_database(backup.to_str().unwrap()).unwrap();
+    drop(db);
+    {
+        let reopened = Database::connect(&active).unwrap();
+        let current = collect_sync_plan(&reopened, &options).unwrap();
+        assert_eq!(
+            current
+                .items
+                .iter()
+                .map(|item| item.remote_key.clone())
+                .collect::<Vec<_>>(),
+            keys
+        );
+        // Make active state differ, then restore the real SQLite snapshot.
+        reopened
+            .connection()
+            .execute("DELETE FROM cloud_sync_roots", [])
+            .unwrap();
+    }
+    omera_storage::recovery::stage_restore(&backup, &active).unwrap();
+    omera_storage::recovery::apply_pending_restore(&active).unwrap();
+    let restored = Database::connect(&active).unwrap();
+    let current = collect_sync_plan(&restored, &options).unwrap();
+    assert_eq!(
+        current
+            .items
+            .iter()
+            .map(|item| item.remote_key.clone())
+            .collect::<Vec<_>>(),
+        keys
+    );
+    for (item, content) in current.items.iter().zip([b"AAAA", b"BBBB"]) {
+        assert_eq!(fs::read(&item.local_path).unwrap(), content);
+    }
+    assert!(backup.exists());
+    assert!(dir.path().read_dir().unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .contains("pre-restore")));
+}

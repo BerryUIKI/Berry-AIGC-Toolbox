@@ -803,6 +803,7 @@ export const zhCN: typeof en = {
     back: "上一步",
   },
   exportModal: {
+    avifExportOnly: "AVIF 仅供导出，暂不支持托管导入、图库转换、缩略图和预览。图库中请使用 PNG、JPEG 或 WebP。",
     title: "媒体导出与转码",
     subtitle: "批量转码格式、清洗擦除敏感生成参数，并将选中图片打包输出至指定文件夹或 ZIP 压缩包。",
     itemsCount: "准备导出 {count} 项媒体文件",

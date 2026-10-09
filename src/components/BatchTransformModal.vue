@@ -165,6 +165,10 @@ function getFilename(path: string): string {
 }
 
 async function handleStartTransform() {
+  if (format.value === "avif") {
+    error.value = t.value.exportModal.avifExportOnly;
+    return;
+  }
   if (managedFiles.value.length === 0) return;
 
   transforming.value = true;
@@ -184,7 +188,7 @@ async function handleStartTransform() {
 
   const spec: TransformSpec = {
     format: format.value,
-    quality: format.value === "jpeg" || format.value === "avif" ? quality.value : null,
+    quality: format.value === "jpeg" ? quality.value : null,
     max_edge,
     scale_percent: scalePercent.value !== 100 ? scalePercent.value : null,
     align_multiple: alignMultiple.value > 1 ? alignMultiple.value : null,
@@ -299,7 +303,7 @@ async function handleStartTransform() {
             >
               <option value="custom">{{ t.batchTransformModal.presetCustom }}</option>
               <option value="web_fast">{{ t.batchTransformModal.presetWebFast }}</option>
-              <option value="archive_avif">{{ t.batchTransformModal.presetArchiveAvif }}</option>
+              <option value="archive_avif" disabled>{{ t.batchTransformModal.presetArchiveAvif }}</option>
               <option value="target_1mb">{{ t.batchTransformModal.presetTarget1mb }}</option>
               <option value="lossless_webp">{{ t.batchTransformModal.presetLosslessWebp }}</option>
             </select>
@@ -318,11 +322,12 @@ async function handleStartTransform() {
                 :disabled="transforming"
               >
                 <option value="webp">{{ t.batchTransformModal.formatWebp }}</option>
-                <option value="avif">{{ t.batchTransformModal.formatAvif }}</option>
+                <option value="avif" disabled>{{ t.batchTransformModal.formatAvif }}</option>
                 <option value="jpeg">{{ t.batchTransformModal.formatJpeg }}</option>
                 <option value="png">{{ t.batchTransformModal.formatPng }}</option>
                 <option value="original">{{ t.batchTransformModal.formatOriginal }}</option>
               </select>
+              <p class="form-hint">{{ t.exportModal.avifExportOnly }}</p>
             </div>
 
             <!-- Quality slider for lossy codecs (JPEG & AVIF) -->

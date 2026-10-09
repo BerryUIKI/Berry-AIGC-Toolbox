@@ -803,6 +803,7 @@ export const fr: typeof en = {
     back: "Retour",
   },
   exportModal: {
+    avifExportOnly: "AVIF est réservé à l’exportation. L’importation gérée, la conversion en bibliothèque, les miniatures et les aperçus ne sont pas encore pris en charge. Utilisez PNG, JPEG ou WebP dans la bibliothèque.",
     title: "Exporter & transcoder les médias",
     subtitle: "Transcoder les formats, nettoyer les métadonnées de génération et regrouper les fichiers sélectionnés dans un dossier ou une archive ZIP.",
     itemsCount: "Exportation de {count} éléments en cours",

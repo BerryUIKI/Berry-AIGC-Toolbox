@@ -4,6 +4,17 @@ Status: **T0, T1, T2, T3, and T4 completed and validated on `dev`**. All Phase 6
 
 ## User outcomes and rollout order
 
+Current codec restriction (#240, October 2026): AVIF is **export-only**. The
+shipped image dependency provides encoding but no AVIF decoder. Import and
+library conversion disable AVIF and reject AVIF sources/targets in the shared
+publication service, including source files renamed to another extension. PNG,
+JPEG and WebP derivatives are decode-verified and supported by thumbnails.
+Standalone AVIF export remains available with an explicit limitation notice.
+Existing AVIF files are not removed or rewritten; their thumbnails/previews and
+re-encoding from AVIF remain unsupported. Discovery policy is tracked separately
+under #267. A future decoder must be packaged and tested on every supported
+target before managed AVIF becomes available again.
+
 1. **Export improvements (first — Completed).** Export selected images to JPEG, WebP, AVIF or PNG with effective quality control, optional resize, explicit metadata policy, collision handling, and instant before/after size estimation. Export never mutates library assets.
 2. **Transform during managed import (second — Completed).** Offer compression/conversion while copying into a managed vault. Decode and validate each staged derivative before registering it. The external source remains intact by default.
 3. **Transform existing managed assets (third — Completed).** Add a gallery batch action. Default to retaining the original; offer an explicit archive choice or move-to-system-Trash choice after the derivative and catalog update are verified. Never silently alter external linked folders.

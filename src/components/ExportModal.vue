@@ -317,6 +317,7 @@ async function handleOpenOutputFolder() {
                 <option value="png">{{ t.exportModal.formatPng }}</option>
                 <option value="original">{{ t.exportModal.formatOriginal }}</option>
               </select>
+              <p v-if="format === 'avif'" class="form-hint">{{ t.exportModal.avifExportOnly }}</p>
             </div>
 
             <div v-if="format === 'jpeg' || format === 'avif'" class="form-group">

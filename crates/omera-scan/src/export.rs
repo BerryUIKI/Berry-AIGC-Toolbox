@@ -3,6 +3,7 @@ use std::fs::{self, File};
 use std::io::{Cursor, Read};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use std::time::Instant;
 
 use image::ImageReader;
@@ -500,7 +501,48 @@ pub fn estimate_export_single_image(
     })
 }
 
-/// Execute a complete batch export job with chunked concurrency and progress events.
+struct ExportInputs {
+    files: Vec<ImageFile>,
+    errors: Vec<String>,
+}
+
+fn prepare_export_inputs(db: &Database, options: &ExportOptions) -> ExportInputs {
+    let mut errors = Vec::new();
+    let mut files = Vec::with_capacity(options.file_ids.len());
+    for &id in &options.file_ids {
+        match db.get_file_by_id(id) {
+            Ok(Some(file)) => files.push(file),
+            Ok(None) => errors.push(format!("File id {id} not found in database")),
+            Err(e) => errors.push(format!("Database error querying file id {id}: {e}")),
+        }
+    }
+
+    ExportInputs { files, errors }
+}
+
+/// Export from a shared connection without holding its guard during media/output work.
+pub fn execute_shared_batch_export<P>(
+    db: &Mutex<Database>,
+    options: &ExportOptions,
+    progress_callback: P,
+) -> Result<ExportSummary, String>
+where
+    P: Fn(ExportProgressEvent) + Send + Sync + 'static,
+{
+    let start_time = Instant::now();
+    let inputs = {
+        let guard = db.lock().map_err(|_| "database lock poisoned")?;
+        prepare_export_inputs(&guard, options)
+    };
+    Ok(execute_export_inputs(
+        inputs,
+        options,
+        progress_callback,
+        start_time,
+    ))
+}
+
+/// Export using an exclusively owned connection (non-application callers).
 pub fn execute_batch_export<P>(
     db: &Database,
     options: &ExportOptions,
@@ -510,20 +552,27 @@ where
     P: Fn(ExportProgressEvent) + Send + Sync + 'static,
 {
     let start_time = Instant::now();
+    execute_export_inputs(
+        prepare_export_inputs(db, options),
+        options,
+        progress_callback,
+        start_time,
+    )
+}
+
+fn execute_export_inputs<P>(
+    inputs: ExportInputs,
+    options: &ExportOptions,
+    progress_callback: P,
+    start_time: Instant,
+) -> ExportSummary
+where
+    P: Fn(ExportProgressEvent) + Send + Sync + 'static,
+{
+    let ExportInputs { files, mut errors } = inputs;
     let total = options.file_ids.len();
-    let mut errors = Vec::new();
     let mut total_exported = 0;
     let mut total_bytes_written = 0u64;
-
-    // Load file records from database
-    let mut files = Vec::with_capacity(total);
-    for &id in &options.file_ids {
-        match db.get_file_by_id(id) {
-            Ok(Some(file)) => files.push(file),
-            Ok(None) => errors.push(format!("File id {id} not found in database")),
-            Err(e) => errors.push(format!("Database error querying file id {id}: {e}")),
-        }
-    }
 
     let dest_path = Path::new(&options.destination_path);
     let mut zip_writer = if options.as_zip {
@@ -741,6 +790,80 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_export_allows_concurrent_reads_and_retains_missing_id_outcomes() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.png");
+        image::DynamicImage::new_rgb8(16, 16).save(&source).unwrap();
+        let original = fs::read(&source).unwrap();
+        let database = Database::connect_in_memory().unwrap();
+        let folder = database.add_folder(&dir.path().to_string_lossy()).unwrap();
+        database
+            .upsert_file(&ImageFile {
+                id: None,
+                folder_id: folder.id,
+                path: source.to_string_lossy().into_owned(),
+                container: omera_domain::Container::Png,
+                size_bytes: original.len() as u64,
+                modified_at: 1,
+                metadata: None,
+                rating: None,
+                aesthetic_score: None,
+                is_favorite: false,
+                is_nsfw: false,
+                stack_id: None,
+                stack_order: 0,
+            })
+            .unwrap();
+        let id = database.list_files(folder.id).unwrap()[0].id.unwrap();
+        let database = std::sync::Arc::new(Mutex::new(database));
+        let worker_db = database.clone();
+        let options = ExportOptions {
+            file_ids: vec![-1, id],
+            format: ExportFormat::Png,
+            quality: 85,
+            privacy: MetadataPrivacyMode::KeepAll,
+            sidecar: ExportSidecar::None,
+            filename_template: "{name}".into(),
+            destination_path: dir.path().join("output").to_string_lossy().into_owned(),
+            as_zip: false,
+            max_edge: None,
+            export_html_showcase: false,
+            html_title: None,
+        };
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let release = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let worker_release = release.clone();
+        let worker = std::thread::spawn(move || {
+            execute_shared_batch_export(&worker_db, &options, move |_| {
+                started_tx.send(()).unwrap();
+                worker_release.wait();
+            })
+            .unwrap()
+        });
+        started_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        let start = Instant::now();
+        let query = database.try_lock().map(|db| db.get_file_by_id(id).unwrap());
+        eprintln!("Concurrent batch-export query: {:?}", start.elapsed());
+        release.wait();
+        let summary = worker.join().unwrap();
+        assert!(
+            query.unwrap().is_some(),
+            "output work must release the application guard"
+        );
+        assert_eq!(summary.total_exported, 1);
+        assert_eq!(summary.total_failed, 1);
+        assert!(!summary.success);
+        assert!(summary
+            .errors
+            .iter()
+            .any(|error| error.contains("File id -1")));
+        assert!(dir.path().join("output/source.png").exists());
+        assert_eq!(fs::read(source).unwrap(), original);
+    }
     use image::{Rgb, RgbImage};
     use omera_domain::{Container, ExtractedMetadata, MetadataFormat};
 

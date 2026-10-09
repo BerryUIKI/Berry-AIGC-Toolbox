@@ -36,12 +36,36 @@ pub enum TransformError {
     DestinationExistsSkipped,
     #[error("External linked folder is read-only for managed transformations")]
     ExternalFolderReadOnly,
+    #[error("AVIF is currently export-only; use PNG, JPEG or WebP for managed library media")]
+    AvifExportOnly,
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Database error: {0}")]
     Database(String),
     #[error("Trash operation failed: {0}")]
     TrashFailed(String),
+}
+
+/// The shipped image dependency encodes AVIF but cannot decode it for library use.
+/// Inspect bytes as well as extensions so renaming an AVIF cannot bypass the gate.
+fn validate_managed_codec(
+    source: &Path,
+    spec: Option<&TransformSpec>,
+) -> Result<(), TransformError> {
+    if spec.is_some_and(|spec| spec.format == TransformFormat::Avif)
+        || source
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("avif"))
+    {
+        return Err(TransformError::AvifExportOnly);
+    }
+    use std::io::Read;
+    let mut header = [0; 32];
+    let length = File::open(source)?.read(&mut header)?;
+    if omera_metadata::detect_container(&header[..length]) == Some(Container::Avif) {
+        return Err(TransformError::AvifExportOnly);
+    }
+    Ok(())
 }
 
 /// Helper to determine the target file extension for a given transform format and source path.
@@ -71,6 +95,7 @@ pub fn transform_file_staged(
         ));
     }
 
+    validate_managed_codec(source_path, Some(spec))?;
     fs::create_dir_all(staging_dir)?;
 
     // Extract source metadata for potential preservation
@@ -216,40 +241,16 @@ pub fn transform_file_staged(
         ));
     }
 
-    if ext == "avif" {
-        // Pure-Rust container verification for AVIF
-        let mut header = [0u8; 16];
-        let mut file = File::open(&staged_path)?;
-        use std::io::Read;
-        let read_bytes = file.read(&mut header)?;
-        if read_bytes < 12 || &header[4..8] != b"ftyp" {
-            let _ = fs::remove_file(&staged_path);
-            return Err(TransformError::VerificationFailed(
-                "Staged AVIF derivative has invalid ftyp header".to_string(),
-            ));
-        }
-        let brand = &header[8..12];
-        if brand != b"avif" && brand != b"avis" && brand != b"mif1" {
-            let _ = fs::remove_file(&staged_path);
-            return Err(TransformError::VerificationFailed(format!(
-                "Staged AVIF derivative has unexpected brand: {:?}",
-                String::from_utf8_lossy(brand)
-            )));
-        }
-    } else {
-        let verified_img = image::open(&staged_path).map_err(|e| {
-            let _ = fs::remove_file(&staged_path);
-            TransformError::VerificationFailed(format!(
-                "Failed to re-decode staged derivative: {e}"
-            ))
-        })?;
+    let verified_img = image::open(&staged_path).map_err(|e| {
+        let _ = fs::remove_file(&staged_path);
+        TransformError::VerificationFailed(format!("Failed to re-decode staged derivative: {e}"))
+    })?;
 
-        if verified_img.width() == 0 || verified_img.height() == 0 {
-            let _ = fs::remove_file(&staged_path);
-            return Err(TransformError::VerificationFailed(
-                "Staged derivative has invalid dimensions".to_string(),
-            ));
-        }
+    if verified_img.width() == 0 || verified_img.height() == 0 {
+        let _ = fs::remove_file(&staged_path);
+        return Err(TransformError::VerificationFailed(
+            "Staged derivative has invalid dimensions".to_string(),
+        ));
     }
 
     Ok(staged_path)
@@ -280,17 +281,6 @@ fn encode_image_to_path(
             let file = File::create(target_path)?;
             let mut writer = BufWriter::new(file);
             let encoder = image::codecs::webp::WebPEncoder::new_lossless(&mut writer);
-            img.write_with_encoder(encoder)
-                .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
-            writer.flush()?;
-        }
-        "avif" => {
-            let file = File::create(target_path)?;
-            let mut writer = BufWriter::new(file);
-            let q = quality.unwrap_or(80).clamp(1, 100);
-            let speed: u8 = 6;
-            let encoder =
-                image::codecs::avif::AvifEncoder::new_with_speed_quality(&mut writer, speed, q);
             img.write_with_encoder(encoder)
                 .map_err(|e| TransformError::EncodeFailed(e.to_string()))?;
             writer.flush()?;
@@ -520,6 +510,19 @@ fn publish_managed_import_item_with_sidecars(
                 status: TransformItemStatus::Failed,
                 error_code: Some("Source file does not exist or is not a file".to_string()),
                 original_action: Some("kept_intact".to_string()),
+            },
+            file_id: None,
+        };
+    }
+
+    if let Err(error) = validate_managed_codec(src_path, transform_spec) {
+        return PublishedImportItem {
+            receipt: TransformItemReceipt {
+                source_id_or_path: src_path_str.to_string(),
+                output_id_or_path: None,
+                status: TransformItemStatus::Failed,
+                error_code: Some(error.to_string()),
+                original_action: Some("kept_intact".into()),
             },
             file_id: None,
         };
@@ -1415,7 +1418,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transform_file_staged_avif_and_webp() {
+    fn test_managed_avif_rejected_and_webp_decode_verified() {
         let dir = tempdir().unwrap();
         let src = dir.path().join("test_input.png");
         create_dummy_png(&src, 80, 80);
@@ -1429,12 +1432,11 @@ mod tests {
             max_edge: Some(40),
             ..Default::default()
         };
-        let staged_avif = transform_file_staged(&src, &staging, &avif_spec).unwrap();
-        assert!(staged_avif.exists());
-        assert_eq!(staged_avif.extension().unwrap(), "avif");
-        let avif_bytes = fs::read(&staged_avif).unwrap();
-        assert!(avif_bytes.len() > 32);
-        assert_eq!(&avif_bytes[4..8], b"ftyp");
+        assert!(matches!(
+            transform_file_staged(&src, &staging, &avif_spec),
+            Err(TransformError::AvifExportOnly)
+        ));
+        assert!(!staging.exists());
 
         // WebP
         let webp_spec = TransformSpec {

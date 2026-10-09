@@ -10,9 +10,10 @@
 
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, GenericImageView};
 use omera_domain::{
-    Container, Folder, ImportTransformRequest, LibraryTransformRequest, OriginalDisposition,
-    TransformCollisionPolicy, TransformFormat, TransformItemReceipt, TransformItemStatus,
-    TransformJobReceipt, TransformMetadataPolicy, TransformSpec,
+    Container, ExtractedMetadata, Folder, ImportTransformRequest, LibraryTransformRequest,
+    MetadataFormat, OriginalDisposition, TransformCollisionPolicy, TransformFormat,
+    TransformItemReceipt, TransformItemStatus, TransformJobReceipt, TransformMetadataPolicy,
+    TransformSpec,
 };
 use omera_storage::Database;
 use std::{
@@ -1186,14 +1187,40 @@ where
         derivative.container = container;
         derivative.size_bytes = size_bytes;
         derivative.modified_at = modified_at;
+        // Staging already fully decoded the output. Read the published header
+        // for geometry; generator Size fields describe provenance, not these pixels.
+        let (width, height) = match image::image_dimensions(&final_path) {
+            Ok((width, height)) if width > 0 && height > 0 => (width, height),
+            result => {
+                if src_path != final_path {
+                    let _ = fs::remove_file(&final_path);
+                }
+                failed += 1;
+                items.push(TransformItemReceipt {
+                    source_id_or_path: file.path.clone(),
+                    output_id_or_path: Some(final_str),
+                    status: TransformItemStatus::Failed,
+                    error_code: Some(format!("Failed to verify published dimensions: {result:?}")),
+                    original_action: Some("preserved".to_string()),
+                });
+                continue;
+            }
+        };
         // Read the published derivative, never restore stale source generation
         // fields from the indexed row when the selected policy strips them.
-        derivative.metadata = match request.spec.metadata_policy {
+        let mut metadata = match request.spec.metadata_policy {
             TransformMetadataPolicy::KeepSupported => {
                 omera_metadata::extract_metadata(container, &final_path)
             }
             TransformMetadataPolicy::StripAi | TransformMetadataPolicy::StripAll => None,
-        };
+        }
+        .unwrap_or_else(|| ExtractedMetadata {
+            format: MetadataFormat::Unspecified,
+            ..Default::default()
+        });
+        metadata.width = Some(width);
+        metadata.height = Some(height);
+        derivative.metadata = Some(metadata);
 
         let target_file_id = file.id.unwrap_or(*file_id);
         if let Err(e) = db.update_file_transformed_with_metadata(target_file_id, &derivative) {

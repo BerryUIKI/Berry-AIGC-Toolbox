@@ -284,6 +284,7 @@ pub fn run() {
             commands::cloud_backup_create_snapshot,
             commands::cloud_backup_list_snapshots,
             commands::cloud_backup_restore_snapshot,
+            commands::cloud_sync_preview_namespace,
             commands::cloud_sync_start,
             commands::cloud_sync_cancel,
             commands::cloud_sync_get_progress,

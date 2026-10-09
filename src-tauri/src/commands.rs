@@ -4374,36 +4374,59 @@ pub async fn cloud_backup_restore_snapshot(
     app_handle.restart();
 }
 
+/// Save the source-preserving legacy/new layout mapping before user confirmation.
+#[tauri::command]
+pub async fn cloud_sync_preview_namespace(
+    app_handle: AppHandle,
+    options: omera_domain::CloudSyncOptions,
+) -> Result<omera_domain::CloudSyncNamespacePreview, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let data_dir = app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?;
+        let manifest = {
+            let state = app_handle.state::<AppState>();
+            let guard = db(&state)?;
+            omera_scan::cloud_sync::build_namespace_manifest(&guard, &options)?
+        };
+        omera_scan::cloud_sync::save_namespace_manifest(&data_dir, manifest)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[tauri::command]
 pub async fn cloud_sync_start(
     app_handle: AppHandle,
     config: omera_domain::CloudBackupConfig,
     options: omera_domain::CloudSyncOptions,
-    state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let sync_state = Arc::clone(&state.cloud_sync);
-    {
-        let st = sync_state.lock().map_err(|e| format!("Lock error: {e}"))?;
-        if st.is_running {
-            return Err("A media sync operation is already currently running".to_string());
-        }
-    }
-
-    let (items, total_bytes) = {
-        let db_guard = db(&state)?;
-        crate::cloud_sync::collect_sync_items(&db_guard, &options)?
-    };
-
-    crate::cloud_sync::start_cloud_sync(
-        app_handle,
-        config,
-        options,
-        sync_state,
-        items,
-        total_bytes,
-    );
-
-    Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let sync_state = Arc::clone(&state.cloud_sync);
+        let plan = {
+            let guard = db(&state)?;
+            omera_scan::cloud_sync::collect_sync_plan(&guard, &options)?
+        };
+        let data_dir = app_handle
+            .path()
+            .app_data_dir()
+            .map_err(|e| e.to_string())?;
+        omera_scan::cloud_sync::save_namespace_manifest(&data_dir, plan.manifest)?;
+        drop(state);
+        // The runner checks/sets busy atomically after preflight, before transfer.
+        crate::cloud_sync::start_cloud_sync(
+            app_handle,
+            config,
+            options,
+            sync_state,
+            plan.items,
+            plan.total_bytes,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

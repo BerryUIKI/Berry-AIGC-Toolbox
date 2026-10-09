@@ -48,6 +48,10 @@ Exit: required automated checks and platform/manual matrix pass; release blocker
 
 ## Phase 5 — Stabilization and 1.0 review (in progress)
 
+The current October review task sequence and acceptance ledger is
+[STABILIZATION_EXECUTION.md](STABILIZATION_EXECUTION.md). September baseline and
+assignment snapshots are historical; use current approved `dev` for fixes.
+
 All pre-1.0 releases retain legacy detection and supported import. Keep cleanup optional. Resolve verified migration problems before removing compatibility paths. Decide the 1.0 import policy explicitly and document it; never use version 1.0 as permission to erase legacy data. Remote collaboration remains a separate product decision after stabilization.
 
 ### Stabilization Gates for 1.0 Readiness:

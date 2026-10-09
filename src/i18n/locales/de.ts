@@ -803,6 +803,7 @@ export const de: typeof en = {
     back: "Zurück",
   },
   exportModal: {
+    avifExportOnly: "AVIF ist nur für den Export verfügbar. Verwalteter Import, Bibliothekskonvertierung, Vorschaubilder und Vorschau unterstützen es noch nicht. Nutze PNG, JPEG oder WebP in der Bibliothek.",
     title: "Medien exportieren & transkodieren",
     subtitle: "Formate konvertieren, Generierungs-Metadaten bereinigen und ausgewählte Dateien in einen Ordner oder ein ZIP-Archiv exportieren.",
     itemsCount: "{count} Mediendateien für den Export vorbereitet",

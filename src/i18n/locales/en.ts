@@ -801,6 +801,7 @@ export const en = {
     back: "Back",
   },
   exportModal: {
+    avifExportOnly: "AVIF is export-only. Managed import, library conversion, thumbnails and previews do not support it yet. Use PNG, JPEG or WebP in your library.",
     title: "Export & Transcode Media",
     subtitle: "Transcode, sanitize generation metadata, and package selected files into a directory or ZIP archive.",
     itemsCount: "Exporting {count} items",

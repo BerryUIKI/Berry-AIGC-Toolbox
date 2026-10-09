@@ -803,6 +803,7 @@ export const ja: typeof en = {
     back: "戻る",
   },
   exportModal: {
+    avifExportOnly: "AVIF は書き出し専用です。管理フォルダーへの取り込み、ライブラリ変換、サムネイル、プレビューには未対応です。ライブラリでは PNG、JPEG、WebP を使用してください。",
     title: "メディアのエクスポート & 変換",
     subtitle: "形式の変換、生成メタデータの消去、選択ファイルのフォルダまたはZIPアーカイブへのパッケージ化を行います。",
     itemsCount: "{count} 件のメディアをエクスポート準備中",

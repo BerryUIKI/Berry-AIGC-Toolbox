@@ -119,6 +119,10 @@ function getFolderName(path: string): string {
 }
 
 async function handleStartImport() {
+  if (format.value === "avif") {
+    error.value = t.value.exportModal.avifExportOnly;
+    return;
+  }
   if (!targetFolderId.value) {
     error.value = t.value.importModal.selectManagedVault;
     return;
@@ -139,7 +143,7 @@ async function handleStartImport() {
 
   const transformSpec: TransformSpec = {
     format: format.value,
-    quality: format.value === "jpeg" || format.value === "avif" ? quality.value : null,
+    quality: format.value === "jpeg" ? quality.value : null,
     max_edge,
     scale_percent: scalePercent.value !== 100 ? scalePercent.value : null,
     align_multiple: alignMultiple.value > 1 ? alignMultiple.value : null,
@@ -208,7 +212,7 @@ async function handleStartImport() {
             >
               <option value="custom">{{ t.importModal.presetCustom }}</option>
               <option value="web_fast">{{ t.importModal.presetWebFast }}</option>
-              <option value="archive_avif">{{ t.importModal.presetArchiveAvif }}</option>
+              <option value="archive_avif" disabled>{{ t.importModal.presetArchiveAvif }}</option>
               <option value="target_1mb">{{ t.importModal.presetTarget1mb }}</option>
               <option value="lossless_webp">{{ t.importModal.presetLosslessWebp }}</option>
             </select>
@@ -252,10 +256,11 @@ async function handleStartImport() {
               <select v-model="format" class="form-select" :disabled="importing || successCount !== null">
                 <option value="original">{{ t.importModal.formatOriginal }}</option>
                 <option value="webp">{{ t.importModal.formatWebp }}</option>
-                <option value="avif">{{ t.importModal.formatAvif }}</option>
+                <option value="avif" disabled>{{ t.importModal.formatAvif }}</option>
                 <option value="jpeg">{{ t.importModal.formatJpeg }}</option>
                 <option value="png">{{ t.importModal.formatPng }}</option>
               </select>
+              <p class="form-hint">{{ t.exportModal.avifExportOnly }}</p>
             </div>
 
             <div v-if="format === 'jpeg' || format === 'avif'" class="form-group">

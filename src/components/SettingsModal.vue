@@ -24,6 +24,7 @@ import {
   type ThumbnailCacheStats,
 } from "../utils/thumbnail";
 import { formatBytes } from "../utils/image";
+import { startCloudSyncWithConfirmation } from "../utils/cloud-sync-namespace";
 import {
   currentLocaleSetting,
   setLocale,
@@ -326,16 +327,28 @@ async function handleStartCloudSync() {
   syncStarting.value = true;
   syncSummary.value = null;
   try {
-    await invoke("cloud_sync_start", {
-      config: getCurrentCloudConfig(),
-      options: {
+    const started = await startCloudSyncWithConfirmation(
+      getCurrentCloudConfig(),
+      {
         strategy: syncStrategy.value,
         concurrency: syncConcurrency.value,
         bandwidth_limit_kbs: syncBandwidthLimit.value > 0 ? syncBandwidthLimit.value : null,
         dry_run: syncDryRun.value,
         remote_prefix: syncRemotePrefix.value,
       },
-    });
+      (preview) => {
+        const text = t.value.settings.cloudBackup;
+        const mappings = preview.manifest.roots.map((root) =>
+          `${root.source_path}\n${root.legacy_prefix} → ${root.new_prefix}`,
+        ).join("\n\n");
+        const ambiguous = preview.manifest.roots.some((root) => root.legacy_ambiguous)
+          ? `\n\n${text.layoutAmbiguous}` : "";
+        return window.confirm(
+          `${text.layoutConfirm}\n\n${mappings}${ambiguous}\n\n${text.layoutSaved}\n${preview.manifest_path}`,
+        );
+      },
+    );
+    if (!started) return;
     await fetchSyncProgress();
   } catch (err: any) {
     window.alert(String(err));

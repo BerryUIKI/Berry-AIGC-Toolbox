@@ -100,6 +100,11 @@ Settings retains its loaded revision and form edits after rejection, displays an
 
 ## File operations, backup and restore
 
+`estimate_export_file({ fileId, options })` copies one full image record under a
+short application database lock, releases that lock, then runs image decoding
+and encoding on a blocking worker. Missing IDs reject before processing; codec
+errors reject independently of gallery reads. Its response DTO is unchanged.
+
 `copy_files`/`move_files` take `{ filePaths, targetFolderId }`; `trash_files` takes `{ filePaths }`. Current working responses are a completed count on full success or a rejection string containing partial progress and recovery-journal information. This is a known transitional limitation (#100): never parse localized strings to infer which individual files succeeded, and never automatically retry the entire operation after partial failure. Refresh affected state and display the error.
 
 `cull_stack_drafts({ stackId, minRating })` trashes lower-rated draft images and sidecars (`.txt`, `.json`) in a stack while preserving the hero image (`stack_order == 0`). Trash operations must succeed on the filesystem before database records are deleted; failed trash operations preserve database rows and are excluded from the returned success count.

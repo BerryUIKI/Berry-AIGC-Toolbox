@@ -21,6 +21,7 @@ const EVENT_STORM_DRAIN_LIMIT: usize = 1024;
 struct WatchRoot {
     folder_id: i64,
     path: PathBuf,
+    is_pipeline_source: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,13 +100,26 @@ impl LibraryWatcher {
     }
 
     pub fn watch_folder(&mut self, folder: &Folder) -> Result<(), String> {
-        let path = PathBuf::from(&folder.path);
-        if !path.is_dir() {
+        // For pipeline folders with auto_harvest, watch the source_path
+        // For other folders, watch the destination path
+        let (watch_path, is_pipeline_source) =
+            if folder.folder_type == "pipeline" && folder.auto_harvest {
+                if let Some(ref src) = folder.source_path {
+                    (PathBuf::from(src), true)
+                } else {
+                    (PathBuf::from(&folder.path), false)
+                }
+            } else {
+                (PathBuf::from(&folder.path), false)
+            };
+
+        if !watch_path.is_dir() {
             return Err(format!(
                 "watch root is not an existing directory: {}",
-                folder.path
+                watch_path.display()
             ));
         }
+
         {
             let mut roots = self
                 .roots
@@ -114,15 +128,18 @@ impl LibraryWatcher {
             roots.retain(|root| root.folder_id != folder.id);
             roots.push(WatchRoot {
                 folder_id: folder.id,
-                path: path.clone(),
+                path: watch_path.clone(),
+                is_pipeline_source,
             });
         }
-        if let Err(error) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+
+        if let Err(error) = self.watcher.watch(&watch_path, RecursiveMode::Recursive) {
             if let Ok(mut roots) = self.roots.write() {
                 roots.retain(|root| root.folder_id != folder.id);
             }
             if let Ok(mut health) = self.health.write() {
-                health.last_error = Some(format!("Failed to watch {}: {error}", folder.path));
+                health.last_error =
+                    Some(format!("Failed to watch {}: {error}", watch_path.display()));
             }
             return Err(error.to_string());
         }
@@ -328,32 +345,74 @@ fn reconcile_journal(
             last_error = Some(format!("folder root {folder_id} not registered yet"));
             continue;
         };
-        let paths = folder_changes
-            .iter()
-            .map(|change| PathBuf::from(&change.path))
-            .collect::<Vec<_>>();
-        let scanner = Scanner::with_default_extractor(db_path.to_path_buf());
-        match scanner.reconcile_paths(folder_id, &root.path, &paths, |progress| {
-            let _ = app.emit("scan-progress", progress);
-        }) {
-            Ok(stats) => {
-                if let Err(error) = journal.delete_filesystem_changes(&folder_changes) {
-                    let msg = format!("filesystem watcher could not acknowledge changes: {error}");
+
+        // Pipeline sources trigger harvest instead of reconciliation
+        if root.is_pipeline_source {
+            match omera_scan::pipeline::harvest_pipeline_folder(journal, folder_id, None) {
+                Ok(_report) => {
+                    if let Err(error) = journal.delete_filesystem_changes(&folder_changes) {
+                        let msg =
+                            format!("filesystem watcher could not acknowledge changes: {error}");
+                        eprintln!("{msg}");
+                        last_error = Some(msg);
+                        all_succeeded = false;
+                    } else {
+                        let _ = app.emit(
+                            "library-files-changed",
+                            LibraryFilesChanged {
+                                folder_id,
+                                stats: ScanStats {
+                                    folder_id,
+                                    found: 0,
+                                    added: 0,
+                                    updated: 0,
+                                    unchanged: 0,
+                                    removed: 0,
+                                    failed: 0,
+                                    duration_ms: 0,
+                                    walk_errors: 0,
+                                },
+                            },
+                        );
+                    }
+                }
+                Err(error) => {
+                    let msg = format!("filesystem watcher pipeline harvest failed: {error}");
                     eprintln!("{msg}");
                     last_error = Some(msg);
                     all_succeeded = false;
-                } else {
-                    let _ = app.emit(
-                        "library-files-changed",
-                        LibraryFilesChanged { folder_id, stats },
-                    );
                 }
             }
-            Err(error) => {
-                let msg = format!("filesystem watcher reconciliation failed: {error}");
-                eprintln!("{msg}");
-                last_error = Some(msg);
-                all_succeeded = false;
+        } else {
+            // Regular folders use path reconciliation
+            let paths = folder_changes
+                .iter()
+                .map(|change| PathBuf::from(&change.path))
+                .collect::<Vec<_>>();
+            let scanner = Scanner::with_default_extractor(db_path.to_path_buf());
+            match scanner.reconcile_paths(folder_id, &root.path, &paths, |progress| {
+                let _ = app.emit("scan-progress", progress);
+            }) {
+                Ok(stats) => {
+                    if let Err(error) = journal.delete_filesystem_changes(&folder_changes) {
+                        let msg =
+                            format!("filesystem watcher could not acknowledge changes: {error}");
+                        eprintln!("{msg}");
+                        last_error = Some(msg);
+                        all_succeeded = false;
+                    } else {
+                        let _ = app.emit(
+                            "library-files-changed",
+                            LibraryFilesChanged { folder_id, stats },
+                        );
+                    }
+                }
+                Err(error) => {
+                    let msg = format!("filesystem watcher reconciliation failed: {error}");
+                    eprintln!("{msg}");
+                    last_error = Some(msg);
+                    all_succeeded = false;
+                }
             }
         }
     }
@@ -370,10 +429,12 @@ mod tests {
             WatchRoot {
                 folder_id: 1,
                 path: PathBuf::from("/library"),
+                is_pipeline_source: false,
             },
             WatchRoot {
                 folder_id: 2,
                 path: PathBuf::from("/library/project"),
+                is_pipeline_source: false,
             },
         ];
         assert_eq!(

@@ -752,6 +752,39 @@ impl Database {
         Ok(())
     }
 
+    /// Publish only if the source row still matches the snapshot used by the codec.
+    /// Returns false for a changed/deleted source. Curation columns stay untouched.
+    pub fn update_file_transformed_if_current(
+        &self,
+        file_id: i64,
+        source: &ImageFile,
+        derivative: &ImageFile,
+    ) -> Result<bool, DatabaseError> {
+        let metadata = derivative
+            .metadata
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        let affected = self.conn.execute(
+            "UPDATE files SET path = ?1, container = ?2, size_bytes = ?3, modified_at = ?4,
+             metadata = ?5 WHERE id = ?6 AND path = ?7 AND folder_id = ?8
+             AND size_bytes = ?9 AND modified_at = ?10",
+            params![
+                derivative.path,
+                derivative.container.id(),
+                derivative.size_bytes as i64,
+                derivative.modified_at,
+                metadata,
+                file_id,
+                source.path,
+                source.folder_id,
+                source.size_bytes as i64,
+                source.modified_at
+            ],
+        )?;
+        Ok(affected == 1)
+    }
+
     /// Delete a file record by path (e.g. after trashing).
     pub fn delete_file_by_path(&self, path: &str) -> Result<(), DatabaseError> {
         self.conn
@@ -3694,6 +3727,31 @@ mod tests {
             .update_file_transformed_with_metadata(id, &derivative)
             .is_err());
         assert_eq!(db.get_file_by_id(id).unwrap().unwrap(), updated);
+    }
+
+    #[test]
+    fn transformed_snapshot_rejects_stale_paths_and_preserves_newer_curation() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/synthetic").unwrap();
+        let source = image(folder.id, "/synthetic/source.png");
+        let id = db.upsert_file(&source).unwrap();
+        let mut derivative = source.clone();
+        derivative.path = "/synthetic/derivative.png".into();
+        db.set_file_rating(id, Some(5)).unwrap();
+        assert!(db
+            .update_file_transformed_if_current(id, &source, &derivative)
+            .unwrap());
+        let current = db.get_file_by_id(id).unwrap().unwrap();
+        assert_eq!(current.rating, Some(5));
+        assert_eq!(current.path, derivative.path);
+        assert!(!db
+            .update_file_transformed_if_current(id, &source, &source)
+            .unwrap());
+        assert_eq!(db.get_file_by_id(id).unwrap().unwrap(), current);
+        db.delete_file_by_id(id).unwrap();
+        assert!(!db
+            .update_file_transformed_if_current(id, &current, &source)
+            .unwrap());
     }
 
     #[test]

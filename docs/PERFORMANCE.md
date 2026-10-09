@@ -84,6 +84,15 @@ Use browser performance traces for WebView work, Rust timing spans for commands,
 
 ## Prioritized Follow-Up Work
 
+### Batch export database ownership
+
+The export worker snapshots only the explicitly selected IDs and their lookup
+errors under the shared application database guard. It releases the guard before
+codecs, directory/ZIP writes, HTML generation and progress callbacks. Raster
+processing retains its bounded 16-item chunks. Metadata reflects the snapshot;
+source files can still change afterward and yield normal per-file failures.
+The summary/IPC shapes and collision policy stay unchanged.
+
 ### P0: Query pagination and incremental result delivery — Phase 2 complete
 
 The gallery fetches bounded pages and extends them near the viewport boundary. Virtual scrolling seamlessly connects directly to keyset cursor deep pagination (`search_files_cursor_page` and `search_files_by_query_cursor_page`). The initial page computes the exact filtered window total, and subsequent scroll requests use `PageCursor` (sort value + row ID) to bypass offset traversal and avoid repeating window counts. Keyset cursor access achieves O(1) row traversal (< 1 ms at 40,000+ items, an 84x speedup over offset paging).

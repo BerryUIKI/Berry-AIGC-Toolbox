@@ -31,7 +31,9 @@ use omera_domain::{
     PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
     TransformJobReceipt, TransformSpec,
 };
-use omera_scan::{execute_batch_export, execute_library_batch_transform, ScanStats, Scanner};
+use omera_scan::{
+    execute_batch_export, execute_shared_library_batch_transform, ScanStats, Scanner,
+};
 use omera_storage::Database;
 use omera_tagger::{ModelInfo, TagPrediction, TaggerConfig, Wd14Tagger};
 use serde::{Deserialize, Serialize};
@@ -1597,10 +1599,9 @@ pub async fn transform_library_files_batch(
 ) -> Result<TransformJobReceipt, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db_guard = db(&state)?;
         let app_emit = app_handle.clone();
-        execute_library_batch_transform(
-            &db_guard,
+        execute_shared_library_batch_transform(
+            &state.db,
             &request,
             Some(move |current, total, current_path: &str| {
                 #[derive(Serialize, Clone)]
@@ -4566,6 +4567,7 @@ pub fn defer_legacy_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use omera_scan::execute_library_batch_transform;
 
     #[test]
     fn export_estimate_snapshot_releases_shared_lock_during_processing() {

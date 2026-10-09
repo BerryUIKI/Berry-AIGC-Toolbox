@@ -35,6 +35,7 @@ pub use thumbnail::{
 };
 pub use transform::{
     execute_library_batch_transform, execute_managed_import_transform,
-    import_files_to_managed_folder, resolve_extension, resolve_publication_path,
-    transform_file_staged, validate_managed_destination_folder, TransformError,
+    execute_shared_library_batch_transform, import_files_to_managed_folder, resolve_extension,
+    resolve_publication_path, transform_file_staged, validate_managed_destination_folder,
+    TransformError,
 };

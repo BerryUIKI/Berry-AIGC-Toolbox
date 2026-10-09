@@ -31,7 +31,9 @@ use omera_domain::{
     PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
     TransformJobReceipt, TransformSpec,
 };
-use omera_scan::{execute_batch_export, execute_library_batch_transform, ScanStats, Scanner};
+use omera_scan::{
+    execute_library_batch_transform, execute_shared_batch_export, ScanStats, Scanner,
+};
 use omera_storage::Database;
 use omera_tagger::{ModelInfo, TagPrediction, TaggerConfig, Wd14Tagger};
 use serde::{Deserialize, Serialize};
@@ -1545,13 +1547,11 @@ pub async fn export_files_batch(
 ) -> Result<ExportSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app_handle.state::<AppState>();
-        let db_guard = db(&state)?;
         let app_emit = app_handle.clone();
-        let summary = execute_batch_export(&db_guard, &options, move |progress| {
+        execute_shared_batch_export(&state.db, &options, move |progress| {
             let _ = app_emit.emit("omera://export-progress", &progress);
             let _ = app_emit.emit("berry://export-progress", progress);
-        });
-        Ok(summary)
+        })
     })
     .await
     .map_err(|e| e.to_string())?

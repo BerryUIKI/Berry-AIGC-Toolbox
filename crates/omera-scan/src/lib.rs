@@ -16,8 +16,8 @@ pub mod thumbnail;
 pub mod transform;
 
 pub use export::{
-    estimate_export_single_image, execute_batch_export, format_export_filename,
-    sanitize_filename_part, ProcessedExportItem,
+    estimate_export_single_image, execute_batch_export, execute_shared_batch_export,
+    format_export_filename, sanitize_filename_part, ProcessedExportItem,
 };
 pub use html_showcase::{generate_html_showcase, ShowcaseItemMetadata};
 pub use pipeline::{

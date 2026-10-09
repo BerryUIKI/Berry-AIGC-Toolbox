@@ -194,7 +194,6 @@ export async function saveAppConfig(config: AppConfig): Promise<void> {
     syncConfigToLocalStorage(config);
   } catch (err) {
     console.error("Failed to save app config:", err);
-    syncConfigToLocalStorage(config);
     throw err;
   }
 }

@@ -40,6 +40,7 @@ import {
   openStorageDir,
   resetSuppressedWarnings,
   type StoragePaths,
+  type AppConfig,
 } from "../utils/config";
 import { applyTheme, normalizeTheme, type AppTheme } from "../utils/theme";
 import ThumbnailDiagnosticsModal from "./ThumbnailDiagnosticsModal.vue";
@@ -385,6 +386,9 @@ async function fetchSyncProgress() {
 // Storage paths state
 const storagePaths = ref<StoragePaths | null>(null);
 
+// Track the loaded config for revision detection
+const loadedConfig = ref<AppConfig | null>(null);
+
 // Cache stats
 const cacheStats = ref<ThumbnailCacheStats | null>(null);
 const clearingCache = ref(false);
@@ -401,6 +405,7 @@ async function loadCacheStats() {
 async function loadSettingsAndPaths() {
   try {
     const config = await loadAppConfig();
+    loadedConfig.value = config;
     selectedLocale.value = (config.locale as LocaleSetting) || currentLocaleSetting.value;
     autoScanOnStartup.value = config.auto_scan;
     startupScanIntervalMinutes.value = config.startup_scan_interval_minutes ?? 360;
@@ -573,11 +578,11 @@ async function saveSettings() {
   setThumbnailCacheBudgetMb(thumbnailCacheBudgetMb.value);
   applyTheme(selectedTheme.value);
 
-  // Write to persistent config.json
+  // Write to persistent config.json using the originally loaded config
   try {
-    const existing = await loadAppConfig();
-    await saveAppConfig({
-      ...existing,
+    const baseConfig = loadedConfig.value || await loadAppConfig();
+    const updatedConfig: AppConfig = {
+      ...baseConfig,
       locale: selectedLocale.value,
       auto_scan: autoScanOnStartup.value,
       startup_scan_interval_minutes: startupScanIntervalMinutes.value,
@@ -602,9 +607,13 @@ async function saveSettings() {
       root_mappings: rootMappings.value,
       cloud_backup: getCurrentCloudConfig(),
       allow_override_existing_prompt: allowOverrideExistingPrompt.value,
-    });
+    };
+    await saveAppConfig(updatedConfig);
+    // Update loadedConfig to the newly saved version
+    loadedConfig.value = updatedConfig;
   } catch (e) {
     console.error("Failed to save config.json:", e);
+    throw e;
   }
   void loadCacheStats();
 

@@ -113,7 +113,15 @@ pub fn build_namespace_manifest(
         {
             return Err("Invalid persisted cloud root UUID".into());
         }
-        let new_prefix = under_prefix(prefix, &format!("v2/roots/{uuid}"));
+        // A flat UUID segment avoids nesting inside a legacy folder named "v2".
+        let namespace = format!("v2-root-{uuid}");
+        if legacy_counts.contains_key(&namespace.to_lowercase()) {
+            return Err(
+                "Cloud namespace overlaps a legacy root; manual layout reconciliation is required"
+                    .into(),
+            );
+        }
+        let new_prefix = under_prefix(prefix, &namespace);
         if !namespaces.insert(new_prefix.to_lowercase()) {
             return Err("Cloud root namespaces collide".into());
         }
@@ -344,6 +352,19 @@ mod tests {
                 "UPDATE cloud_sync_roots SET root_uuid = '../unsafe' WHERE folder_id = ?1",
                 [b.id],
             )
+            .unwrap();
+        assert!(build_namespace_manifest(&db, &CloudSyncOptions::default()).is_err());
+    }
+
+    #[test]
+    fn version_like_legacy_names_are_safe_but_exact_namespace_overlap_is_rejected() {
+        let db = Database::connect_in_memory().unwrap();
+        let folder = db.add_folder("/a/v2").unwrap();
+        let identity = db.ensure_cloud_sync_root(folder.id).unwrap();
+        let manifest = build_namespace_manifest(&db, &CloudSyncOptions::default()).unwrap();
+        assert_eq!(manifest.roots[0].legacy_prefix, "media/v2");
+        assert!(manifest.roots[0].new_prefix.starts_with("media/v2-root-"));
+        db.add_folder(&format!("/b/v2-root-{}", identity.root_uuid))
             .unwrap();
         assert!(build_namespace_manifest(&db, &CloudSyncOptions::default()).is_err());
     }

@@ -51,12 +51,14 @@ never infer authorization to delete or adopt them. This table is separate from
 
 `omera_scan::cloud_sync` now provides the prepared planning services:
 `build_namespace_manifest`, `collect_sync_plan`, and `save_namespace_manifest`.
-They map selected roots to `<prefix>/v2/roots/<uuid>`, flag ambiguous legacy
+They map selected roots to `<prefix>/v2-root-<uuid>`, flag ambiguous legacy
 basenames (including unselected registered roots), and reject unsafe paths or
 case-insensitive duplicate keys before returning any transfer queue. The plan
 requires acknowledgement of the current manifest's SHA-256 ID. Manifests are
 atomically saved under `cloud-sync-manifests/layout-<id>.json` without replacing
-earlier evidence; a damaged existing manifest fails closed.
+earlier evidence; a damaged existing manifest fails closed. A flat UUID segment
+avoids nesting beneath legacy folders named `v2`; an exact overlap with a known
+legacy basename requires manual reconciliation before any transfer.
 
 These services are not yet connected to the cloud IPC or Settings caller. The
 runtime transition and provider acceptance tests remain the next #244 increment.

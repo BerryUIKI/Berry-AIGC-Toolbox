@@ -89,3 +89,93 @@ fn local_uploads_separate_same_basename_roots_and_preserve_legacy() {
     assert_eq!(fs::read(legacy).unwrap(), b"legacy source");
     fixture.assert_sources_unchanged();
 }
+
+#[test]
+fn s3_uploads_use_distinct_uuid_keys_and_exact_source_bodies() {
+    let fixture = Fixture::new();
+    let mut server = mockito::Server::new();
+    let config = CloudBackupConfig {
+        provider: CloudStorageProvider::S3,
+        s3_endpoint: Some(server.url()),
+        s3_bucket: Some("test-bucket".into()),
+        s3_region: Some("us-east-1".into()),
+        s3_access_key: Some("fixture-access".into()),
+        s3_secret_key: Some("fixture-secret".into()),
+        s3_prefix: Some("backup".into()),
+        ..Default::default()
+    };
+    let no_legacy = server
+        .mock("PUT", "/test-bucket/backup/media/outputs/image.png")
+        .expect(0)
+        .create();
+    let no_delete = server
+        .mock("DELETE", mockito::Matcher::Any)
+        .expect(0)
+        .create();
+    let options = CloudSyncOptions {
+        strategy: CloudSyncStrategy::Sha256Checksum,
+        ..fixture.options.clone()
+    };
+    for (item, content) in fixture.plan.items.iter().zip([b"AAAA", b"BBBB"]) {
+        let path = format!("/test-bucket/backup/{}", item.remote_key);
+        let head = server.mock("HEAD", path.as_str()).with_status(404).create();
+        let put = server
+            .mock("PUT", path.as_str())
+            .match_body(content.to_vec())
+            .match_header("x-amz-meta-sha256", sha256_hex(content).as_str())
+            .with_status(200)
+            .create();
+        assert!(matches!(
+            sync_single_item(&config, &options, item, &limiter()).unwrap(),
+            SyncOutcome::Uploaded(4)
+        ));
+        head.assert();
+        put.assert();
+    }
+    no_legacy.assert();
+    no_delete.assert();
+    fixture.assert_sources_unchanged();
+}
+
+#[test]
+fn webdav_uploads_use_distinct_uuid_keys_and_exact_source_bodies() {
+    let fixture = Fixture::new();
+    let mut server = mockito::Server::new();
+    let config = CloudBackupConfig {
+        provider: CloudStorageProvider::WebDav,
+        webdav_endpoint: Some(format!("{}/backup", server.url())),
+        ..Default::default()
+    };
+    let no_legacy = server
+        .mock("PUT", "/backup/media/outputs/image.png")
+        .expect(0)
+        .create();
+    let no_delete = server
+        .mock("DELETE", mockito::Matcher::Any)
+        .expect(0)
+        .create();
+    let mkdir = server
+        .mock("MKCOL", mockito::Matcher::Any)
+        .with_status(201)
+        .expect(4)
+        .create();
+    for (item, content) in fixture.plan.items.iter().zip([b"AAAA", b"BBBB"]) {
+        let path = format!("/backup/{}", item.remote_key);
+        let head = server.mock("HEAD", path.as_str()).with_status(404).create();
+        let put = server
+            .mock("PUT", path.as_str())
+            .match_body(content.to_vec())
+            .with_status(201)
+            .create();
+        assert!(matches!(
+            sync_single_item(&config, &fixture.options, item, &limiter()).unwrap(),
+            SyncOutcome::Uploaded(4)
+        ));
+        head.assert();
+        put.assert();
+    }
+    mkdir.assert();
+    no_legacy.assert();
+    no_delete.assert();
+    fixture.assert_sources_unchanged();
+}

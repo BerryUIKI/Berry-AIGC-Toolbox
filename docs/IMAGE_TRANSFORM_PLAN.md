@@ -11,8 +11,12 @@ publication service, including source files renamed to another extension. PNG,
 JPEG and WebP derivatives are decode-verified and supported by thumbnails.
 Standalone AVIF export remains available with an explicit limitation notice.
 Existing AVIF files are not removed or rewritten; their thumbnails/previews and
-re-encoding from AVIF remain unsupported. Discovery policy is tracked separately
-under #267. A future decoder must be packaged and tested on every supported
+re-encoding from AVIF remain unsupported. Folder discovery (#267) indexes existing
+AVIF files in place by their container signature; it does not copy, transform,
+or establish decode support. Unrecognized bytes and incomplete leading signatures
+fail recognition; a recognized header does not validate the complete AVIF payload.
+Recognizable bytes take precedence over the filename extension. A future
+decoder must be packaged and tested on every supported
 target before managed AVIF becomes available again.
 
 1. **Export improvements (first — Completed).** Export selected images to JPEG, WebP, AVIF or PNG with effective quality control, optional resize, explicit metadata policy, collision handling, and instant before/after size estimation. Export never mutates library assets.

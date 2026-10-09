@@ -62,6 +62,8 @@ Gallery rows omit raw workflow/parameter payloads. `get_file_details({ fileId })
 
 `ExtractedMetadata.format` is a known generator string or `null` for technical image facts without generation metadata. Library batch transformations store the published image's width/height atomically with its path. Raw preserved generation parameters may describe the original generation size; they are not current pixel dimensions. Stripping policies retain only technical dimensions in SQLite, with generation fields and format null. Existing generator strings/defaults remain unchanged; no schema migration is required.
 
+`ImageFile.container` serializes as the native Serde names (`Png`, `Jpeg`, `WebP`, `Avif`, `Mp4`, `Webm`, `Txt`). TypeScript also accepts historical lowercase canonical IDs used by existing callers. Folder scans can discover existing AVIF by signature and index it without changing its bytes; discovery does not supply AVIF decoding or lift the managed-publication gate. Unknown AVIF signatures fail recognition instead of using an extension-only fallback.
+
 `list_filtered_stacks({ query, context })` and `get_filtered_stack_members({ stackId, query, context })` share gallery filters. Do not replace these with unfiltered stack APIs inside a scoped search.
 
 ## Semantic search and indexing

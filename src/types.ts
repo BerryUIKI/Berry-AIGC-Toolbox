@@ -21,7 +21,9 @@ export interface Folder {
   auto_harvest?: boolean;
 }
 
-export type Container = "png" | "jpg" | "webp" | "mp4" | "webm" | "txt";
+// Native Serde enum names plus historical canonical IDs accepted by UI helpers.
+export type Container = "Png" | "Jpeg" | "WebP" | "Avif" | "Mp4" | "Webm" | "Txt"
+  | "png" | "jpg" | "webp" | "avif" | "mp4" | "webm" | "txt";
 
 export interface ExtractedMetadata {
   /** null for technical image facts without a generation platform. */

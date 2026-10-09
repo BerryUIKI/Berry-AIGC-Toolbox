@@ -16,8 +16,8 @@ use omera_storage::{Database, DatabaseError};
 use serde::Serialize;
 use walkdir::WalkDir;
 
-/// Supported media file extensions, lowercased and without the leading dot.
-const MEDIA_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "mp4", "webm"];
+/// Discoverable media extensions; recognition does not imply decoder support.
+const MEDIA_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "avif", "mp4", "webm"];
 
 /// How many file upserts happen per transaction.
 const BATCH_SIZE: usize = 256;
@@ -605,10 +605,20 @@ fn detect_container(path: &Path) -> Result<Option<Container>, ScanError> {
         })?
     };
 
+    let avif_extension = path
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("avif"));
+    // New AVIF discovery requires a recognizable complete signature. Do not
+    // let the generic eight-byte ftyp fallback classify truncated AVIF as video.
+    if avif_extension && n < 12 {
+        return Ok(None);
+    }
     if let Some(container) = omera_metadata::detect_container(&buf[..n]) {
         return Ok(Some(container));
     }
 
+    // There is deliberately no AVIF extension-only fallback: unsupported
+    // decoding cannot verify an arbitrary file labelled .avif.
     Ok(container_from_extension(path))
 }
 

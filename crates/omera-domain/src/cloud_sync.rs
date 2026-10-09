@@ -12,6 +12,31 @@ pub struct CloudSyncRootIdentity {
     pub legacy_basename: String,
 }
 
+/// Compatibility mapping; old objects require manual verification, never deletion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudSyncRootMapping {
+    pub folder_id: i64,
+    pub source_path: String,
+    pub root_uuid: String,
+    pub legacy_prefix: String,
+    pub new_prefix: String,
+    pub legacy_ambiguous: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudSyncNamespaceManifest {
+    pub version: u8,
+    pub remote_prefix: String,
+    pub roots: Vec<CloudSyncRootMapping>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudSyncNamespacePreview {
+    pub manifest_id: String,
+    pub manifest_path: String,
+    pub manifest: CloudSyncNamespaceManifest,
+}
+
 /// Direction of incremental mirroring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -91,6 +116,10 @@ pub struct CloudSyncOptions {
     /// Optional library folder IDs to restrict sync to; None or empty = all folders.
     #[serde(default)]
     pub folder_ids: Option<Vec<i64>>,
+    /// ID returned by namespace preview and explicitly acknowledged by the caller.
+    /// Omitted legacy requests deserialize but cannot start a changed layout.
+    #[serde(default)]
+    pub namespace_manifest_id: Option<String>,
 }
 
 fn default_concurrency() -> usize {
@@ -111,7 +140,26 @@ impl Default for CloudSyncOptions {
             dry_run: false,
             remote_prefix: default_media_prefix(),
             folder_ids: None,
+            namespace_manifest_id: None,
         }
+    }
+}
+
+#[cfg(test)]
+mod namespace_contract_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_options_deserialize_without_layout_acknowledgement() {
+        let options: CloudSyncOptions = serde_json::from_str("{}").unwrap();
+        assert_eq!(options.namespace_manifest_id, None);
+        assert_eq!(options.remote_prefix, "media/");
+        let options: CloudSyncOptions =
+            serde_json::from_str(r#"{"namespace_manifest_id":"acknowledged-manifest"}"#).unwrap();
+        assert_eq!(
+            options.namespace_manifest_id.as_deref(),
+            Some("acknowledged-manifest")
+        );
     }
 }
 

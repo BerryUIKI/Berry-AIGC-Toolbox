@@ -7,25 +7,34 @@ use uuid::Uuid;
 use crate::{Database, DatabaseError};
 
 impl Database {
+    /// Read the existing mapping without allocating identities during discovery.
+    pub fn cloud_sync_root_identity(
+        &self,
+        folder_id: i64,
+    ) -> Result<Option<CloudSyncRootIdentity>, DatabaseError> {
+        Ok(self
+            .connection()
+            .query_row(
+                "SELECT root_uuid, legacy_basename FROM cloud_sync_roots WHERE folder_id = ?1",
+                [folder_id],
+                |row| {
+                    Ok(CloudSyncRootIdentity {
+                        folder_id,
+                        root_uuid: row.get(0)?,
+                        legacy_basename: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
     /// Allocate once per folder registration. Existing identities are immutable;
     /// deleting a folder cascades its mapping, so reused numeric IDs are safe.
     pub fn ensure_cloud_sync_root(
         &self,
         folder_id: i64,
     ) -> Result<CloudSyncRootIdentity, DatabaseError> {
-        let read =
-            || {
-                self.connection().query_row(
-                "SELECT root_uuid, legacy_basename FROM cloud_sync_roots WHERE folder_id = ?1",
-                [folder_id],
-                |row| Ok(CloudSyncRootIdentity {
-                    folder_id,
-                    root_uuid: row.get(0)?,
-                    legacy_basename: row.get(1)?,
-                }),
-            ).optional()
-            };
-        if let Some(identity) = read()? {
+        if let Some(identity) = self.cloud_sync_root_identity(folder_id)? {
             return Ok(identity);
         }
         let path: String = self
@@ -51,7 +60,8 @@ impl Database {
             params![folder_id, Uuid::new_v4().to_string(), basename],
         )?;
         // Concurrent allocation on a different connection must use the winner.
-        read()?.ok_or(DatabaseError::FolderNotFound(folder_id))
+        self.cloud_sync_root_identity(folder_id)?
+            .ok_or(DatabaseError::FolderNotFound(folder_id))
     }
 }
 
@@ -72,6 +82,8 @@ mod tests {
         assert!(Uuid::parse_str(&a.root_uuid).is_ok());
         assert!(Uuid::parse_str(&b.root_uuid).is_ok());
         assert_eq!(db.ensure_cloud_sync_root(first.id).unwrap(), a);
+        assert_eq!(db.cloud_sync_root_identity(first.id).unwrap(), Some(a));
+        assert_eq!(db.cloud_sync_root_identity(99).unwrap(), None);
     }
 
     #[test]

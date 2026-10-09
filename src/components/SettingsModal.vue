@@ -191,6 +191,9 @@ const cloudPingStatus = ref<"unknown" | "testing" | "success" | "error">("unknow
 const cloudPingLatency = ref<number | null>(null);
 const cloudPingMessage = ref("");
 
+const savingSettings = ref(false);
+const saveError = ref("");
+
 const cloudSnapshots = ref<CloudSnapshotMeta[]>([]);
 const cloudSnapshotsLoading = ref(false);
 const cloudCreatingSnapshot = ref(false);
@@ -568,6 +571,9 @@ onUnmounted(() => {
 });
 
 async function saveSettings() {
+  savingSettings.value = true;
+  saveError.value = "";
+
   setLocale(selectedLocale.value);
   setThumbnailMaxEdge(thumbnailMaxEdge.value);
   setThumbnailCacheBudgetMb(thumbnailCacheBudgetMb.value);
@@ -603,26 +609,30 @@ async function saveSettings() {
       cloud_backup: getCurrentCloudConfig(),
       allow_override_existing_prompt: allowOverrideExistingPrompt.value,
     });
+
+    void loadCacheStats();
+
+    emit("save", {
+      locale: selectedLocale.value,
+      autoScan: autoScanOnStartup.value,
+      startupScanIntervalMinutes: startupScanIntervalMinutes.value,
+      theme: selectedTheme.value,
+      blurNsfw: blurNsfwDefault.value,
+      showCardBadges: showCardBadges.value,
+      defaultView: defaultView.value,
+      thumbnailMaxEdge: thumbnailMaxEdge.value,
+      thumbnailCacheBudgetMb: thumbnailCacheBudgetMb.value,
+      autoCheckUpdate: autoCheckUpdate.value,
+      allowMultipleStacksOpen: allowMultipleStacksOpen.value,
+      allowOverrideExistingPrompt: allowOverrideExistingPrompt.value,
+    });
+    emit("close");
   } catch (e) {
     console.error("Failed to save config.json:", e);
+    saveError.value = String(e);
+  } finally {
+    savingSettings.value = false;
   }
-  void loadCacheStats();
-
-  emit("save", {
-    locale: selectedLocale.value,
-    autoScan: autoScanOnStartup.value,
-    startupScanIntervalMinutes: startupScanIntervalMinutes.value,
-    theme: selectedTheme.value,
-    blurNsfw: blurNsfwDefault.value,
-    showCardBadges: showCardBadges.value,
-    defaultView: defaultView.value,
-    thumbnailMaxEdge: thumbnailMaxEdge.value,
-    thumbnailCacheBudgetMb: thumbnailCacheBudgetMb.value,
-    autoCheckUpdate: autoCheckUpdate.value,
-    allowMultipleStacksOpen: allowMultipleStacksOpen.value,
-    allowOverrideExistingPrompt: allowOverrideExistingPrompt.value,
-  });
-  emit("close");
 }
 </script>
 
@@ -1773,8 +1783,11 @@ async function saveSettings() {
 
       <!-- Footer -->
       <div class="dialog-footer">
+        <div v-if="saveError" class="error-message">{{ saveError }}</div>
         <button type="button" class="btn secondary" @click="emit('close')">{{ t.settings.cancel }}</button>
-        <button type="button" class="btn primary" @click="saveSettings">{{ t.settings.save }}</button>
+        <button type="button" class="btn primary" @click="saveSettings" :disabled="savingSettings">
+          {{ savingSettings ? "..." : t.settings.save }}
+        </button>
       </div>
     </div>
     <ThumbnailDiagnosticsModal :show="showDiagnosticsModal" @close="showDiagnosticsModal = false" />

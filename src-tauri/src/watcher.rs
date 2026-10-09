@@ -102,17 +102,16 @@ impl LibraryWatcher {
     pub fn watch_folder(&mut self, folder: &Folder) -> Result<(), String> {
         // For pipeline folders with auto_harvest, watch the source_path
         // For other folders, watch the destination path
-        let (watch_path, is_pipeline_source) = if folder.folder_type == "pipeline"
-            && folder.auto_harvest
-        {
-            if let Some(ref src) = folder.source_path {
-                (PathBuf::from(src), true)
+        let (watch_path, is_pipeline_source) =
+            if folder.folder_type == "pipeline" && folder.auto_harvest {
+                if let Some(ref src) = folder.source_path {
+                    (PathBuf::from(src), true)
+                } else {
+                    (PathBuf::from(&folder.path), false)
+                }
             } else {
                 (PathBuf::from(&folder.path), false)
-            }
-        } else {
-            (PathBuf::from(&folder.path), false)
-        };
+            };
 
         if !watch_path.is_dir() {
             return Err(format!(

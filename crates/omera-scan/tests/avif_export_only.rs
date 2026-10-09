@@ -182,8 +182,13 @@ fn offered_managed_formats_reopen_thumbnail_and_reexport_with_shipped_codecs() {
             max_edge: Some(8),
             ..Default::default()
         };
-        let ids = import_files_to_managed_folder(&db, &[source.path.clone()], target, Some(&spec))
-            .unwrap();
+        let ids = import_files_to_managed_folder(
+            &db,
+            std::slice::from_ref(&source.path),
+            target,
+            Some(&spec),
+        )
+        .unwrap();
         let imported = db.get_file_by_id(ids[0]).unwrap().unwrap();
         let decoded = image::open(&imported.path).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (8, 4));

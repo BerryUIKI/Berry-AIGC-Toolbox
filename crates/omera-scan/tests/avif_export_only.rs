@@ -1,6 +1,7 @@
 use omera_domain::{
-    Container, ImageFile, ImportTransformRequest, LibraryTransformRequest, OriginalDisposition,
-    TransformFormat, TransformSpec,
+    Container, ExportFormat, ExportOptions, ExportSidecar, ImageFile, ImportTransformRequest,
+    LibraryTransformRequest, MetadataPrivacyMode, OriginalDisposition, TransformFormat,
+    TransformSpec,
 };
 use omera_scan::{
     execute_library_batch_transform, execute_managed_import_transform,
@@ -118,4 +119,104 @@ fn malformed_avif_source_is_rejected_without_publication() {
     assert!(!Path::new(&source)
         .with_file_name("vault/malformed.avif")
         .exists());
+}
+
+#[test]
+fn standalone_avif_export_remains_available_but_cannot_reenter_managed_library() {
+    let (dir, db, id, target) = fixture();
+    let output = dir.path().join("export");
+    let options = ExportOptions {
+        file_ids: vec![id],
+        format: ExportFormat::Avif,
+        quality: 70,
+        privacy: MetadataPrivacyMode::StripAll,
+        sidecar: ExportSidecar::None,
+        filename_template: "{name}".into(),
+        destination_path: output.to_string_lossy().into_owned(),
+        as_zip: false,
+        max_edge: None,
+        export_html_showcase: false,
+        html_title: None,
+    };
+    let summary = omera_scan::execute_batch_export(&db, &options, |_| {});
+    assert!(summary.success, "{:?}", summary.errors);
+    let avif = output.join("source.avif");
+    let bytes = fs::read(&avif).unwrap();
+    assert_eq!(
+        omera_metadata::detect_container(&bytes[..32]),
+        Some(Container::Avif)
+    );
+    // This is intentionally not claimed as supported application decoding.
+    let thumb = dir.path().join("unsupported-thumbnail.webp");
+    assert!(omera_scan::thumbnail::generate_thumbnail(&avif, &thumb, 8).is_err());
+    assert!(!thumb.exists());
+    for filename in ["source.avif", "disguised.png"] {
+        let source = output.join(filename);
+        if source != avif {
+            fs::write(&source, &bytes).unwrap();
+        }
+        let error = import_files_to_managed_folder(
+            &db,
+            &[source.to_string_lossy().into_owned()],
+            target,
+            None,
+        )
+        .unwrap_err();
+        assert!(error.contains("export-only"));
+        assert_eq!(fs::read(&source).unwrap(), bytes);
+    }
+    assert!(db.list_file_fingerprints(target).unwrap().is_empty());
+}
+
+#[test]
+fn offered_managed_formats_reopen_thumbnail_and_reexport_with_shipped_codecs() {
+    let (dir, db, id, target) = fixture();
+    let source = db.get_file_by_id(id).unwrap().unwrap();
+    for format in [
+        TransformFormat::Png,
+        TransformFormat::Jpeg,
+        TransformFormat::Webp,
+    ] {
+        let spec = TransformSpec {
+            format,
+            max_edge: Some(8),
+            ..Default::default()
+        };
+        let ids = import_files_to_managed_folder(&db, &[source.path.clone()], target, Some(&spec))
+            .unwrap();
+        let imported = db.get_file_by_id(ids[0]).unwrap().unwrap();
+        let decoded = image::open(&imported.path).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (8, 4));
+        let thumb = dir.path().join(format!("thumbnail-{format:?}.webp"));
+        omera_scan::thumbnail::generate_thumbnail(Path::new(&imported.path), &thumb, 4).unwrap();
+        let preview = image::open(&thumb).unwrap();
+        assert_eq!((preview.width(), preview.height()), (4, 2));
+        let options = ExportOptions {
+            file_ids: ids,
+            format: ExportFormat::Png,
+            quality: 80,
+            privacy: MetadataPrivacyMode::StripAll,
+            sidecar: ExportSidecar::None,
+            filename_template: "{name}".into(),
+            destination_path: dir
+                .path()
+                .join(format!("reexport-{format:?}"))
+                .to_string_lossy()
+                .into_owned(),
+            as_zip: false,
+            max_edge: None,
+            export_html_showcase: false,
+            html_title: None,
+        };
+        let summary = omera_scan::execute_batch_export(&db, &options, |_| {});
+        assert!(summary.success, "{:?}", summary.errors);
+        let exported = fs::read_dir(&options.destination_path)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let decoded = image::open(exported).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), (8, 4));
+    }
 }

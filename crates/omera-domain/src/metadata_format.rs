@@ -26,6 +26,10 @@ pub enum MetadataFormat {
     EasyDiffusion,
     /// Stable Swarm.
     StableSwarm,
+    /// Technical image facts without embedded generation metadata.
+    /// Serialize as null so consumers do not infer a generation platform.
+    #[serde(untagged)]
+    Unspecified,
 }
 
 impl MetadataFormat {
@@ -52,6 +56,7 @@ impl MetadataFormat {
             Self::ComfyUI => "comfyui",
             Self::EasyDiffusion => "easydiffusion",
             Self::StableSwarm => "stableswarm",
+            Self::Unspecified => "unknown",
         }
     }
 }
@@ -86,5 +91,35 @@ mod tests {
             let back: MetadataFormat = serde_json::from_str(&json).unwrap();
             assert_eq!(back, *format);
         }
+    }
+
+    #[test]
+    fn technical_metadata_has_no_generator_on_the_wire() {
+        let metadata = crate::ExtractedMetadata {
+            format: MetadataFormat::Unspecified,
+            width: Some(32),
+            height: Some(16),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&metadata).unwrap();
+        let fixture: crate::ExtractedMetadata = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/derivative-dimensions.json"
+        ))
+        .unwrap();
+        assert_eq!(fixture, metadata);
+        assert!(json["format"].is_null());
+        assert_eq!(json["width"], 32);
+        assert_eq!(json["height"], 16);
+        assert_eq!(
+            serde_json::from_value::<crate::ExtractedMetadata>(json).unwrap(),
+            metadata
+        );
+        assert!(!MetadataFormat::ALL.contains(&MetadataFormat::Unspecified));
+        // Existing generator labels and defaults remain compatible.
+        assert_eq!(
+            serde_json::to_string(&MetadataFormat::A1111).unwrap(),
+            "\"A1111\""
+        );
+        assert_eq!(MetadataFormat::default(), MetadataFormat::A1111);
     }
 }

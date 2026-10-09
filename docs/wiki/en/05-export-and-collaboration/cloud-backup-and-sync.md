@@ -63,3 +63,24 @@ While snapshots protect your database, **Delta Sync** provides one-way increment
 - **Upload-Only Mirroring**: Current runtime synchronizes local indexed files to the remote target. Remote-to-local pull/download reconciliation is not implemented in the current runtime.
 - **No Remote Deletion Sync**: Local file deletions do not delete remote objects; remote storage retains uploaded media.
 - **Planned Bidirectional Sync**: Full two-way reconciliation with remote change detection, download pulls, and conflict resolution policies is planned for future releases.
+
+### Folder mapping and existing cloud files
+
+Each registered library root now has a persistent UUID. Uploads use
+`<media prefix>/v2-root-<UUID>/<relative file path>`, so two roots called
+`outputs` cannot overwrite each other's `image.png`. The UUID remains stable
+when that registered root is renamed and across database backup/restore;
+removing and registering a new root creates a new identity.
+
+Before starting, Settings shows the source paths and old/new cloud prefixes for
+confirmation. Canceling makes no uploads. The mapping is saved in application
+data under `cloud-sync-manifests/layout-<ID>.json`; keep this file for manual
+reconciliation. Paths shown are relative to the provider destination, including
+any S3 base prefix. Changed roots or prefixes require a fresh preview.
+
+Files in the old basename layout remain untouched. A warning identifies roots
+that shared an old cloud folder: manually verify which files belong to which
+root before reorganizing them. Sync does not automatically adopt, move, or delete
+old files. New UUID folders may initially upload another copy and use additional
+remote space. Unsafe paths, duplicate keys, or an unavailable/damaged manifest
+stop the operation before transfer.

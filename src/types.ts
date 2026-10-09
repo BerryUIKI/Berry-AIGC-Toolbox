@@ -320,6 +320,28 @@ export interface CloudSyncOptions {
   dry_run?: boolean;
   remote_prefix?: string;
   folder_ids?: number[] | null;
+  namespace_manifest_id?: string | null;
+}
+
+export interface CloudSyncRootMapping {
+  folder_id: number;
+  source_path: string;
+  root_uuid: string;
+  legacy_prefix: string;
+  new_prefix: string;
+  legacy_ambiguous: boolean;
+}
+
+export interface CloudSyncNamespaceManifest {
+  version: number;
+  remote_prefix: string;
+  roots: CloudSyncRootMapping[];
+}
+
+export interface CloudSyncNamespacePreview {
+  manifest_id: string;
+  manifest_path: string;
+  manifest: CloudSyncNamespaceManifest;
 }
 
 export interface CloudSyncProgress {

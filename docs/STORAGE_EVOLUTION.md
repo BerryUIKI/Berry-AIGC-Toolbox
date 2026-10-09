@@ -41,15 +41,13 @@ retain the mapping. Folder removal cascades the mapping so registering another
 folder with a reused numeric ID creates a new UUID. Existing folders, files,
 curation, and migrations remain intact; there is no eager library backfill.
 
-This is the storage prerequisite for #244, not the runtime namespace transition.
-The existing sync collector still uses basename keys until its separate integration
-lands. That transition must provide a compatibility manifest and explicit user
-acknowledgement before publishing under a versioned UUID namespace. It must retain
-legacy remote objects and source media, identify ambiguous legacy mappings, and
-never infer authorization to delete or adopt them. This table is separate from
+Cloud sync now previews and saves a compatibility manifest and requires explicit
+user acknowledgement before publishing under the versioned UUID namespace. It
+retains legacy remote objects and source media, identifies ambiguous mappings,
+and never infers authorization to delete or adopt them. This table is separate from
 `storage_roots`, whose workstation mappings are not linked to registered folders.
 
-`omera_scan::cloud_sync` now provides the prepared planning services:
+`omera_scan::cloud_sync` provides the shared planning services:
 `build_namespace_manifest`, `collect_sync_plan`, and `save_namespace_manifest`.
 They map selected roots to `<prefix>/v2-root-<uuid>`, flag ambiguous legacy
 basenames (including unselected registered roots), and reject unsafe paths or
@@ -60,8 +58,13 @@ earlier evidence; a damaged existing manifest fails closed. A flat UUID segment
 avoids nesting beneath legacy folders named `v2`; an exact overlap with a known
 legacy basename requires manual reconciliation before any transfer.
 
-These services are not yet connected to the cloud IPC or Settings caller. The
-runtime transition and provider acceptance tests remain the next #244 increment.
+The Settings caller previews the mapping, displays it with the saved manifest
+path, and starts only after confirmation. IPC revalidates the acknowledgement and
+preflights the complete selection in a blocking worker. Database locks end before
+manifest persistence and provider I/O. Tests exercise actual LocalPath uploads,
+mocked S3/WebDAV HEAD/PUT requests and exact bodies, legacy preservation, and
+stable keys after root rename, restart, and staged snapshot restore. Provider
+fixtures establish protocol behavior, not live-cloud or release qualification.
 
 ## Benchmark and acceptance plan
 

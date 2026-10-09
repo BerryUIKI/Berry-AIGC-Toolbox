@@ -13,7 +13,7 @@ Status: current source contract plus explicitly marked proposals. The active run
 | Update DTOs | Rust `UpdateDownloadProgress` | `src/utils/updater.ts` |
 | Watcher events | `src-tauri/src/watcher.rs` | App refresh scheduling |
 
-[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 157 commands currently registered in `src-tauri/src/lib.rs`, their actual request keys and Rust return types. On any checkout, validate with `node scripts/generate-ipc-reference.mjs --check`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
+[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 158 commands currently registered in `src-tauri/src/lib.rs`, their actual request keys and Rust return types. On any checkout, validate with `node scripts/generate-ipc-reference.mjs --check`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
 
 Current commands are local Tauri IPC, not HTTP endpoints. Do not invent REST routes or expose these commands through a network server. Commands are restricted to the configured application WebView; IPC arguments still require backend validation.
 
@@ -136,6 +136,27 @@ The storage-only Rust function `recovery::migrate_copy(source, destination)` is 
 
 
 ## Updates and long-running operations
+
+Cloud media sync uses persistent per-folder UUID namespaces. Call
+`cloud_sync_preview_namespace({ options })` first: it resolves
+`CloudSyncNamespacePreview { manifest_id, manifest_path, manifest }`, saves a
+compatibility mapping in application data, and does not transfer media. The
+manifest contains version, normalized remote prefix, and sorted root mappings
+(`folder_id`, `source_path`, `root_uuid`, `legacy_prefix`, `new_prefix`,
+`legacy_ambiguous`). Display the mapping and obtain explicit confirmation before
+calling `cloud_sync_start({ config, options: { ...options,
+namespace_manifest_id: preview.manifest_id } })`. Canceling must not call start.
+
+Start revalidates the current mapping, preflights every selected file, and saves
+the manifest before launching transfers. Missing/stale acknowledgement, unsafe
+paths, colliding keys, or damaged/unwritable manifests reject before transfer.
+Preview and preflight run in blocking workers; database guards are released
+before manifest I/O or network work. Concurrent starts are rejected by the
+runner's atomic busy check. Optional request fields retain Serde defaults;
+legacy requests without acknowledgement deserialize but cannot start syncing.
+Prefixes are relative to the provider base (including any configured S3 prefix).
+Old basename objects are preserved and require manual reconciliation; ambiguous
+legacy mappings never authorize remote deletion or automatic adoption.
 
 `download_update({ url, filename })` resolves a staged installer path after signature verification in the working code. `install_update({ installerPath, silent })` revalidates the local installer and launches installation. Missing embedded trust configuration is an error; engineers must not add a bypass. Platform/architecture asset selection and renamed-repository trust remain lead-owned work.
 

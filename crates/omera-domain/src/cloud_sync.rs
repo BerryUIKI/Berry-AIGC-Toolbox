@@ -150,6 +150,18 @@ mod namespace_contract_tests {
     use super::*;
 
     #[test]
+    fn namespace_preview_matches_shared_frontend_fixture() {
+        let value: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/cloud-sync-namespace.json"
+        ))
+        .unwrap();
+        let preview: CloudSyncNamespacePreview = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(preview.manifest.version, 2);
+        assert!(preview.manifest.roots[0].legacy_ambiguous);
+        assert_eq!(serde_json::to_value(preview).unwrap(), value);
+    }
+
+    #[test]
     fn legacy_options_deserialize_without_layout_acknowledgement() {
         let options: CloudSyncOptions = serde_json::from_str("{}").unwrap();
         assert_eq!(options.namespace_manifest_id, None);

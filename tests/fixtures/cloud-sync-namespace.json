@@ -1,0 +1,18 @@
+{
+  "manifest_id": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "manifest_path": "/app-data/cloud-sync-manifests/layout-example.json",
+  "manifest": {
+    "version": 2,
+    "remote_prefix": "media",
+    "roots": [
+      {
+        "folder_id": 12,
+        "source_path": "/library/outputs",
+        "root_uuid": "01234567-89ab-4cde-8f01-23456789abcd",
+        "legacy_prefix": "media/outputs",
+        "new_prefix": "media/v2-root-01234567-89ab-4cde-8f01-23456789abcd",
+        "legacy_ambiguous": true
+      }
+    ]
+  }
+}

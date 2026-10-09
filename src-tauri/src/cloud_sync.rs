@@ -6,7 +6,7 @@
 
 use std::collections::VecDeque;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -16,10 +16,14 @@ use omera_domain::{
     CloudBackupConfig, CloudStorageProvider, CloudSyncOptions, CloudSyncPhase, CloudSyncProgress,
     CloudSyncResult, CloudSyncStrategy,
 };
-use omera_storage::Database;
+pub use omera_scan::cloud_sync::SyncItem;
 use tauri::{AppHandle, Emitter};
 
 use crate::cloud_backup::{sha256_file, sha256_hex, S3Client, WebDavClient};
+
+#[cfg(test)]
+#[path = "cloud_sync_namespace_tests.rs"]
+mod namespace_tests;
 
 // -----------------------------------------------------------------------------
 // Rate Limiter (Token Bucket)
@@ -93,18 +97,6 @@ impl Default for CloudSyncState {
 }
 
 // -----------------------------------------------------------------------------
-// Sync Queue Item
-// -----------------------------------------------------------------------------
-
-#[derive(Debug, Clone)]
-pub struct SyncItem {
-    pub local_path: PathBuf,
-    pub remote_key: String,
-    pub size_bytes: u64,
-    pub mtime_secs: i64,
-}
-
-// -----------------------------------------------------------------------------
 // Core Sync Runner
 // -----------------------------------------------------------------------------
 
@@ -120,12 +112,15 @@ pub fn start_cloud_sync(
     sync_state: Arc<Mutex<CloudSyncState>>,
     items: Vec<SyncItem>,
     total_bytes: u64,
-) {
+) -> Result<(), String> {
     let cancel_flag = Arc::new(AtomicBool::new(false));
 
     // Initialize state
     {
         let mut state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
+        if state.is_running {
+            return Err("A media sync operation is already currently running".into());
+        }
         state.is_running = true;
         state.cancel_flag = Arc::clone(&cancel_flag);
         state.progress = CloudSyncProgress {
@@ -153,6 +148,7 @@ pub fn start_cloud_sync(
             total_bytes,
         );
     });
+    Ok(())
 }
 
 fn run_cloud_sync_worker(
@@ -350,81 +346,6 @@ fn run_cloud_sync_worker(
         let state = sync_state.lock().unwrap_or_else(|e| e.into_inner());
         state.progress.clone()
     });
-}
-
-// -----------------------------------------------------------------------------
-// Helper: Collect Files & Build Remote Paths
-// -----------------------------------------------------------------------------
-
-pub fn collect_sync_items(
-    db: &Database,
-    options: &CloudSyncOptions,
-) -> Result<(Vec<SyncItem>, u64), String> {
-    let folders = db
-        .list_folders()
-        .map_err(|e| format!("Failed to list folders: {e}"))?;
-
-    let folder_id_filter = options.folder_ids.as_ref();
-
-    let mut items = Vec::new();
-    let mut total_bytes = 0u64;
-
-    for folder in &folders {
-        if let Some(filter) = folder_id_filter {
-            if !filter.contains(&folder.id) {
-                continue;
-            }
-        }
-
-        let folder_name = Path::new(&folder.path)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("library");
-
-        let fingerprints = db
-            .list_file_fingerprints(folder.id)
-            .map_err(|e| format!("Failed to list files for folder {}: {e}", folder_name))?;
-
-        let folder_path_clean = folder
-            .path
-            .replace('\\', "/")
-            .trim_end_matches('/')
-            .to_string();
-
-        for (file_path, size_bytes, mtime, _has_meta) in fingerprints {
-            let path_obj = PathBuf::from(&file_path);
-            let normalized_file_path = file_path.replace('\\', "/");
-
-            let rel_subpath = if normalized_file_path.starts_with(&folder_path_clean) {
-                normalized_file_path[folder_path_clean.len()..]
-                    .trim_start_matches('/')
-                    .to_string()
-            } else {
-                path_obj
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown_file")
-                    .to_string()
-            };
-
-            let prefix = options.remote_prefix.trim_matches('/');
-            let remote_key = if prefix.is_empty() {
-                format!("{}/{}", folder_name, rel_subpath)
-            } else {
-                format!("{}/{}/{}", prefix, folder_name, rel_subpath)
-            };
-
-            total_bytes += size_bytes;
-            items.push(SyncItem {
-                local_path: path_obj,
-                remote_key,
-                size_bytes,
-                mtime_secs: mtime,
-            });
-        }
-    }
-
-    Ok((items, total_bytes))
 }
 
 // -----------------------------------------------------------------------------

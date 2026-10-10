@@ -1348,6 +1348,8 @@ async function onToggleStackExpand(stackId: string) {
 
   if (pendingStackExpansions.has(stackId)) return;
   pendingStackExpansions.add(stackId);
+  const context = galleryContextKey.value;
+  const version = libraryRequestVersion;
   try {
     if (!allowMultipleStacksOpen.value) {
       for (const expandedId of [...expandedStacks.value]) {
@@ -1362,7 +1364,7 @@ async function onToggleStackExpand(stackId: string) {
           query,
           context: currentPagedCriteria(0),
         });
-    if (members.length === 0) return;
+    if (members.length === 0 || context !== galleryContextKey.value || version !== libraryRequestVersion) return;
     const insertionIndex = files.value.findIndex((file) => file.stack_id === stackId);
     const nextFiles = files.value.filter((file) => file.stack_id !== stackId);
     nextFiles.splice(insertionIndex >= 0 ? insertionIndex : nextFiles.length, 0, ...members);
@@ -2558,6 +2560,9 @@ function onResetZoom() {
             :context-key="galleryContextKey"
             :files="files"
             :file-revision="galleryRevision"
+            :stack-map="stackMap"
+            :expanded-stacks="expandedStacks"
+            @toggle-stack-expand="onToggleStackExpand"
             :empty-message="emptyGalleryMessage"
             :empty-action-text="emptyGalleryAction"
             @recover="recoverGallery"

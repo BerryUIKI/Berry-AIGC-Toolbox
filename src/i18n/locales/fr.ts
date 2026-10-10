@@ -90,6 +90,9 @@ export const fr: typeof en = {
     noMatchHint: "Ajustez vos mots-clés ou filtres (ex: prompt:cat, model:sdxl, ou steps:>=20).",
   },
   view: {
+    maskingOn: "Masquage actif",
+    contentVisible: "Contenu visible",
+    sessionMaskHint: "Pour cette session uniquement. Les paramètres définissent le choix au démarrage. Maj+M bascule le masquage.",
     columns: "Colonnes",
     columnWidth: "Largeur (pixels)",
     resetColumns: "Réinitialiser les colonnes",

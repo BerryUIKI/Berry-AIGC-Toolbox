@@ -66,7 +66,7 @@ import { actionHistory } from "./utils/history";
 import { applyBooleanFlagMutation } from "./utils/batch-flags";
 import { collaborationSync } from "./utils/collaborationSync";
 import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
-import { useGalleryPrivacy } from "./utils/gallery-privacy";
+import { useGalleryPrivacy, setSensitiveMasking } from "./utils/gallery-privacy";
 
 const LightboxModal = defineAsyncComponent(() => import("./components/LightboxModal.vue"));
 const FilterDrawer = defineAsyncComponent(() => import("./components/FilterDrawer.vue"));
@@ -345,6 +345,9 @@ const {
   reveal: onRevealNsfw,
   remask: onRemaskNsfw,
 } = useGalleryPrivacy();
+function onToggleGlobalMasking() {
+  setSensitiveMasking(blurNsfw, !blurNsfw.value, revealedNsfw);
+}
 const showCardBadges = ref(getStorageItem("card_badges") !== "false");
 const appTheme = ref<AppTheme>(normalizeTheme(getStorageItem("theme")));
 applyTheme(appTheme.value);
@@ -366,7 +369,7 @@ function onSettingsSaved(settings: {
   allowMultipleStacksOpen?: boolean;
   allowOverrideExistingPrompt?: boolean;
 }) {
-  blurNsfw.value = settings.blurNsfw;
+  setSensitiveMasking(blurNsfw, settings.blurNsfw, revealedNsfw);
   showCardBadges.value = settings.showCardBadges;
   if (settings.theme) {
     appTheme.value = settings.theme;
@@ -446,6 +449,13 @@ function handleWindowKeyDown(e: KeyboardEvent) {
   }
 
   if (hasActiveDialog()) {
+    return;
+  }
+
+  if (e.defaultPrevented) return;
+  if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && (e.key === "m" || e.key === "M")) {
+    e.preventDefault();
+    onToggleGlobalMasking();
     return;
   }
 
@@ -2457,6 +2467,19 @@ function onResetZoom() {
               <span class="zoom-icon large">◼</span>
             </div>
 
+            <button
+              type="button"
+              class="session-mask-btn"
+              :class="{ active: blurNsfw }"
+              :aria-pressed="blurNsfw"
+              :title="t.view.sessionMaskHint"
+              aria-keyshortcuts="Shift+M"
+              @click="onToggleGlobalMasking"
+            >
+              <span aria-hidden="true">{{ blurNsfw ? '🔒' : '👁' }}</span>
+              {{ blurNsfw ? t.view.maskingOn : t.view.contentVisible }}
+            </button>
+
             <!-- View Mode Switch -->
             <div class="view-mode-toggle">
               <button
@@ -2939,9 +2962,10 @@ function onResetZoom() {
 }
 
 .gallery-topbar {
-  height: 42px;
+  height: auto;
+  flex-wrap: wrap;
   min-height: 42px;
-  padding: 0 10px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2949,7 +2973,7 @@ function onResetZoom() {
   background: var(--color-bg-primary);
   border-bottom: 1px solid var(--border-color);
   z-index: 10;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .topbar-left {
@@ -3056,6 +3080,8 @@ function onResetZoom() {
 }
 
 .topbar-right {
+  max-width: 100%;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3089,6 +3115,22 @@ function onResetZoom() {
   accent-color: #a855f7;
   cursor: pointer;
 }
+
+.session-mask-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  font-size: 0.74rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.session-mask-btn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.session-mask-btn:not(.active) { border-color: var(--color-warning, #f59e0b); }
 
 .view-mode-toggle {
   display: flex;

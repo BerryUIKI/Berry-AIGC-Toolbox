@@ -88,6 +88,9 @@ export const en = {
     noMatchHint: "Try adjusting keywords or parameter filters like prompt:cat, model:sdxl, or steps:>=20.",
   },
   view: {
+    maskingOn: "Masking on",
+    contentVisible: "Content visible",
+    sessionMaskHint: "For this session only. Settings controls the startup default. Shift+M toggles masking.",
     columns: "Columns",
     columnWidth: "Width (pixels)",
     resetColumns: "Reset columns",

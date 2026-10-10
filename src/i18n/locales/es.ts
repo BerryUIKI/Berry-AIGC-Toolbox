@@ -90,6 +90,9 @@ export const es: typeof en = {
     noMatchHint: "Ajuste las palabras clave o filtros (ej: prompt:cat, model:sdxl o steps:>=20).",
   },
   view: {
+    maskingOn: "Ocultación activa",
+    contentVisible: "Contenido visible",
+    sessionMaskHint: "Solo para esta sesión. Los ajustes controlan el estado inicial. Mayús+M alterna la ocultación.",
     columns: "Columnas",
     columnWidth: "Ancho (píxeles)",
     resetColumns: "Restablecer columnas",

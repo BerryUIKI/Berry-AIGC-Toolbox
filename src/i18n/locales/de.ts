@@ -73,6 +73,8 @@ export const de: typeof en = {
     noMatchHint: "Passen Sie Schlüsselwörter oder Parameterfilter an (z.B. prompt:cat, model:sdxl oder steps:>=20).",
   },
   view: {
+    selectFile: "{name} auswählen",
+    deselectFile: "Auswahl von {name} aufheben",
     grid: "Raster",
     masonry: "Wasserfall",
     table: "Tabelle",

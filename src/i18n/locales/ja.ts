@@ -73,6 +73,8 @@ export const ja: typeof en = {
     noMatchHint: "キーワードやパラメータ条件を調整してください (例: prompt:cat, model:sdxl, steps:>=20)。",
   },
   view: {
+    selectFile: "{name}を選択",
+    deselectFile: "{name}の選択を解除",
     grid: "グリッド",
     masonry: "ウォーターフォール",
     table: "リスト",

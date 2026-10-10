@@ -73,6 +73,8 @@ export const zhCN: typeof en = {
     noMatchHint: "尝试调整关键词或参数筛选条件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    selectFile: "选择 {name}",
+    deselectFile: "取消选择 {name}",
     grid: "网格",
     masonry: "瀑布流",
     table: "列表",

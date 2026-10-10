@@ -71,6 +71,8 @@ export const en = {
     noMatchHint: "Try adjusting keywords or parameter filters like prompt:cat, model:sdxl, or steps:>=20.",
   },
   view: {
+    selectFile: "Select {name}",
+    deselectFile: "Deselect {name}",
     grid: "Grid",
     masonry: "Waterfall",
     table: "Table",

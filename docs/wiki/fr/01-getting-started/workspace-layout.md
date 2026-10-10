@@ -42,7 +42,7 @@ La fenêtre adopte une conception sans cadre (frameless) avec une barre de titre
   - `Préférences / Paramètres...` (`Ctrl + ,` / `Cmd + ,`) : Ouvrir la fenêtre centrale de configuration à 8 onglets.
   - `Quitter` (`Alt + F4`) : Fermer proprement le studio.
 - **Édition** :
-  - `Tout sélectionner` (`Ctrl + A` / `Cmd + A`) : Sélectionner tous les éléments de la vue active.
+  - `Sélectionner les éléments chargés` (`Ctrl + A` / `Cmd + A`): Sélectionne uniquement les éléments chargés. Dépliez les piles pour inclure leurs images ; recommencez après le chargement de pages supplémentaires.
   - `Désélectionner tout` (`Échap`) : Désélectionner tous les éléments mis en surbrillance.
   - `Ajouter des tags en lot...` : Assigner ou retirer des tags aux fichiers sélectionnés.
   - `Ajouter à l'album en lot...` : Assigner les fichiers sélectionnés à un album.
@@ -152,7 +152,7 @@ Située tout en bas de la fenêtre :
 
 Lorsqu'une ou plusieurs cartes sont sélectionnées, une barre d'outils flottante apparaît au centre inférieur du canevas :
 
-- Indicateur de sélection multiple (`X sur Y sélectionnés`) avec boutons Tout sélectionner / Désélectionner.
+- Indicateur de sélection multiple (`X sur Y sélectionnés`) avec boutons Sélectionner les éléments chargés / Désélectionner.
 - Menu déroulant Définir la note (0 à 10 étoiles / demi-étoiles).
 - Déclencheurs de modales « Ajouter à l'album » et « Ajouter un tag ».
 - Déclencheur « Étiquetage auto (WD14) ».

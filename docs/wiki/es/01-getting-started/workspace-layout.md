@@ -41,7 +41,7 @@ La ventana utiliza un diseño sin marcos con una barra de título personalizada 
   - `Preferencias / Configuración...` (`Ctrl + ,` / `Cmd + ,`): Abrir la ventana central de ajustes de 8 pestañas.
   - `Salir` (`Alt + F4`): Cerrar Omera de forma ordenada.
 - **Edición**:
-  - `Seleccionar todo` (`Ctrl + A` / `Cmd + A`): Seleccionar todos los activos de la vista de galería activa.
+  - `Seleccionar elementos cargados` (`Ctrl + A` / `Cmd + A`): Selecciona solo elementos cargados. Expande las pilas para incluir sus imágenes y repite tras cargar más páginas.
   - `Deseleccionar todo` (`Esc`): Desmarcar todos los elementos seleccionados.
   - `Añadir etiquetas por lotes...`: Asignar o quitar etiquetas a los archivos seleccionados.
   - `Añadir al álbum por lotes...`: Asignar los archivos seleccionados a un álbum.
@@ -151,7 +151,7 @@ Ubicada en la parte inferior de la ventana:
 
 Cuando se seleccionan una o más tarjetas, aparece una barra de herramientas flotante en la parte inferior central del lienzo:
 
-- Indicador de elementos seleccionados (`X de Y seleccionados`) con botones de Seleccionar todo / Deseleccionar.
+- Indicador de elementos seleccionados (`X de Y seleccionados`) con botones de Seleccionar elementos cargados / Deseleccionar.
 - Desplegable de puntuación por lotes (0 a 10 estrellas).
 - Botones modales para «Añadir al álbum» y «Añadir etiqueta».
 - Activador de «Autoetiquetar (WD14)».

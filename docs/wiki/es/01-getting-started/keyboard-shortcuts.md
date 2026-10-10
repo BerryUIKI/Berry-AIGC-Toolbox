@@ -12,7 +12,7 @@ Omera está diseñado con un flujo de trabajo centrado en el teclado (**keyboard
 | `Esc` | **Cerrar / Deseleccionar** | Global | Cerrar el Lightbox o diálogo modal, cancelar la búsqueda o deseleccionar tarjetas. |
 | `←` / `→` | **Anterior / Siguiente** | Galería y Lightbox | Mover la selección al elemento adyacente (o avanzar/retroceder 1 fotograma en reproducción de vídeo). |
 | `↑` / `↓` | **Fila arriba / abajo** | Vista Cuadrícula | Mover la selección arriba o abajo en una fila visual completa. |
-| `Ctrl + A` / `Cmd + A` | **Seleccionar todo** | Lienzo de galería | Seleccionar todas las tarjetas que coincidan con la búsqueda o filtro activo. |
+| `Ctrl + A` / `Cmd + A` | **Seleccionar elementos cargados** | Lienzo de galería | Selecciona solo elementos cargados. Expande las pilas para incluir sus imágenes y repite tras cargar más páginas. |
 | `Supr` o `Retroceso` | **Mover a la papelera** | Selección de galería | Enviar los elementos seleccionados a la papelera de reciclaje del sistema operativo. |
 
 ---

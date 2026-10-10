@@ -67,7 +67,7 @@ Sobald mehrere Elemente markiert werden (über `Strg+Klick`, `Umschalt+Klick` od
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  [✓ 14 von 120 ausgewählt]  [Alle auswählen]  [Auswahl aufheben]                       │
+│  [✓ 14 von 120 ausgewählt]  [Geladene Einträge auswählen]  [Auswahl aufheben]                       │
 │  [★ Bewertung ▾]  [🏷 Tag]  [📁 Album]  [🏷️ Auto-Tag]  [★ Favorit]  [🔞 NSFW]          │
 │  [📋 Pfade kopieren]  [💬 Prompts kopieren]  [📂 Verschieben]  [📄 Kopieren]           │
 │  [🧹 Entwürfe aussortieren]  [📤 Exportieren...]  [🗑 Papierkorb]                       │

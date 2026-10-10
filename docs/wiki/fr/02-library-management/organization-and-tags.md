@@ -67,7 +67,7 @@ Dès que vous sélectionnez plusieurs éléments (via `Ctrl+Clic`, `Maj+Clic` ou
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  [✓ 14 sur 120 sélectionnés]  [Tout sélectionner]  [Désélectionner]                    │
+│  [✓ 14 sur 120 sélectionnés]  [Sélectionner les éléments chargés]  [Désélectionner]                    │
 │  [★ Définir la note ▾]  [🏷 Tag]  [📁 Album]  [🧠 Étiquetage auto]  [★ Fav]  [🔞 NSFW]   │
 │  [📋 Copier chemins]  [💬 Copier prompts]  [📂 Déplacer]  [📄 Copier]  [🧹 Élaguer]    │
 │  [📤 Exporter...]  [🗑 Corbeille]                                                      │

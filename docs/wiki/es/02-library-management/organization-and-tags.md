@@ -67,7 +67,7 @@ Siempre que seleccione múltiples elementos (mediante `Ctrl+Clic`, `Shift+Clic` 
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  [✓ 14 de 120 seleccionados]  [Seleccionar todo]  [Deseleccionar]                      │
+│  [✓ 14 de 120 seleccionados]  [Seleccionar elementos cargados]  [Deseleccionar]                      │
 │  [★ Puntuación ▾]  [🏷 Etiqueta]  [📁 Álbum]  [🧠 Autoetiquetar]  [★ Fav]  [🔞 NSFW]    │
 │  [📋 Copiar rutas]  [📋 Copiar prompts]  [📂 Mover]  [📄 Copiar]  [🧹 Borradores] [📤]  │
 │  [🗑 Papelera]                                                                         │

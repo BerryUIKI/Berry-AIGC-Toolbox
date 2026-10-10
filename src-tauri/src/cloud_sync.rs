@@ -5,12 +5,14 @@
 //! thread concurrency, token-bucket bandwidth throttling, and progress tracking.
 
 use std::collections::VecDeque;
-use std::fs;
+use std::fs::{self, File};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+#[cfg(test)]
+use std::time::Duration;
+use std::time::Instant;
 
 use omera_domain::{
     CloudBackupConfig, CloudStorageProvider, CloudSyncOptions, CloudSyncPhase, CloudSyncProgress,
@@ -19,60 +21,18 @@ use omera_domain::{
 pub use omera_scan::cloud_sync::SyncItem;
 use tauri::{AppHandle, Emitter};
 
-use crate::cloud_backup::{sha256_file, sha256_hex, S3Client, WebDavClient};
+#[cfg(test)]
+use crate::cloud_backup::sha256_hex;
+use crate::cloud_backup::{S3Client, WebDavClient};
+use omera_scan::transfer::{TransferControl, TransferLease};
 
 #[cfg(test)]
 #[path = "cloud_sync_namespace_tests.rs"]
 mod namespace_tests;
 
-// -----------------------------------------------------------------------------
-// Rate Limiter (Token Bucket)
-// -----------------------------------------------------------------------------
-
-pub struct RateLimiter {
-    bytes_per_sec: u64,
-    last_check: Instant,
-    tokens: f64,
-    capacity: f64,
-}
-
-impl RateLimiter {
-    pub fn new(kb_per_sec: u64) -> Self {
-        let bytes_per_sec = kb_per_sec * 1024;
-        let capacity = if bytes_per_sec > 0 {
-            (bytes_per_sec * 2) as f64
-        } else {
-            0.0
-        };
-        Self {
-            bytes_per_sec,
-            last_check: Instant::now(),
-            tokens: capacity,
-            capacity,
-        }
-    }
-
-    pub fn acquire(&mut self, bytes: usize) {
-        if self.bytes_per_sec == 0 {
-            return;
-        }
-        let now = Instant::now();
-        let elapsed = now.duration_since(self.last_check).as_secs_f64();
-        self.last_check = now;
-        self.tokens = (self.tokens + elapsed * (self.bytes_per_sec as f64)).min(self.capacity);
-
-        let needed = bytes as f64;
-        if self.tokens < needed {
-            let deficit = needed - self.tokens;
-            let wait_secs = deficit / (self.bytes_per_sec as f64);
-            thread::sleep(Duration::from_secs_f64(wait_secs));
-            self.tokens = 0.0;
-            self.last_check = Instant::now();
-        } else {
-            self.tokens -= needed;
-        }
-    }
-}
+#[cfg(test)]
+#[path = "cloud_sync_stream_tests.rs"]
+mod stream_tests;
 
 // -----------------------------------------------------------------------------
 // Cloud Sync State
@@ -195,9 +155,10 @@ fn run_cloud_sync_worker(
     }
 
     // Step 2: Setup rate limiter and work queue
-    let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(
+    let rate_limiter = TransferControl::new(
         options.bandwidth_limit_kbs.unwrap_or(0),
-    )));
+        Arc::clone(&cancel_flag),
+    );
     let work_queue = Arc::new(Mutex::new(VecDeque::from(items)));
 
     let completed_files_counter = Arc::new(AtomicUsize::new(0));
@@ -254,6 +215,7 @@ fn run_cloud_sync_worker(
                         completed.fetch_add(1, Ordering::SeqCst);
                         transferred.fetch_add(bytes, Ordering::SeqCst);
                     }
+                    Err(_) if cancel.load(Ordering::SeqCst) => break,
                     Err(err_msg) => {
                         failed.fetch_add(1, Ordering::SeqCst);
                         let mut errs = errors.lock().unwrap_or_else(|e| e.into_inner());
@@ -363,8 +325,10 @@ fn sync_single_item(
     config: &CloudBackupConfig,
     options: &CloudSyncOptions,
     item: &SyncItem,
-    rate_limiter: &Arc<Mutex<RateLimiter>>,
+    rate_limiter: &Arc<TransferControl>,
 ) -> Result<SyncOutcome, String> {
+    let mut lease = rate_limiter.acquire().map_err(|e| e.to_string())?;
+    let mut local_digest = None;
     if !item.local_path.exists() {
         return Err(format!(
             "Local file does not exist: {}",
@@ -406,8 +370,14 @@ fn sync_single_item(
                                 remote_mtime >= item.mtime_secs
                             }
                             CloudSyncStrategy::Sha256Checksum => {
-                                let local_hash = sha256_file(&item.local_path).unwrap_or_default();
-                                let remote_hash = sha256_file(&target).unwrap_or_default();
+                                let local_hash = cached_file_digest(
+                                    &item.local_path,
+                                    &mut lease,
+                                    &mut local_digest,
+                                )?;
+                                let remote_hash = lease
+                                    .hash(File::open(&target).map_err(|e| e.to_string())?)
+                                    .map_err(|e| e.to_string())?;
                                 !local_hash.is_empty() && local_hash == remote_hash
                             }
                         }
@@ -434,7 +404,11 @@ fn sync_single_item(
                             false
                         }
                         CloudSyncStrategy::Sha256Checksum => {
-                            let local_hash = sha256_file(&item.local_path).unwrap_or_default();
+                            let local_hash = cached_file_digest(
+                                &item.local_path,
+                                &mut lease,
+                                &mut local_digest,
+                            )?;
                             if let Some(ref remote_h) = remote_sha {
                                 remote_h == &local_hash
                             } else {
@@ -460,9 +434,14 @@ fn sync_single_item(
                         }
                         CloudSyncStrategy::Sha256Checksum => {
                             // WebDAV doesn't provide SHA-256, must download and hash
-                            let local_hash = sha256_file(&item.local_path).unwrap_or_default();
-                            let remote_data = webdav.get_object(&item.remote_key)?;
-                            let remote_hash = sha256_hex(&remote_data);
+                            let local_hash = cached_file_digest(
+                                &item.local_path,
+                                &mut lease,
+                                &mut local_digest,
+                            )?;
+                            let remote_hash = lease
+                                .hash(webdav.get_object_stream(&item.remote_key)?)
+                                .map_err(|e| e.to_string())?;
                             !local_hash.is_empty() && local_hash == remote_hash
                         }
                     }
@@ -480,16 +459,6 @@ fn sync_single_item(
         return Ok(SyncOutcome::DryRun(local_len));
     }
 
-    // Read local file bytes
-    let data = fs::read(&item.local_path)
-        .map_err(|e| format!("Failed to read file {}: {e}", item.local_path.display()))?;
-
-    // Apply bandwidth throttling
-    {
-        let mut limiter = rate_limiter.lock().unwrap_or_else(|e| e.into_inner());
-        limiter.acquire(data.len());
-    }
-
     // Transfer file to target provider
     match config.provider {
         CloudStorageProvider::LocalPath => {
@@ -503,46 +472,76 @@ fn sync_single_item(
                     format!("Failed to create directories for {}: {e}", target.display())
                 })?;
             }
-            fs::write(&target, &data)
-                .map_err(|e| format!("Failed to write {}: {e}", target.display()))?;
+            let parent = target
+                .parent()
+                .ok_or_else(|| "Mirror target has no parent".to_string())?;
+            let mut staged = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+            let copied = lease
+                .copy(
+                    File::open(&item.local_path).map_err(|e| e.to_string())?,
+                    staged.as_file_mut(),
+                )
+                .map_err(|e| e.to_string())?;
+            if copied != local_len {
+                return Err("Source length changed during transfer".into());
+            }
+            staged.as_file().sync_all().map_err(|e| e.to_string())?;
+            rate_limiter.check_cancelled().map_err(|e| e.to_string())?;
+            staged.persist(&target).map_err(|e| e.to_string())?;
         }
         CloudStorageProvider::S3 => {
             let s3 = S3Client::from_config(config)?;
             let object_key = s3.object_key(&item.remote_key);
-            let sha = if options.strategy == CloudSyncStrategy::Sha256Checksum {
-                Some(sha256_hex(&data))
-            } else {
-                None
-            };
-            s3.put_object_raw(&object_key, &data, sha.as_deref())?;
+            let digest = cached_file_digest(&item.local_path, &mut lease, &mut local_digest)?;
+            let checksum =
+                (options.strategy == CloudSyncStrategy::Sha256Checksum).then_some(digest.as_str());
+            s3.put_object_stream(
+                &object_key,
+                lease.reader_exact(
+                    File::open(&item.local_path).map_err(|e| e.to_string())?,
+                    local_len,
+                ),
+                local_len,
+                &digest,
+                checksum,
+            )?;
         }
         CloudStorageProvider::WebDav => {
             let webdav = WebDavClient::from_config(config)?;
-            webdav.put_object_path(&item.remote_key, &data)?;
+            webdav.put_object_stream(
+                &item.remote_key,
+                lease.reader_exact(
+                    File::open(&item.local_path).map_err(|e| e.to_string())?,
+                    local_len,
+                ),
+                local_len,
+                Some(rate_limiter),
+            )?;
         }
     }
 
+    rate_limiter.check_cancelled().map_err(|e| e.to_string())?;
     Ok(SyncOutcome::Uploaded(local_len))
+}
+
+fn cached_file_digest(
+    path: &std::path::Path,
+    lease: &mut TransferLease,
+    cached: &mut Option<String>,
+) -> Result<String, String> {
+    if cached.is_none() {
+        *cached = Some(
+            lease
+                .hash(File::open(path).map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?,
+        );
+    }
+    Ok(cached.as_ref().expect("digest initialized").clone())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_rate_limiter_unlimited() {
-        let mut limiter = RateLimiter::new(0);
-        let start = Instant::now();
-        limiter.acquire(1024 * 1024);
-        assert!(start.elapsed().as_millis() < 50);
-    }
-
-    #[test]
-    fn test_rate_limiter_throttling() {
-        let limiter = RateLimiter::new(500); // 500 KB/s
-        assert_eq!(limiter.bytes_per_sec, 500 * 1024);
-        assert_eq!(limiter.capacity, 1000.0 * 1024.0);
-    }
 
     #[test]
     fn test_sync_options_defaults() {
@@ -641,7 +640,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         // FastFingerprint should detect the change via mtime
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
@@ -705,7 +704,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         // FastFingerprint should skip because remote mtime >= local mtime
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
@@ -767,7 +766,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         // FastFingerprint should detect size difference immediately
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
@@ -844,7 +843,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         // FastFingerprint should return false (needs sync) because we cannot verify equality
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
@@ -916,7 +915,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -984,7 +983,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1040,7 +1039,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1099,7 +1098,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1177,7 +1176,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1244,7 +1243,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1315,7 +1314,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1386,7 +1385,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1455,7 +1454,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1519,7 +1518,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 
@@ -1584,7 +1583,7 @@ mod tests {
             ..Default::default()
         };
 
-        let rate_limiter = Arc::new(Mutex::new(RateLimiter::new(0)));
+        let rate_limiter = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
 
         let result = sync_single_item(&config, &options, &item, &rate_limiter);
 

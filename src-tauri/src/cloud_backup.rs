@@ -59,22 +59,6 @@ pub(crate) fn sha256_hex(data: &[u8]) -> String {
     hex::encode(hash)
 }
 
-/// Calculate SHA-256 of an on-disk file in streaming 64KB chunks.
-pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
-    use std::io::Read;
-    let mut file = std::fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 65536];
-    loop {
-        let n = file.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buffer[..n]);
-    }
-    Ok(hex::encode(hasher.finalize()))
-}
-
 fn format_iso8601_basic(time: SystemTime) -> (String, String) {
     let secs = time
         .duration_since(UNIX_EPOCH)
@@ -606,8 +590,19 @@ impl<'a> WebDavClient<'a> {
     }
 
     pub fn get_object(&self, filename: &str) -> Result<Vec<u8>, String> {
+        let mut bytes = Vec::new();
+        self.get_object_stream(filename)?
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("Failed to read WebDAV payload: {e}"))?;
+        Ok(bytes)
+    }
+
+    pub(crate) fn get_object_stream(
+        &self,
+        filename: &str,
+    ) -> Result<Box<dyn Read + Send + Sync>, String> {
         let url = format!("{}/{}", self.endpoint, filename);
-        let mut req = ureq::get(&url);
+        let mut req = media_transfer_agent().get(&url);
         if let Some(auth) = self.auth_header() {
             req = req.set("Authorization", &auth);
         }
@@ -616,11 +611,7 @@ impl<'a> WebDavClient<'a> {
             .call()
             .map_err(|e| format!("WebDAV download failed: {e}"))?;
         if resp.status() >= 200 && resp.status() < 300 {
-            let mut bytes = Vec::new();
-            resp.into_reader()
-                .read_to_end(&mut bytes)
-                .map_err(|e| format!("Failed to read WebDAV payload: {e}"))?;
-            Ok(bytes)
+            Ok(resp.into_reader())
         } else {
             Err(format!("WebDAV GET returned status: {}", resp.status()))
         }

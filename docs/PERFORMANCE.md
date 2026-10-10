@@ -196,3 +196,14 @@ and Space activation and an explicit expanded state. Members remain ordinary
 virtual rows; expansion does not mount the full library. Expansion responses
 are discarded if the gallery context or request revision changed while awaiting
 IPC. Collapsing retains the hero and removes hidden member selections.
+
+
+### Configurable Table columns
+
+The compact Table default prioritizes filename, prompt and model rather than
+forcing all metadata columns into ordinary windows. Widths and visibility affect
+only the existing visible row window and spacer column count. Fixed table layout
+and single-line ellipsis keep row height at 46 pixels even for long names and
+prompts. Saved preferences use the authoritative configuration revision, with
+compatible defaults for earlier installations. Optional preview decoding remains
+bounded by the visible window; hiding preview avoids speculative thumbnail work.

@@ -26,7 +26,7 @@ separately from an empty result. The older `get_prompt_stats` API remains suppor
 | Update DTOs | Rust `UpdateDownloadProgress` | `src/utils/updater.ts` |
 | Watcher events | `src-tauri/src/watcher.rs` | App refresh scheduling |
 
-[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 158 commands currently registered in `src-tauri/src/lib.rs`, their actual request keys and Rust return types. On any checkout, validate with `node scripts/generate-ipc-reference.mjs --check`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
+[IPC_REFERENCE.md](IPC_REFERENCE.md) inventories all 159 commands currently registered in `src-tauri/src/lib.rs`, their actual request keys and Rust return types. On any checkout, validate with `node scripts/generate-ipc-reference.mjs --check`. The generator fails if a registered signature is not recognized. It does not validate nested DTOs; engineers must test Serde/TypeScript compatibility explicitly. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
 
 Current commands are local Tauri IPC, not HTTP endpoints. Do not invent REST routes or expose these commands through a network server. Commands are restricted to the configured application WebView; IPC arguments still require backend validation.
 
@@ -251,3 +251,16 @@ Confirmation must refer to the exact backend preview the user saw. A boolean alo
 3. Document validation limits, side effects, lock/worker ownership, cancellation boundaries and partial outcomes. Reads that perform migration or cache writes must say so.
 4. Supply request/success/error fixtures using actual serialized property names. Never include secrets or personal file paths in fixtures.
 5. Update the command inventory and contract tests. Lead approval is required for identity, persistence, cleanup, signing and security boundaries.
+
+
+## Table column preferences
+
+`AppConfig.table_columns` is an optional-on-read list of `{ id, visible, width }`
+preferences. Older configuration receives an empty list on both sides, meaning
+the compact default (selection, filename, prompt and model). UI normalization
+ignores unknown/duplicate column IDs, clamps widths to 44–640 pixels (filename,
+prompt and model minimum 80), and always retains filename and selection.
+Visibility and widths are saved together through revision-checked configuration;
+failed saves retain the draft, show an error and leave active columns unchanged.
+Keyboard-accessible checkboxes and numeric width controls provide customization,
+with reset to the compact default. Horizontal scrolling stays inside the Table.

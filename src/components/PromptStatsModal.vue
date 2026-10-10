@@ -137,16 +137,17 @@ function onSelectKeyword(item: PromptKeywordStat) {
           <button
             type="button"
             class="refresh-btn"
-            title="Refresh statistics"
+            :title="t.promptStatsModal.refresh"
             :disabled="loading"
             @click="loadStats"
           >
-            {{ loading ? "..." : "↻ Refresh" }}
+            {{ loading ? t.promptStatsModal.refreshing : `↻ ${t.promptStatsModal.refresh}` }}
           </button>
           <button
             type="button"
             class="close-btn"
-            title="Close (Esc)"
+            :title="t.promptStatsModal.close"
+            :aria-label="t.promptStatsModal.close"
             @click="close"
           >
             ✕
@@ -245,7 +246,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
       <div class="stats-content">
         <div v-if="loading" class="loading-state">
           <div class="spinner"></div>
-          <p>Extracting keyword distributions and ratings across your library…</p>
+          <p>{{ t.promptStatsModal.loading }}</p>
         </div>
 
         <div v-else-if="error" class="error-state">
@@ -253,7 +254,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
         </div>
 
         <div v-else-if="currentItems.length === 0" class="empty-state">
-          <p>No statistics available in this category.</p>
+          <p>{{ t.promptStatsModal.empty }}</p>
         </div>
 
         <div v-else class="items-list">
@@ -261,7 +262,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
             v-for="(item, idx) in currentItems"
             :key="item.keyword"
             class="stat-row"
-            title="Click to search this in library"
+            :title="t.promptStatsModal.searchKeyword"
             @click="onSelectKeyword(item)"
           >
             <div class="stat-rank">{{ idx + 1 }}</div>
@@ -277,7 +278,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
             </div>
 
             <!-- Rating badge if available -->
-            <div v-if="item.avg_rating" class="stat-rating" title="Average Rating">
+            <div v-if="item.avg_rating" class="stat-rating" :title="t.promptStatsModal.avgRating">
               ★ {{ item.avg_rating.toFixed(1) }}
             </div>
 
@@ -286,7 +287,7 @@ function onSelectKeyword(item: PromptKeywordStat) {
               {{ item.count }}
             </div>
 
-            <button type="button" class="stat-search-hint" title="Filter library">
+            <button type="button" class="stat-search-hint" :title="t.promptStatsModal.filterLibrary" :aria-label="t.promptStatsModal.filterLibrary">
               🔍
             </button>
           </div>
@@ -296,10 +297,10 @@ function onSelectKeyword(item: PromptKeywordStat) {
       <!-- Footer -->
       <footer class="stats-footer">
         <span class="footer-tip">
-          💡 Click any keyword or model to filter library files.
+          💡 {{ t.promptStatsModal.tip }}
         </span>
         <button type="button" class="btn-done" @click="close">
-          Done
+          {{ t.promptStatsModal.done }}
         </button>
       </footer>
     </div>

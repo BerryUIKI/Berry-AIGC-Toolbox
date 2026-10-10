@@ -187,7 +187,7 @@ async function scan(folder: Folder, action: "scan" | "rebuild" = "scan") {
 async function removeFolder(folder: Folder, e: MouseEvent | KeyboardEvent) {
   e.stopPropagation();
   const folderName = getFolderName(folder.path);
-  const template = t.value.nav.removeFolderConfirm || 'Remove folder "{name}" from Omera? Files on disk will not be deleted.';
+  const template = t.value.nav.removeFolderConfirm;
   const confirmMsg = template.replace("{name}", folderName);
   if (!window.confirm(confirmMsg)) {
     return;
@@ -626,7 +626,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
     ref="sidebarRef"
     class="sidebar-eagle"
     :class="{ collapsed }"
-    aria-label="Sidebar Navigation"
+    :aria-label="t.nav.navigationLabel"
     @keydown="onSidebarKeydown"
   >
     <div class="sidebar-scrollable">
@@ -693,8 +693,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
             type="button"
             class="group-action-btn"
             :disabled="addingFolder"
-            :title="t.nav.addFolder || t.addFolder?.title || 'Add Folder'"
-            :aria-label="t.nav.addFolder || t.addFolder?.title || 'Add Folder'"
+            :title="t.nav.addFolder"
+            :aria-label="t.nav.addFolder"
             @click="pickFolder"
           >
             <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
@@ -718,8 +718,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                 class="tree-arrow-btn"
                 :class="{ expanded: expandedPaths.has(folder.path) }"
                 :aria-expanded="expandedPaths.has(folder.path)"
-                :aria-label="(expandedPaths.has(folder.path) ? (t.nav?.collapse || 'Collapse') : (t.nav?.expand || 'Expand')) + ' ' + getFolderName(folder.path)"
-                :title="expandedPaths.has(folder.path) ? (t.nav?.collapse || 'Collapse') : (t.nav?.expand || 'Expand')"
+                :aria-label="(expandedPaths.has(folder.path) ? t.nav.collapse : t.nav.expand) + ' ' + getFolderName(folder.path)"
+                :title="expandedPaths.has(folder.path) ? t.nav.collapse : t.nav.expand"
                 @click.stop="toggleFolderExpand(folder)"
               >
                 <span v-if="loadingPaths.has(folder.path)" class="tree-loading-dot">…</span>
@@ -749,8 +749,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   type="button"
                   class="icon-btn import-btn"
                   :disabled="isBusy(folder.id)"
-                  :title="t.importModal?.title || 'Import Files'"
-                  :aria-label="t.importModal?.title || 'Import Files'"
+                  :title="t.importModal.title"
+                  :aria-label="t.importModal.title"
                   @click="handleImportToManaged(folder, $event)"
                 >
                   📥
@@ -760,8 +760,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
                   type="button"
                   class="icon-btn harvest-btn"
                   :disabled="isBusy(folder.id)"
-                  :title="t.nav?.harvest || 'Harvest New Images'"
-                  :aria-label="t.nav?.harvest || 'Harvest New Images'"
+                  :title="t.nav.harvest"
+                  :aria-label="t.nav.harvest"
                   @click="harvest(folder, $event)"
                 >
                   {{ isBusy(folder.id) ? '⏳' : '⚡' }}
@@ -888,8 +888,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               v-model="tagQuery"
               type="text"
               class="tag-search-input"
-              :placeholder="t.nav.filterTags || 'Filter tags…'"
-              :aria-label="t.nav.filterTags || 'Filter tags…'"
+              :placeholder="t.nav.filterTags"
+              :aria-label="t.nav.filterTags"
               autocomplete="off"
               spellcheck="false"
               @keydown="onTagSearchKeydown"
@@ -898,8 +898,8 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
               v-if="tagQuery"
               type="button"
               class="tag-search-clear-btn"
-              :title="t.nav.clearTagFilter || 'Clear tag filter'"
-              :aria-label="t.nav.clearTagFilter || 'Clear tag filter'"
+              :title="t.nav.clearTagFilter"
+              :aria-label="t.nav.clearTagFilter"
               @click="clearTagFilter"
             >
               ✕
@@ -930,13 +930,13 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
             <span v-if="tagCounts?.[tag.id]" class="tag-count" aria-hidden="true">{{ tagCounts[tag.id] }}</span>
           </button>
           <p v-if="tags === undefined" class="empty-hint">
-            {{ t.nav.loadingTags || 'Loading tags…' }}
+            {{ t.nav.loadingTags }}
           </p>
           <p v-else-if="tags.length === 0" class="empty-hint">
             {{ t.nav.noTags }}
           </p>
           <p v-else-if="filteredTags.length === 0" class="empty-hint no-match-hint">
-            {{ t.nav.noMatchingTags || 'No matching tags.' }}
+            {{ t.nav.noMatchingTags }}
           </p>
         </div>
       </section>
@@ -944,7 +944,7 @@ function onDropOnTag(e: DragEvent, tag: Tag) {
 
     <!-- Sidebar Bottom Action Bar (Eagle Style) -->
     <footer class="sidebar-footer">
-      <div class="footer-tools" role="toolbar" aria-label="Sidebar Tools">
+      <div class="footer-tools" role="toolbar" :aria-label="t.nav.toolsLabel">
         <button
           type="button"
           class="tool-btn"

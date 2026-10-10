@@ -5,6 +5,7 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
+import { en } from "../src/i18n/locales/en.ts";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
 
@@ -26,52 +27,7 @@ function loadProductionComponent(relativePath, componentId) {
 
   // Mock i18n
   const mockI18n = `
-  const i18nData = {
-    nav: {
-      library: "Library",
-      allImages: "All Images",
-      favorites: "Favorites",
-      sensitive: "Sensitive (18+)",
-      promptInsights: "Prompt Insights",
-      folders: "Folders",
-      noFolders: "No folders added yet.",
-      scan: "Scan",
-      scanning: "Scanning...",
-      rebuild: "Rebuild",
-      rebuilding: "Rebuilding...",
-      remove: "Remove",
-      removeFolderConfirm: 'Remove folder "{name}" from Omera? Files on disk will not be deleted.',
-      harvest: "Harvest New Images",
-      albums: "Albums",
-      newAlbum: "+ New",
-      noAlbums: "No albums yet.",
-      tags: "Tags",
-      newTag: "+ New",
-      noTags: "No tags yet.",
-      filterTags: "Filter tags…",
-      clearTagFilter: "Clear tag filter",
-      noMatchingTags: "No matching tags.",
-      loadingTags: "Loading tags…",
-      recursiveMode: "Subfolders",
-      singleLevelMode: "Direct only",
-      addFolder: "Add Folder",
-      expand: "Expand",
-      collapse: "Collapse",
-    },
-    addFolder: {
-      title: "Add Folder to Library",
-    },
-    search: {
-      insights: "Insights",
-      autoTagger: "Auto-Tag",
-      models: "Models",
-      database: "Database",
-      shortcuts: "Shortcuts",
-    },
-    importModal: {
-      title: "Import Files",
-    },
-  };
+  const i18nData = ${JSON.stringify(en)};
   const t = new Proxy(i18nData, {
     get(target, prop) {
       if (prop === "value") return target;
@@ -283,7 +239,7 @@ test("Sidebar renders accessible focusable button controls with WAI-ARIA states"
     const html = await renderToString(app);
 
     // Root landmark and label
-    assert.ok(html.includes('aria-label="Sidebar Navigation"'), "Sidebar root exposes landmark aria-label");
+    assert.ok(html.includes(`aria-label="${en.nav.navigationLabel}"`), "Sidebar root exposes landmark aria-label");
 
     // Semantic Library button destinations
     assert.ok(html.includes('aria-current="page"'), "All Images is active button with aria-current='page'");
@@ -312,7 +268,7 @@ test("Sidebar renders accessible focusable button controls with WAI-ARIA states"
     assert.ok(html.includes('aria-label="landscape (8)"'), "Tag chip has accessible name and count");
 
     // Footer tools
-    assert.ok(html.includes('role="toolbar" aria-label="Sidebar Tools"'), "Footer has toolbar semantics");
+    assert.ok(html.includes(`role="toolbar" aria-label="${en.nav.toolsLabel}"`), "Footer has toolbar semantics");
     assert.ok(html.includes('aria-label="Insights"'), "Insights button has accessible aria-label");
     assert.ok(html.includes('aria-label="Auto-Tag"'), "Auto-Tag button has accessible aria-label");
     assert.ok(html.includes('aria-label="Shortcuts"'), "Shortcuts button has accessible aria-label");

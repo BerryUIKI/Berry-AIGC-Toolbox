@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from "../i18n";
+import { computed } from "vue";
 
 defineProps<{
   show: boolean;
@@ -9,11 +10,11 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
-const shortcuts = [
+const shortcuts = computed(() => [
   { key: "Space / Enter", desc: "Open preview / full inspector for selected image" },
   { key: "Esc", desc: "Close preview or modal, clear multi-selection" },
   { key: "← / → / ↑ / ↓", desc: "Navigate between images in grid or list" },
-  { key: "Cmd/Ctrl + A", desc: "Select all images in current view" },
+  { key: "Cmd/Ctrl + A", desc: t.value.view.selectAll },
   { key: "/ or Cmd/Ctrl + F", desc: "Focus search bar" },
   { key: "1 - 5", desc: "Quickly rate selected image(s) 1 to 5 stars" },
   { key: "0", desc: "Clear rating on selected image(s)" },
@@ -22,7 +23,7 @@ const shortcuts = [
   { key: "I", desc: "Toggle metadata inspector panel inside preview" },
   { key: "Delete / Backspace", desc: "Move selected image(s) to Trash" },
   { key: "?", desc: "Show this keyboard shortcuts guide" },
-];
+]);
 </script>
 
 <template>

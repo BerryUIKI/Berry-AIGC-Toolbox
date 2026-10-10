@@ -2584,7 +2584,8 @@ function onResetZoom() {
           <BatchActionBar
             v-if="selectedFilesList.length > 0 && !isAnyModalOpen"
             :selected-count="selectedFilesList.length"
-            :total-count="files.length"
+            :total-count="galleryTotal"
+            :loaded-count="files.length"
             :selected-files="selectedFilesList"
             @clear-selection="onClearSelection"
             @select-all="onSelectAll"

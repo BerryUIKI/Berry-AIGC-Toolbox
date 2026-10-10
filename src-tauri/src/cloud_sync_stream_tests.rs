@@ -1,7 +1,24 @@
 use super::*;
 use std::io::{Read, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc;
+
+fn read_request_headers(stream: &mut TcpStream) -> Vec<u8> {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let mut headers = Vec::new();
+    while !headers.ends_with(b"\r\n\r\n") {
+        assert!(
+            headers.len() < 16 * 1024,
+            "fixture request headers exceeded bound"
+        );
+        let mut byte = [0];
+        stream.read_exact(&mut byte).unwrap();
+        headers.push(byte[0]);
+    }
+    headers
+}
 
 #[test]
 fn cancelled_throttled_local_transfer_preserves_source_and_previous_destination() {
@@ -90,13 +107,12 @@ fn stalled_webdav_checksum_body_has_bounded_cancellation_completion() {
     let (release_send, release_receive) = mpsc::channel();
     let server = thread::spawn(move || {
         let (mut head, _) = listener.accept().unwrap();
-        let mut request = [0; 1024];
-        head.read(&mut request).unwrap();
+        assert!(read_request_headers(&mut head).starts_with(b"HEAD "));
         head.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 16\r\nConnection: close\r\n\r\n")
             .unwrap();
         drop(head);
         let (mut body, _) = listener.accept().unwrap();
-        body.read(&mut request).unwrap();
+        assert!(read_request_headers(&mut body).starts_with(b"GET "));
         body.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 16\r\nConnection: close\r\n\r\nx")
             .unwrap();
         started_send.send(()).unwrap();

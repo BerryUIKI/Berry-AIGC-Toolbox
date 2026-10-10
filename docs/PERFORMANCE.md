@@ -12,8 +12,8 @@ Omera should remain interactive with large local libraries while keeping CPU, me
 
 ### Cloud media transfer contract
 
-The reusable primitives are implemented first; production provider routing is
-tracked separately in #255/#283 until the follow-up integration lands.
+The media worker shares these primitives across all items. Snapshot archive
+creation is a separate operation and is outside this media buffer budget.
 
 Media sync uses a shared transfer budget: at most eight active 64 KiB engine
 buffers (512 KiB total), independent of media size and the requested worker count.
@@ -24,7 +24,10 @@ reuses that digest. WebDAV checksum downloads are hashed as a stream.
 
 Cancellation is checked between chunks and while waiting for budget or bandwidth.
 Limiter waits release their mutex and check cancellation at most every 25 ms.
-Network adapters bound connect/read/write inactivity; cancellation cannot
+Network adapters bound connect/read/write inactivity to two seconds, and HEAD
+and collection requests have a two-second total deadline. Active transfers have
+no total-duration deadline so deliberate bandwidth limits remain usable.
+Cancellation is checked before/after each collection request. Cancellation cannot
 interrupt an OS filesystem call already in progress. Local mirrors stage output
 before publication so interrupted transfers retain an existing destination.
 Synthetic stream, throttle, budget and stalled-provider fixtures establish these

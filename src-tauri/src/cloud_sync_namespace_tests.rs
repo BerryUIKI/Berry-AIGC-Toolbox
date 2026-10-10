@@ -63,8 +63,8 @@ impl Fixture {
     }
 }
 
-fn limiter() -> Arc<Mutex<RateLimiter>> {
-    Arc::new(Mutex::new(RateLimiter::new(0)))
+fn limiter() -> Arc<TransferControl> {
+    TransferControl::new(0, Arc::new(AtomicBool::new(false)))
 }
 
 #[test]

@@ -94,6 +94,20 @@ its selection anchor, using at most the previously loaded page extent. It stops
 on query-context changes, end of results or a non-advancing page. Metadata facets
 and album/tag sidebars are not reloaded for these flag-only changes.
 
+Stack spread and collapse are nonessential animations. The reduced-motion rule
+must match both state selectors with equal specificity so expanded cards cannot
+override the guard.
+
+Browser validation (2026-10-10/11): production Vue components with synthetic IPC,
+1,200 generated records and no user media. Grid, Waterfall and Table were checked
+at 960×640 and 1600×950; Grid/Waterfall retained 200px cards. Scrollbar dragging,
+stack expansion/collapse and keyboard selection were exercised. Removing a
+favorite in Favorites removed its row and decremented the count; undo/redo
+restored/reapplied both. Removing a sensitive flag in Table likewise updated its
+filter and count. Reduced-motion CSS was forced in a temporary test server;
+expanded stack animation exposed a selector-specificity defect. This browser
+fixture does not qualify native Tauri transport or OS preference detection.
+
 ### Batch export database ownership
 
 The export worker snapshots only the explicitly selected IDs and their lookup

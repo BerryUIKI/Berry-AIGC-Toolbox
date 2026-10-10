@@ -186,3 +186,13 @@ Progress-event coalescing and streaming full-folder traversal are complete. Comp
 - [x] Provide System, Midnight, Graphite, Violet, and Light themes. Use semantic color tokens so every panel follows the selected theme.
 - [x] Add a small background-activity popover for scans, thumbnail generation, tagging, and embeddings, with pause/cancel controls where supported.
 - [x] Preserve scroll position independently per folder/search context so navigation does not force users back to the beginning.
+
+
+### Table stack expansion
+
+Table uses the same scoped stack summaries and expansion handler as Grid and
+Waterfall. Only the stack hero renders a count/expand button, with native Enter
+and Space activation and an explicit expanded state. Members remain ordinary
+virtual rows; expansion does not mount the full library. Expansion responses
+are discarded if the gallery context or request revision changed while awaiting
+IPC. Collapsing retains the hero and removes hidden member selections.

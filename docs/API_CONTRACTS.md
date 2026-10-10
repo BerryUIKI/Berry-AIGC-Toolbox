@@ -257,7 +257,7 @@ Confirmation must refer to the exact backend preview the user saw. A boolean alo
 
 `AppConfig.table_columns` is an optional-on-read list of `{ id, visible, width }`
 preferences. Older configuration receives an empty list on both sides, meaning
-the compact default (selection, filename, prompt and model). UI normalization
+the compact default (selection, preview, filename, prompt and model). UI normalization
 ignores unknown/duplicate column IDs, clamps widths to 44–640 pixels (filename,
 prompt and model minimum 80), and always retains filename and selection.
 Visibility and widths are saved together through revision-checked configuration;

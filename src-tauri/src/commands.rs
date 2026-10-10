@@ -3290,6 +3290,13 @@ pub fn scan_loras_directory(dir_path: String, state: State<'_, AppState>) -> Res
 // --- Application Configuration & Storage Directory Management ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableColumnPreference {
+    pub id: String,
+    pub visible: bool,
+    pub width: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
     pub config_revision: u64,
@@ -3304,6 +3311,8 @@ pub struct AppConfig {
     pub blur_nsfw: bool,
     pub show_card_badges: bool,
     pub default_view: String,
+    #[serde(default)]
+    pub table_columns: Vec<TableColumnPreference>,
     pub thumbnail_max_edge: u32,
     #[serde(default = "default_thumbnail_cache_budget_mb")]
     pub thumbnail_cache_budget_mb: u64,
@@ -3396,6 +3405,7 @@ impl Default for AppConfig {
             blur_nsfw: true,
             show_card_badges: true,
             default_view: "grid".to_string(),
+            table_columns: Vec::new(),
             thumbnail_max_edge: 384,
             thumbnail_cache_budget_mb: default_thumbnail_cache_budget_mb(),
             similarity_limit: 50,
@@ -3424,6 +3434,23 @@ mod app_config_tests {
     use super::AppConfig;
 
     #[test]
+    fn table_preferences_round_trip_with_frontend_field_names() {
+        let mut value = serde_json::to_value(AppConfig::default()).unwrap();
+        value["table_columns"] = serde_json::json!([
+            {"id": "prompt", "visible": true, "width": 240},
+            {"id": "model", "visible": false, "width": 100}
+        ]);
+        let config: AppConfig = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(config.table_columns[0].id, "prompt");
+        assert_eq!(config.table_columns[0].width, 240);
+        assert!(!config.table_columns[1].visible);
+        assert_eq!(
+            serde_json::to_value(config).unwrap()["table_columns"],
+            value["table_columns"]
+        );
+    }
+
+    #[test]
     fn legacy_config_receives_defaults_for_new_preferences() {
         let mut value = serde_json::to_value(AppConfig::default()).unwrap();
         value.as_object_mut().unwrap().remove("suppressed_warnings");
@@ -3432,6 +3459,7 @@ mod app_config_tests {
             .unwrap()
             .remove("startup_scan_interval_minutes");
         value.as_object_mut().unwrap().remove("theme");
+        value.as_object_mut().unwrap().remove("table_columns");
         value
             .as_object_mut()
             .unwrap()
@@ -3450,6 +3478,7 @@ mod app_config_tests {
         assert!(config.suppressed_warnings.is_empty());
         assert_eq!(config.startup_scan_interval_minutes, 360);
         assert_eq!(config.theme, "system");
+        assert!(config.table_columns.is_empty());
         assert_eq!(config.thumbnail_cache_budget_mb, 2048);
         assert_eq!(config.comfyui_url, "http://127.0.0.1:8188");
         assert_eq!(config.webui_url, "http://127.0.0.1:7860");

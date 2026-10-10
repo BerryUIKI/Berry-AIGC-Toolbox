@@ -61,6 +61,7 @@ import { applyTheme, normalizeTheme, type AppTheme } from "./utils/theme";
 import ToastContainer from "./components/ToastContainer.vue";
 import { useNotification } from "./utils/notification";
 import { actionHistory } from "./utils/history";
+import { applyBooleanFlagMutation } from "./utils/batch-flags";
 import { collaborationSync } from "./utils/collaborationSync";
 import { hasActiveDialog, isEditableTarget } from "./utils/dialog";
 import { useGalleryPrivacy } from "./utils/gallery-privacy";
@@ -1607,6 +1608,40 @@ async function onAutoTagsApplied() {
   }
 }
 
+function patchBatchFlag(ids: number[], flag: "is_favorite" | "is_nsfw", value: boolean) {
+  const changed = new Set(ids);
+  for (const id of ids) fileDetailsManager.update(id, { [flag]: value });
+  files.value = files.value.map(file => file.id != null && changed.has(file.id)
+    ? { ...file, [flag]: value } : file);
+  for (const target of [selectedFile, lightboxFile]) {
+    if (target.value?.id != null && changed.has(target.value.id)) {
+      target.value = { ...target.value, [flag]: value };
+    }
+  }
+}
+
+async function refreshBatchFlagMutation() {
+  const context = galleryContextKey.value;
+  const selectedPaths = new Set(selectedFilePaths.value);
+  const anchor = selectionAnchorPath.value;
+  const loadedCount = files.value.length;
+  const reload = loadFiles();
+  const version = libraryRequestVersion;
+  await Promise.all([refreshCounts(), reload]);
+  if (version !== libraryRequestVersion || context !== galleryContextKey.value) return;
+  // Refill only the extent already loaded, with one bounded page in flight.
+  while (files.value.length < loadedCount && galleryHasMore.value) {
+    const before = nextGalleryOffset.value;
+    await loadMoreFiles();
+    if (version !== libraryRequestVersion || context !== galleryContextKey.value) return;
+    if (nextGalleryOffset.value <= before) break;
+  }
+  const validPaths = new Set(files.value.map(file => file.path));
+  selectedFilePaths.value = new Set([...selectedPaths].filter(path => validPaths.has(path)));
+  selectionAnchorPath.value = anchor && validPaths.has(anchor) ? anchor : null;
+  if (selectedFile.value && !validPaths.has(selectedFile.value.path)) selectedFile.value = null;
+}
+
 async function onBatchToggleFavorite(isFavorite: boolean) {
   const targetFiles = selectedFilesList.value.filter((f): f is ImageFile & { id: number } => f.id != null);
   if (targetFiles.length === 0) return;
@@ -1616,37 +1651,12 @@ async function onBatchToggleFavorite(isFavorite: boolean) {
     previousFavs.set(f.id, !!f.is_favorite);
   }
 
-  const applyFavState = async (favMap: Map<number, boolean>) => {
-    const favIds: number[] = [];
-    const unfavIds: number[] = [];
-    for (const [id, fav] of favMap.entries()) {
-      if (fav) favIds.push(id);
-      else unfavIds.push(id);
-    }
-    if (favIds.length > 0) {
-      await invoke("set_files_favorite", { fileIds: favIds, isFavorite: true });
-      for (const id of favIds) {
-        const isFavorite = true;
-        fileDetailsManager.update(id, { is_favorite: isFavorite });
-      }
-    }
-    if (unfavIds.length > 0) {
-      await invoke("set_files_favorite", { fileIds: unfavIds, isFavorite: false });
-      for (const id of unfavIds) {
-        const isFavorite = false;
-        fileDetailsManager.update(id, { is_favorite: isFavorite });
-      }
-    }
-    files.value = files.value.map((f) => {
-      if (f.id != null && favMap.has(f.id)) {
-        return { ...f, is_favorite: favMap.get(f.id) };
-      }
-      return f;
-    });
-    if (selectedFile.value?.id != null && favMap.has(selectedFile.value.id)) {
-      selectedFile.value.is_favorite = favMap.get(selectedFile.value.id);
-    }
-  };
+  const applyFavState = (values: Map<number, boolean>) => applyBooleanFlagMutation(
+    values,
+    async (ids, value) => { await invoke("set_files_favorite", { fileIds: ids, isFavorite: value }); },
+    (ids, value) => patchBatchFlag(ids, "is_favorite", value),
+    refreshBatchFlagMutation,
+  );
 
   try {
     const newFavMap = new Map<number, boolean>();
@@ -1671,37 +1681,12 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
     previousNsfw.set(f.id, !!f.is_nsfw);
   }
 
-  const applyNsfwState = async (nsfwMap: Map<number, boolean>) => {
-    const nsfwIds: number[] = [];
-    const sfwIds: number[] = [];
-    for (const [id, nsfw] of nsfwMap.entries()) {
-      if (nsfw) nsfwIds.push(id);
-      else sfwIds.push(id);
-    }
-    if (nsfwIds.length > 0) {
-      await invoke("set_files_nsfw", { fileIds: nsfwIds, isNsfw: true });
-      for (const id of nsfwIds) {
-        const isNsfw = true;
-        fileDetailsManager.update(id, { is_nsfw: isNsfw });
-      }
-    }
-    if (sfwIds.length > 0) {
-      await invoke("set_files_nsfw", { fileIds: sfwIds, isNsfw: false });
-      for (const id of sfwIds) {
-        const isNsfw = false;
-        fileDetailsManager.update(id, { is_nsfw: isNsfw });
-      }
-    }
-    files.value = files.value.map((f) => {
-      if (f.id != null && nsfwMap.has(f.id)) {
-        return { ...f, is_nsfw: nsfwMap.get(f.id) };
-      }
-      return f;
-    });
-    if (selectedFile.value?.id != null && nsfwMap.has(selectedFile.value.id)) {
-      selectedFile.value.is_nsfw = nsfwMap.get(selectedFile.value.id);
-    }
-  };
+  const applyNsfwState = (values: Map<number, boolean>) => applyBooleanFlagMutation(
+    values,
+    async (ids, value) => { await invoke("set_files_nsfw", { fileIds: ids, isNsfw: value }); },
+    (ids, value) => patchBatchFlag(ids, "is_nsfw", value),
+    refreshBatchFlagMutation,
+  );
 
   try {
     const newNsfwMap = new Map<number, boolean>();

@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { t } from "../i18n";
-import type { DatabaseStats, PromptKeywordStat, PromptStat, PromptStats } from "../types";
+import type { PromptKeywordStat, PromptStats } from "../types";
 
 const props = defineProps<{
   open: boolean;
@@ -22,27 +22,9 @@ const activeTab = ref<"positive" | "negative" | "models" | "samplers">("positive
 async function loadStats() {
   loading.value = true;
   error.value = "";
+  stats.value = null;
   try {
-    const [pos, neg, dbStats] = await Promise.all([
-      invoke<PromptStat[]>("get_prompt_stats", { isNegative: false, limit: 40 }),
-      invoke<PromptStat[]>("get_prompt_stats", { isNegative: true, limit: 40 }),
-      invoke<DatabaseStats>("get_database_stats").catch(() => null),
-    ]);
-    const positiveWords: PromptKeywordStat[] = (pos || []).map((p) => ({
-      keyword: p.text,
-      count: p.count,
-    }));
-    const negativeWords: PromptKeywordStat[] = (neg || []).map((p) => ({
-      keyword: p.text,
-      count: p.count,
-    }));
-    stats.value = {
-      total_analyzed: dbStats?.file_count ?? positiveWords.reduce((acc, p) => acc + p.count, 0),
-      top_positive_words: positiveWords,
-      top_negative_words: negativeWords,
-      top_models: [],
-      top_samplers: [],
-    };
+    stats.value = await invoke<PromptStats>("get_prompt_insights", { limit: 40 });
   } catch (e) {
     error.value = String(e);
   } finally {

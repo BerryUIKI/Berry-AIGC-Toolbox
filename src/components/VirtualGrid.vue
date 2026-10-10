@@ -1604,6 +1604,7 @@ function onDragStart(e: DragEvent, file: ImageFile) {
 @media (prefers-reduced-motion: reduce) {
   .grid-card,
   .grid-card.is-collapsed-stack,
+  .grid-card.stack-expanded,
   .card-select-btn,
   .badge-stack,
   .card-stack-compare-btn,

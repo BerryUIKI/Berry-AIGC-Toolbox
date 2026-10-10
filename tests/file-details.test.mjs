@@ -185,16 +185,7 @@ test("App.vue integrates FileDetailsManager and watches full revision identity",
     /fileDetailsManager\.update\(fileId,\s*\{\s*rating:\s*rating\s*\?\?\s*undefined\s*\}\);/,
     "onFileRated updates fileDetailsManager",
   );
-  assert.match(
-    appSource,
-    /fileDetailsManager\.update\(id,\s*\{\s*is_favorite:\s*isFavorite\s*\}\);/,
-    "onBatchToggleFavorite updates fileDetailsManager",
-  );
-  assert.match(
-    appSource,
-    /fileDetailsManager\.update\(id,\s*\{\s*is_nsfw:\s*isNsfw\s*\}\);/,
-    "onBatchToggleNsfw updates fileDetailsManager",
-  );
+  // Boolean flag patches are exercised through the production handler in batch-flags.test.mjs.
   assert.match(
     appSource,
     /fileDetailsManager\.update\(file\.id,\s*file\);/,

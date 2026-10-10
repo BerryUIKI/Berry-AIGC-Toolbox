@@ -189,6 +189,7 @@ pub fn run() {
             commands::set_file_nsfw,
             commands::set_files_nsfw,
             commands::get_prompt_stats,
+            commands::get_prompt_insights,
             commands::get_checkpoint_models,
             commands::import_model_cache_file,
             commands::resolve_model_hash,

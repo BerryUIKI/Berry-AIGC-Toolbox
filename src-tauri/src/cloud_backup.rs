@@ -3,17 +3,26 @@
 use std::fs::{self, File};
 use std::io::{Cursor, Read, Write};
 use std::path::Path;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use omera_domain::{
     CloudBackupConfig, CloudBackupResult, CloudPingResult, CloudRestoreResult, CloudSnapshotMeta,
     CloudStorageProvider,
 };
+use omera_scan::transfer::TransferControl;
 use omera_storage::Database;
 use sha2::{Digest, Sha256};
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
+
+fn media_transfer_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(2))
+        .timeout_read(Duration::from_secs(2))
+        .timeout_write(Duration::from_secs(2))
+        .build()
+}
 
 // -----------------------------------------------------------------------------
 // Cryptographic & SigV4 Utilities
@@ -197,6 +206,17 @@ impl<'a> S3Client<'a> {
         payload: &[u8],
         extra_headers: &[(&str, &str)],
     ) -> (String, Vec<(String, String)>) {
+        self.sign_request_hash(method, path, query, &sha256_hex(payload), extra_headers)
+    }
+
+    fn sign_request_hash(
+        &self,
+        method: &str,
+        path: &str,
+        query: &str,
+        payload_hash: &str,
+        extra_headers: &[(&str, &str)],
+    ) -> (String, Vec<(String, String)>) {
         let (date_str, datetime_str) = format_iso8601_basic(SystemTime::now());
 
         let url_parsed = self
@@ -205,7 +225,7 @@ impl<'a> S3Client<'a> {
             .trim_start_matches("http://");
         let host = url_parsed.split('/').next().unwrap_or(url_parsed);
 
-        let payload_hash = sha256_hex(payload);
+        let payload_hash = payload_hash.to_owned();
 
         let canonical_uri = if path.starts_with('/') {
             path.to_string()
@@ -300,23 +320,42 @@ impl<'a> S3Client<'a> {
         &self,
         key: &str,
         data: &[u8],
-        sha256_hex: Option<&str>,
+        checksum: Option<&str>,
+    ) -> Result<(), String> {
+        self.put_object_stream(
+            key,
+            Cursor::new(data),
+            data.len() as u64,
+            &sha256_hex(data),
+            checksum,
+        )
+    }
+
+    pub(crate) fn put_object_stream(
+        &self,
+        key: &str,
+        source: impl Read,
+        length: u64,
+        digest: &str,
+        checksum: Option<&str>,
     ) -> Result<(), String> {
         let path = format!("/{}/{}", self.bucket, key);
-        let extra = if let Some(sha) = sha256_hex {
+        let extra = if let Some(sha) = checksum {
             vec![("x-amz-meta-sha256", sha)]
         } else {
             vec![]
         };
-        let (url, headers) = self.sign_request_ext("PUT", &path, "", data, &extra);
+        let (url, headers) = self.sign_request_hash("PUT", &path, "", digest, &extra);
 
-        let mut req = ureq::put(&url);
+        let mut req = media_transfer_agent()
+            .put(&url)
+            .set("Content-Length", &length.to_string());
         for (k, v) in headers {
             req = req.set(&k, &v);
         }
 
         let resp = req
-            .send_bytes(data)
+            .send(source)
             .map_err(|e| format!("S3 PUT failed: {e}"))?;
         if resp.status() >= 200 && resp.status() < 300 {
             Ok(())
@@ -329,7 +368,9 @@ impl<'a> S3Client<'a> {
         let path = format!("/{}/{}", self.bucket, key);
         let (url, headers) = self.sign_request("HEAD", &path, "", &[]);
 
-        let mut req = ureq::head(&url);
+        let mut req = media_transfer_agent()
+            .head(&url)
+            .timeout(Duration::from_secs(2));
         for (k, v) in headers {
             req = req.set(&k, &v);
         }
@@ -470,7 +511,9 @@ impl<'a> WebDavClient<'a> {
     ) -> Result<Option<(u64, Option<String>)>, String> {
         let clean = relative_path.trim_start_matches('/');
         let url = format!("{}/{}", self.endpoint, clean);
-        let mut req = ureq::head(&url);
+        let mut req = media_transfer_agent()
+            .head(&url)
+            .timeout(Duration::from_secs(2));
         if let Some(auth) = self.auth_header() {
             req = req.set("Authorization", &auth);
         }
@@ -489,7 +532,11 @@ impl<'a> WebDavClient<'a> {
         }
     }
 
-    pub(crate) fn ensure_collection(&self, relative_dir: &str) -> Result<(), String> {
+    fn ensure_collection_with_control(
+        &self,
+        relative_dir: &str,
+        control: Option<&TransferControl>,
+    ) -> Result<(), String> {
         let clean = relative_dir.trim_matches('/');
         if clean.is_empty() {
             return Ok(());
@@ -497,35 +544,55 @@ impl<'a> WebDavClient<'a> {
         let parts: Vec<&str> = clean.split('/').collect();
         let mut current = String::new();
         for part in parts {
+            if let Some(control) = control {
+                control.check_cancelled().map_err(|e| e.to_string())?;
+            }
             if current.is_empty() {
                 current = part.to_string();
             } else {
                 current = format!("{current}/{part}");
             }
             let url = format!("{}/{}", self.endpoint, current);
-            let mut req = ureq::request("MKCOL", &url);
+            let mut req = media_transfer_agent()
+                .request("MKCOL", &url)
+                .timeout(Duration::from_secs(2));
             if let Some(auth) = self.auth_header() {
                 req = req.set("Authorization", &auth);
             }
             let _ = req.call(); // 405 Method Not Allowed means collection already exists
+            if let Some(control) = control {
+                control.check_cancelled().map_err(|e| e.to_string())?;
+            }
         }
         Ok(())
     }
 
     pub(crate) fn put_object_path(&self, relative_path: &str, data: &[u8]) -> Result<(), String> {
+        self.put_object_stream(relative_path, Cursor::new(data), data.len() as u64, None)
+    }
+
+    pub(crate) fn put_object_stream(
+        &self,
+        relative_path: &str,
+        source: impl Read,
+        length: u64,
+        control: Option<&TransferControl>,
+    ) -> Result<(), String> {
         let clean = relative_path.trim_start_matches('/');
         if let Some(idx) = clean.rfind('/') {
             let parent_dir = &clean[..idx];
-            let _ = self.ensure_collection(parent_dir);
+            self.ensure_collection_with_control(parent_dir, control)?;
         }
         let url = format!("{}/{}", self.endpoint, clean);
-        let mut req = ureq::put(&url);
+        let mut req = media_transfer_agent()
+            .put(&url)
+            .set("Content-Length", &length.to_string());
         if let Some(auth) = self.auth_header() {
             req = req.set("Authorization", &auth);
         }
 
         let resp = req
-            .send_bytes(data)
+            .send(source)
             .map_err(|e| format!("WebDAV upload failed: {e}"))?;
         if resp.status() >= 200 && resp.status() < 300 {
             Ok(())

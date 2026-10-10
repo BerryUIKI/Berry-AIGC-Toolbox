@@ -56,6 +56,8 @@ function loadProductionFileList(componentId, viewMessages = {}) {
   // Mock i18n
   const mockI18n = `
   const i18nData = {
+    stack: ${JSON.stringify(en.stack)},
+    nav: ${JSON.stringify(en.nav)},
     view: ${JSON.stringify({ ...en.view, ...viewMessages })},
     review: { noMatches: "No items match your filter", retry: "Reset Filters", gallery: "Gallery Table" },
     sort: { name: "Name", size: "Size", modified: "Modified" },
@@ -324,4 +326,30 @@ test("FileList names selected and unselected files correctly in every locale", a
       assert.match(html, /type="checkbox" checked aria-label=/);
     } finally { fs.unlinkSync(loader.tmpPath); }
   }
+});
+
+
+test("Table renders one accessible stack control and emits expansion without changing selection", async () => {
+  const loader = loadProductionFileList("table-stacks");
+  try {
+    const FileList = await loader.importComponent();
+    const members = [1, 2, 3].map(id => ({id,path:`/stack/${id}.png`,stack_id:"s",stack_order:id-1,container:"png",size_bytes:1,modified_at:1}));
+    let state;
+    const original = FileList.setup;
+    FileList.setup = (props, context) => { state = original(props, context); return state; };
+    const events = [];
+    const props = {files:members,loading:false,stackMap:{s:{count:3,heroId:1}},expandedStacks:new Set(["s"]),
+      onToggleStackExpand:id=>events.push(id)};
+    let html = await renderToString(createSSRApp(FileList,props));
+    assert.equal((html.match(/class="table-stack-btn"/g)??[]).length,1);
+    assert.ok(html.includes('aria-expanded="true"'));
+    assert.ok(html.includes('Collapse: 1.png · 3 images in stack'));
+    state.emit('toggleStackExpand','s');
+    assert.deepEqual(events,['s']);
+    props.files = members.slice(0,1); props.expandedStacks = new Set();
+    html = await renderToString(createSSRApp(FileList,props));
+    assert.ok(html.includes('aria-expanded="false"'));
+    assert.ok(html.includes('Expand: 1.png · 3 images in stack'));
+    assert.equal((html.match(/class="data-row/g)??[]).length,1);
+  } finally { fs.unlinkSync(loader.tmpPath); }
 });

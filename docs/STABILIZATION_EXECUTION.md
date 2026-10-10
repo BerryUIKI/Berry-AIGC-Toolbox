@@ -25,10 +25,10 @@ required CI checks pass; delete only the merged task branch.
 | 6 | #202 | Short transform read/write locks with codecs/publication outside them; retain transactional per-item safety | Merged #355; CI passed on three platforms |
 | 7 | #255, #283 | Global transfer memory budget and cooperative cancellation across limiter/transfer waits; synthetic slow-transfer tests | Merged #357 and #358; CI passed on three platforms |
 | 8 | #251, #280 | Populate model/sampler statistics from production queries and report genuinely analyzed files | Merged #356; CI passed on three platforms |
-| 9 | #258 | Localize statistics, history and Sidebar text in all seven locales | Planned |
+| 9 | #258 | Localize statistics, history and Sidebar text in all seven locales | PR #361; build and 240 frontend tests pass |
 | 10 | #282 | Accurate per-image selection names for assistive technology | Merged #359; CI and synthetic browser checks passed |
-| 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Implemented; build and 237 frontend tests pass |
-| 12 | #259 | Table stack expansion with scoped members and keyboard access | Planned |
+| 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Merged #360; CI and synthetic browser checks passed |
+| 12 | #259 | Table stack expansion with scoped members and keyboard access | Implemented; build and 243 frontend tests pass |
 | 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | Planned |
 | 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Planned |
 | 15 | #246 | Opt-in automatic backup scheduling, compatible defaults, snapshot safety, restart/failure status | Planned |
@@ -79,3 +79,8 @@ undo/redo notifications use the current locale around that recorded name.
 All seven supported locales supply the same keys. Backend errors and user data
 remain verbatim. Production component rendering and operation-handler tests
 exercise localized text rather than English-only fixture fallbacks.
+
+- Table stacks on 2026-10-11: synthetic browser checks at 960 × 640 and
+  1600 × 950 confirm Enter expansion, Space collapse, 25 mounted rows at the
+  narrow size, and consistent expanded members across Grid/Waterfall/Table.
+  Existing Table horizontal overflow is handled separately in #263.

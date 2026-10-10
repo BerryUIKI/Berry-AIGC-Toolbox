@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { FileSortField, ImageFile, SortDirection } from "../types";
+import { resolveStackHeroPaths } from "../utils/stack";
 import { fileSelectionLabel } from "../utils/selection";
 import {
   assetUrl,
@@ -37,6 +38,8 @@ const props = defineProps<{
   selectedFilePaths?: Set<string>;
   contextKey?: string;
   fileRevision?: number;
+  stackMap?: Record<string, { count: number; heroId: number | null }>;
+  expandedStacks?: Set<string>;
   emptyMessage?: string;
   emptyActionText?: string;
   sortField?: FileSortField;
@@ -50,6 +53,7 @@ const emit = defineEmits<{
   (e: "activate", file: ImageFile): void;
   (e: "toggleSelect", file: ImageFile): void;
   (e: "toggleAll"): void;
+  (e: "toggleStackExpand", stackId: string): void;
   (e: "loadMore"): void;
   (e: "recover"): void;
   (e: "update:sortField", value: FileSortField): void;
@@ -74,6 +78,16 @@ function toggleNsfwReveal(path: string) {
   if (!props.revealedNsfw) {
     privacy.toggleReveal(path);
   }
+}
+
+const stackHeroPaths = computed(() => resolveStackHeroPaths(props.files, props.stackMap ?? {}));
+function isStackCover(file: ImageFile): boolean {
+  return Boolean(file.stack_id && (props.stackMap?.[file.stack_id]?.count ?? 1) > 1 &&
+    stackHeroPaths.value.get(file.stack_id) === file.path);
+}
+function stackLabel(file: ImageFile): string {
+  const operation = props.expandedStacks?.has(file.stack_id!) ? t.value.nav.collapse : t.value.nav.expand;
+  return `${operation}: ${getFileName(file.path)} · ${props.stackMap?.[file.stack_id!]?.count} ${t.value.stack.stackCount}`;
 }
 
 const ROW_HEIGHT = 46;
@@ -516,7 +530,21 @@ onUnmounted(() => {
                 </button>
               </div>
             </td>
-            <td class="name" :title="normalizePath(file.path)">{{ getFileName(file.path) }}</td>
+            <td class="name" :title="normalizePath(file.path)">
+              <button
+                v-if="isStackCover(file)"
+                type="button"
+                class="table-stack-btn"
+                :title="t.stack.toggleExpand"
+                :aria-label="stackLabel(file)"
+                :aria-expanded="!!expandedStacks?.has(file.stack_id!)"
+                @click.stop="emit('toggleStackExpand', file.stack_id!)"
+                @dblclick.stop
+              >
+                <span aria-hidden="true">{{ expandedStacks?.has(file.stack_id!) ? '▾' : '▸' }} {{ stackMap?.[file.stack_id!]?.count }}</span>
+              </button>
+              {{ getFileName(file.path) }}
+            </td>
             <td>{{ file.container }}</td>
             <td>{{ formatBytes(file.size_bytes) }}</td>
             <td class="date">{{ formatDateTime(file.modified_at) }}</td>
@@ -590,6 +618,20 @@ onUnmounted(() => {
 .empty-state-btn:hover {
   background: var(--color-bg-hover);
   border-color: var(--color-primary);
+}
+
+.table-stack-btn {
+  margin-right: 6px;
+  padding: 2px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+}
+.table-stack-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .scroll {

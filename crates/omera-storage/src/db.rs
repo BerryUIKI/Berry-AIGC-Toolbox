@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 use omera_domain::{
     Album, ChangeLogEntry, ChangeLogSyncQuery, CheckpointModelStat, CleanupQueueItem, Container,
     CursorFilePage, DatabaseStats, ExtractedMetadata, FilePage, FileSortField, FilesystemChange,
-    Folder, ImageFile, LoraModel, ModelCacheEntry, MutationResult, PageCursor, PromptStat,
-    SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
+    Folder, ImageFile, LoraModel, ModelCacheEntry, MutationResult, PageCursor, PromptInsights,
+    PromptKeywordStat, PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary,
+    StorageRoot, Tag,
 };
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use uuid::Uuid;
@@ -1962,6 +1963,64 @@ impl Database {
     }
 
     // --- Prompt Statistics ---
+
+    /// Stream the complete analysis population without materializing library files.
+    pub fn get_prompt_insights(&self, limit: usize) -> Result<PromptInsights, DatabaseError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT json_extract(metadata, '$.prompt'),
+                    json_extract(metadata, '$.negative_prompt'),
+                    json_extract(metadata, '$.model_name'),
+                    json_extract(metadata, '$.sampler')
+             FROM files WHERE metadata IS NOT NULL",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut frequencies: [HashMap<String, usize>; 4] = Default::default();
+        let mut total_analyzed = 0;
+        while let Some(row) = rows.next()? {
+            let mut analyzed = false;
+            for (index, counts) in frequencies.iter_mut().enumerate() {
+                let value: Option<String> = row.get(index)?;
+                let value = value.as_deref().unwrap_or("");
+                let keywords: HashSet<&str> = if index < 2 {
+                    value
+                        .split(',')
+                        .map(|part| part.trim().trim_matches('"').trim())
+                        .filter(|part| part.len() > 1)
+                        .collect()
+                } else {
+                    std::iter::once(value.trim())
+                        .filter(|part| !part.is_empty())
+                        .collect()
+                };
+                analyzed |= !keywords.is_empty();
+                for keyword in keywords {
+                    *counts.entry(keyword.to_owned()).or_default() += 1;
+                }
+            }
+            total_analyzed += usize::from(analyzed);
+        }
+        let ranked = |counts: HashMap<String, usize>| {
+            let mut items: Vec<_> = counts
+                .into_iter()
+                .map(|(keyword, count)| PromptKeywordStat { keyword, count })
+                .collect();
+            items.sort_by(|a, b| {
+                b.count
+                    .cmp(&a.count)
+                    .then_with(|| a.keyword.cmp(&b.keyword))
+            });
+            items.truncate(limit.min(100));
+            items
+        };
+        let [positive, negative, models, samplers] = frequencies;
+        Ok(PromptInsights {
+            total_analyzed,
+            top_positive_words: ranked(positive),
+            top_negative_words: ranked(negative),
+            top_models: ranked(models),
+            top_samplers: ranked(samplers),
+        })
+    }
 
     /// Extract and rank prompt tags by occurrence across all indexed files.
     pub fn get_prompt_stats(
@@ -4594,6 +4653,62 @@ mod tests {
         // "blurry" appeared in both images (count 2)
         assert_eq!(neg_stats[0].text, "blurry");
         assert_eq!(neg_stats[0].count, 2);
+    }
+
+    #[test]
+    fn prompt_insights_count_usable_files_and_rank_real_categories() {
+        let db = Database::connect_in_memory().unwrap();
+        assert_eq!(
+            db.get_prompt_insights(40).unwrap(),
+            PromptInsights::default()
+        );
+        let folder = db.add_folder("/insights").unwrap();
+        for (index, prompt, negative, model, sampler) in [
+            (1, "cat, cat, sky", "blur, blur", " model A ", " Euler "),
+            (2, "cat", "", "model B", "Euler"),
+            (3, "", "", "model A", ""),
+            (4, " , a, \"\"", "  ", " ", " "),
+        ] {
+            let mut file = image(folder.id, &format!("/insights/{index}.png"));
+            file.metadata = Some(sample_meta(prompt, negative, model, sampler, 20, 7.0, "1"));
+            db.upsert_file(&file).unwrap();
+        }
+        db.upsert_file(&image(folder.id, "/insights/plain.png"))
+            .unwrap();
+        let result = db.get_prompt_insights(40).unwrap();
+        assert_eq!(result.total_analyzed, 3);
+        assert_eq!(
+            result.top_positive_words[0],
+            PromptKeywordStat {
+                keyword: "cat".into(),
+                count: 2
+            }
+        );
+        assert_eq!(result.top_negative_words[0].count, 1);
+        assert_eq!(
+            result.top_models[0],
+            PromptKeywordStat {
+                keyword: "model A".into(),
+                count: 2
+            }
+        );
+        assert_eq!(
+            result.top_samplers[0],
+            PromptKeywordStat {
+                keyword: "Euler".into(),
+                count: 2
+            }
+        );
+        assert_eq!(db.get_prompt_insights(1).unwrap().top_models.len(), 1);
+        assert_eq!(db.get_prompt_insights(0).unwrap().total_analyzed, 3);
+        assert!(db.get_prompt_insights(0).unwrap().top_models.is_empty());
+        let json = serde_json::to_value(&result).unwrap();
+        assert_eq!(json["top_models"][0]["keyword"], "model A");
+        assert_eq!(json["total_analyzed"], 3);
+        assert_eq!(
+            serde_json::from_value::<PromptInsights>(json).unwrap(),
+            result
+        );
     }
 
     #[test]

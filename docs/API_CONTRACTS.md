@@ -2,6 +2,19 @@
 
 Status: current source contract plus explicitly marked proposals. The active runtime identity is Omera (`com.berryuiki.omera`), and the seven legacy migration coordination commands are implemented in `src-tauri` under lead ownership. Proposed extensions and contracts not yet implemented as invokable runtime IPC are explicitly labeled.
 
+## Prompt insights population
+
+`get_prompt_insights({ limit })` returns `total_analyzed` and four ranked lists of
+`{ keyword, count }` objects. The population includes files with at least one
+usable positive/negative prompt token, nonblank model name, or nonblank sampler.
+Prompt tokens use the existing comma-separated, trimmed, minimum-two-byte rules.
+Each keyword counts a file once, even when repeated within that file. Model and
+sampler names are trimmed; missing/blank values contribute no category entry.
+The result limit is capped at 100 per category. Aggregation streams database rows
+on a blocking worker and returns a consistent snapshot. Empty libraries return
+zero and empty lists; query failures reject, allowing the UI to display failure
+separately from an empty result. The older `get_prompt_stats` API remains supported.
+
 ## Sources of truth and compatibility
 
 | Surface | Source of truth | Consumer |

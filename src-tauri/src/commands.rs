@@ -27,9 +27,9 @@ use omera_domain::{
     CleanupQueueItem, CursorFilePage, DatabasePingResult, DatabaseStats, DetectedLora,
     ExportEstimateResult, ExportOptions, ExportSummary, FilePage, FileSortField, Folder, ImageFile,
     LibraryTransformRequest, LoraModel, MigrationOptions, MigrationSummary, ModelCacheEntry,
-    MutationResult, NormalizedPath, PathResolver, PipelineDetectedPath, PromptStackCandidate,
-    PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary, StorageRoot, Tag,
-    TransformJobReceipt, TransformSpec,
+    MutationResult, NormalizedPath, PathResolver, PipelineDetectedPath, PromptInsights,
+    PromptStackCandidate, PromptStat, SearchCriteria, SimilarityMatch, SortDirection, StackSummary,
+    StorageRoot, Tag, TransformJobReceipt, TransformSpec,
 };
 use omera_scan::{
     execute_shared_batch_export, execute_shared_library_batch_transform, ScanStats, Scanner,
@@ -928,6 +928,25 @@ pub fn set_files_nsfw(
 }
 
 // --- Prompt Stats ---
+
+#[tauri::command]
+pub async fn get_prompt_insights(
+    limit: usize,
+    app_handle: AppHandle,
+) -> Result<PromptInsights, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app_handle.state::<AppState>();
+        let database = state
+            .db
+            .lock()
+            .map_err(|_| "database lock poisoned".to_string())?;
+        database
+            .get_prompt_insights(limit)
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 
 /// Get frequency statistics for prompt tags.
 #[tauri::command]

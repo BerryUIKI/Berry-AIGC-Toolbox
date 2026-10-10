@@ -62,7 +62,7 @@ pub use migration::{
 };
 pub use pipeline::{CleanupQueueItem, PipelineDetectedPath};
 pub use prompt_stacking::{plan_prompt_stacks, PromptStackCandidate, PromptStackPlan};
-pub use prompt_stat::PromptStat;
+pub use prompt_stat::{PromptInsights, PromptKeywordStat, PromptStat};
 pub use search::{CursorFilePage, FilePage, PageCursor, SearchCriteria};
 pub use search_parser::parse_query;
 pub use similarity::SimilarityMatch;

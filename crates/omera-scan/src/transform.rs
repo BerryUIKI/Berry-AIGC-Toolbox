@@ -10,17 +10,60 @@
 
 use image::{codecs::jpeg::JpegEncoder, imageops::FilterType, DynamicImage, GenericImageView};
 use omera_domain::{
-    Container, ExtractedMetadata, Folder, ImportTransformRequest, LibraryTransformRequest,
-    MetadataFormat, OriginalDisposition, TransformCollisionPolicy, TransformFormat,
-    TransformItemReceipt, TransformItemStatus, TransformJobReceipt, TransformMetadataPolicy,
-    TransformSpec,
+    Container, ExtractedMetadata, Folder, ImageFile, ImportTransformRequest,
+    LibraryTransformRequest, MetadataFormat, OriginalDisposition, TransformCollisionPolicy,
+    TransformFormat, TransformItemReceipt, TransformItemStatus, TransformJobReceipt,
+    TransformMetadataPolicy, TransformSpec,
 };
 use omera_storage::Database;
 use std::{
     fs::{self, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
+    sync::Mutex,
 };
+
+static LIBRARY_TRANSFORM_GATE: Mutex<()> = Mutex::new(());
+
+trait LibraryTransformStore {
+    fn list_folders(&self) -> Result<Vec<Folder>, String>;
+    fn get_file_by_id(&self, id: i64) -> Result<Option<ImageFile>, String>;
+    fn publish(&self, id: i64, source: &ImageFile, derivative: &ImageFile) -> Result<(), String>;
+}
+
+impl LibraryTransformStore for Database {
+    fn list_folders(&self) -> Result<Vec<Folder>, String> {
+        Database::list_folders(self).map_err(|e| e.to_string())
+    }
+    fn get_file_by_id(&self, id: i64) -> Result<Option<ImageFile>, String> {
+        Database::get_file_by_id(self, id).map_err(|e| e.to_string())
+    }
+    fn publish(&self, id: i64, source: &ImageFile, derivative: &ImageFile) -> Result<(), String> {
+        if self
+            .update_file_transformed_if_current(id, source, derivative)
+            .map_err(|e| e.to_string())?
+        {
+            Ok(())
+        } else {
+            Err("Source record changed or disappeared during transformation".into())
+        }
+    }
+}
+
+impl LibraryTransformStore for Mutex<Database> {
+    fn list_folders(&self) -> Result<Vec<Folder>, String> {
+        let guard = self.lock().map_err(|_| "database lock poisoned")?;
+        LibraryTransformStore::list_folders(&*guard)
+    }
+    fn get_file_by_id(&self, id: i64) -> Result<Option<ImageFile>, String> {
+        let guard = self.lock().map_err(|_| "database lock poisoned")?;
+        LibraryTransformStore::get_file_by_id(&*guard, id)
+    }
+    fn publish(&self, id: i64, source: &ImageFile, derivative: &ImageFile) -> Result<(), String> {
+        let guard = self.lock().map_err(|_| "database lock poisoned")?;
+        LibraryTransformStore::publish(&*guard, id, source, derivative)
+    }
+}
 
 /// Error types occurring during image transformation.
 #[derive(Debug, thiserror::Error)]
@@ -1017,7 +1060,32 @@ pub fn execute_library_batch_transform<F>(
 where
     F: Fn(usize, usize, &str) + Send + Sync,
 {
-    let folders = db.list_folders().map_err(|e| e.to_string())?;
+    execute_library_batch_transform_from_store(db, request, progress_callback)
+}
+
+pub fn execute_shared_library_batch_transform<F>(
+    db: &Mutex<Database>,
+    request: &LibraryTransformRequest,
+    progress_callback: Option<F>,
+) -> Result<TransformJobReceipt, String>
+where
+    F: Fn(usize, usize, &str) + Send + Sync,
+{
+    execute_library_batch_transform_from_store(db, request, progress_callback)
+}
+
+fn execute_library_batch_transform_from_store<D: LibraryTransformStore, F>(
+    db: &D,
+    request: &LibraryTransformRequest,
+    progress_callback: Option<F>,
+) -> Result<TransformJobReceipt, String>
+where
+    F: Fn(usize, usize, &str) + Send + Sync,
+{
+    let _job_guard = LIBRARY_TRANSFORM_GATE
+        .lock()
+        .map_err(|_| "transform job lock poisoned")?;
+    let folders = db.list_folders()?;
     let job_id = format!(
         "lib_tx_{}",
         std::time::SystemTime::now()
@@ -1032,7 +1100,7 @@ where
     let total = request.file_ids.len();
 
     for (index, file_id) in request.file_ids.iter().enumerate() {
-        let file_opt = db.get_file_by_id(*file_id).map_err(|e| e.to_string())?;
+        let file_opt = db.get_file_by_id(*file_id)?;
         let Some(file) = file_opt else {
             failed += 1;
             items.push(TransformItemReceipt {
@@ -1223,7 +1291,7 @@ where
         derivative.metadata = Some(metadata);
 
         let target_file_id = file.id.unwrap_or(*file_id);
-        if let Err(e) = db.update_file_transformed_with_metadata(target_file_id, &derivative) {
+        if let Err(e) = db.publish(target_file_id, &file, &derivative) {
             // Compensation: if DB update fails and published file is separate from source, remove published derivative
             if src_path != final_path {
                 let _ = fs::remove_file(&final_path);
@@ -1307,6 +1375,103 @@ where
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_transform_releases_database_and_rejects_changed_source_rows() {
+        use super::*;
+        for change_source in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let source = dir.path().join("source.png");
+            image::RgbImage::new(16, 8).save(&source).unwrap();
+            let original = fs::read(&source).unwrap();
+            let db = Database::connect_in_memory().unwrap();
+            let folder = db
+                .add_folder_with_mode(
+                    &dir.path().to_string_lossy(),
+                    "managed",
+                    None,
+                    None,
+                    None,
+                    true,
+                )
+                .unwrap();
+            let id = db
+                .upsert_file(&ImageFile {
+                    id: None,
+                    folder_id: folder.id,
+                    path: source.to_string_lossy().into_owned(),
+                    size_bytes: original.len() as u64,
+                    modified_at: 1,
+                    container: Container::Png,
+                    metadata: None,
+                    rating: None,
+                    aesthetic_score: None,
+                    is_favorite: false,
+                    is_nsfw: false,
+                    stack_id: None,
+                    stack_order: 0,
+                })
+                .unwrap();
+            let shared = std::sync::Arc::new(Mutex::new(db));
+            let worker_db = shared.clone();
+            let request = LibraryTransformRequest {
+                file_ids: vec![id],
+                spec: TransformSpec {
+                    format: TransformFormat::Png,
+                    ..Default::default()
+                },
+                original_disposition: OriginalDisposition::Keep,
+            };
+            let (started_tx, started_rx) = std::sync::mpsc::channel();
+            let release = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let worker_release = release.clone();
+            let worker = std::thread::spawn(move || {
+                execute_shared_library_batch_transform(
+                    &worker_db,
+                    &request,
+                    Some(move |_, _, _: &str| {
+                        started_tx.send(()).unwrap();
+                        worker_release.wait();
+                    }),
+                )
+                .unwrap()
+            });
+            started_rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            let start = std::time::Instant::now();
+            let concurrent = shared.try_lock().map(|db| {
+                db.set_file_rating(id, Some(5)).unwrap();
+                if change_source {
+                    db.connection()
+                        .execute(
+                            "UPDATE files SET path = 'changed-by-concurrent-move' WHERE id = ?1",
+                            [id],
+                        )
+                        .unwrap();
+                }
+                db.get_file_by_id(id).unwrap().unwrap()
+            });
+            eprintln!("Concurrent transform query/write: {:?}", start.elapsed());
+            release.wait();
+            let receipt = worker.join().unwrap();
+            let concurrent = concurrent.unwrap();
+            let current = shared.lock().unwrap().get_file_by_id(id).unwrap().unwrap();
+            assert_eq!(current.rating, Some(5));
+            assert_eq!(fs::read(&source).unwrap(), original);
+            if change_source {
+                assert_eq!(receipt.failed, 1);
+                assert_eq!(receipt.succeeded, 0);
+                assert_eq!(current.path, concurrent.path);
+                assert!(!Path::new(receipt.items[0].output_id_or_path.as_ref().unwrap()).exists());
+            } else {
+                assert_eq!(receipt.succeeded, 1);
+                assert_eq!(receipt.failed, 0);
+                assert_ne!(current.path, concurrent.path);
+                assert!(Path::new(&current.path).exists());
+            }
+        }
+    }
+
     #[test]
     fn sidecar_failure_rolls_back_only_owned_publication() {
         use super::*;

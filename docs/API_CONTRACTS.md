@@ -280,3 +280,21 @@ completed SQLite snapshot. Archive names include a unique suffix; local targets
 are published atomically without overwrite. Uploads stream the archive from disk.
 Backups contain the database and manifest, never media or credential/config files.
 Restore retains its existing staged-recovery contract.
+
+
+## Automatic backup schedule policy (#246)
+
+The domain schedule is I/O-free and uses explicit Unix seconds. Saved opt-in
+settings enable the first snapshot on the next worker poll; successful snapshots
+become due after 1–365 days (clamped). Only one automatic job may run. A failed
+attempt retries after one hour, retaining the last success; restart recovers a
+persisted running attempt as interrupted with the same backoff. Disabling stops
+future jobs; an already started snapshot may finish. Destination identity changes
+reset the destination's success history; credential rotation does not. Clock
+rollback postpones a due date rather than causing repeated snapshots.
+
+Persisted schedule state contains no credentials and uses a destination digest.
+Public status reports enabled, interval_days, running, last_attempt_at,
+last_success_at, next_due_at, last_error and last_snapshot (archive filename).
+Corrupt state must be preserved and scheduling paused with a visible error.
+Runtime worker/status IPC and UI follow separately; this policy adds no command.

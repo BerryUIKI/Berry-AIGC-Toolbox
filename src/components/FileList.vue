@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { FileSortField, ImageFile, SortDirection } from "../types";
+import { normalizeTableColumns, type TableColumnId, type TableColumnPreference } from "../utils/table-columns";
 import { resolveStackHeroPaths } from "../utils/stack";
 import { fileSelectionLabel } from "../utils/selection";
 import {
@@ -40,6 +41,9 @@ const props = defineProps<{
   fileRevision?: number;
   stackMap?: Record<string, { count: number; heroId: number | null }>;
   expandedStacks?: Set<string>;
+  columns?: TableColumnPreference[];
+  columnsSaving?: boolean;
+  columnsError?: string;
   emptyMessage?: string;
   emptyActionText?: string;
   sortField?: FileSortField;
@@ -53,6 +57,7 @@ const emit = defineEmits<{
   (e: "activate", file: ImageFile): void;
   (e: "toggleSelect", file: ImageFile): void;
   (e: "toggleAll"): void;
+  (e: "saveColumns", columns: TableColumnPreference[]): void;
   (e: "toggleStackExpand", stackId: string): void;
   (e: "loadMore"): void;
   (e: "recover"): void;
@@ -60,6 +65,29 @@ const emit = defineEmits<{
   (e: "update:sortDirection", value: SortDirection): void;
   (e: "toggleReveal", path: string): void;
 }>();
+
+const columnMenuRef = ref<HTMLDetailsElement | null>(null);
+const draftColumns = ref(normalizeTableColumns(props.columns));
+const activeColumns = computed(() => normalizeTableColumns(props.columns));
+const shownColumns = computed(() => activeColumns.value.filter(column => column.visible));
+const columnCount = computed(() => shownColumns.value.length + 1);
+const tableWidth = computed(() => shownColumns.value.reduce((width, column) => width + column.width, 28));
+function showColumn(id: TableColumnId): boolean {
+  return activeColumns.value.some(column => column.id === id && column.visible);
+}
+function columnLabel(id: TableColumnId): string {
+  const labels = {preview:t.value.preview.preview,name:t.value.sort.name,container:t.value.preview.container,
+    size:t.value.sort.size,modified:t.value.sort.modified,platform:t.value.preview.platform,
+    prompt:t.value.preview.prompt,dimensions:t.value.preview.dimensions,model:t.value.preview.modelName};
+  return labels[id];
+}
+function closeColumnMenu() {
+  if (columnMenuRef.value) columnMenuRef.value.open = false;
+}
+watch(() => props.columns, value => {
+  draftColumns.value = normalizeTableColumns(value);
+  closeColumnMenu();
+});
 
 const privacy = useGalleryPrivacy();
 
@@ -199,10 +227,10 @@ function getRowImageSrc(file: ImageFile): string | null {
 
 // Prefetch thumbnails for visible rows
 watch(
-  visibleFiles,
-  (batch) => {
+  [visibleFiles, () => showColumn("preview")],
+  ([batch, previewVisible]) => {
     const generation = beginThumbnailRequestCycle();
-    if (!batch || batch.length === 0) return;
+    if (!previewVisible || !batch || batch.length === 0) return;
     for (const file of batch) {
       if (
         file.container !== "mp4" && file.container !== "txt" &&
@@ -354,6 +382,27 @@ onUnmounted(() => {
 
 <template>
   <section class="files">
+    <div class="table-controls">
+      <details ref="columnMenuRef" class="column-menu" @keydown.esc.prevent.stop="closeColumnMenu">
+        <summary>{{ t.view.columns }}</summary>
+        <div class="column-panel">
+          <div v-for="column in draftColumns" :key="column.id" class="column-option">
+            <label>
+              <input v-model="column.visible" type="checkbox" :disabled="column.id === 'name' || columnsSaving" />
+              {{ columnLabel(column.id) }}
+            </label>
+            <input v-model.number="column.width" type="number" :min="['name','prompt','model'].includes(column.id) ? 80 : 44"
+              max="640" step="10" :disabled="columnsSaving"
+              :aria-label="`${columnLabel(column.id)} · ${t.view.columnWidth}`" />
+          </div>
+          <p v-if="columnsError" role="alert">{{ t.view.columnSaveError }}: {{ columnsError }}</p>
+          <div class="column-actions">
+            <button type="button" :disabled="columnsSaving" @click="draftColumns = normalizeTableColumns([])">{{ t.view.resetColumns }}</button>
+            <button type="button" :disabled="columnsSaving" @click="emit('saveColumns', normalizeTableColumns(draftColumns))">{{ t.view.saveColumns }}</button>
+          </div>
+        </div>
+      </details>
+    </div>
     <p v-if="loading" class="empty">{{ t.view.loading }}</p>
     <div v-else-if="!files.length" class="empty empty-state">
       <span class="empty-state-message">{{ emptyMessage || t.review.noMatches }}</span>
@@ -367,7 +416,11 @@ onUnmounted(() => {
     </div>
 
     <div v-else ref="containerRef" class="scroll" @scroll.passive="onScroll">
-      <table class="table" role="grid" :aria-label="t.review.gallery">
+      <table class="table" role="grid" :aria-label="t.review.gallery" :style="{ minWidth: `${tableWidth}px` }">
+        <colgroup>
+          <col style="width: 28px" />
+          <col v-for="column in shownColumns" :key="column.id" :style="{ width: `${column.width}px` }" />
+        </colgroup>
         <thead class="sticky-header">
           <tr role="row">
             <th class="th-checkbox" role="columnheader">
@@ -379,8 +432,9 @@ onUnmounted(() => {
                 @click.stop="emit('toggleAll')"
               />
             </th>
-            <th class="th-preview" role="columnheader">{{ t.preview.preview }}</th>
+            <th v-if="showColumn('preview')" class="th-preview" role="columnheader">{{ t.preview.preview }}</th>
             <th
+              v-if="showColumn('name')"
               class="th-sortable"
               role="columnheader"
               :aria-sort="sortField === 'path' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
@@ -392,8 +446,9 @@ onUnmounted(() => {
               <span>{{ t.sort.name }}</span>
               <span v-if="sortField === 'path'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
             </th>
-            <th role="columnheader">{{ t.preview.container }}</th>
+            <th v-if="showColumn('container')" role="columnheader">{{ t.preview.container }}</th>
             <th
+              v-if="showColumn('size')"
               class="th-sortable"
               role="columnheader"
               :aria-sort="sortField === 'size_bytes' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
@@ -406,6 +461,7 @@ onUnmounted(() => {
               <span v-if="sortField === 'size_bytes'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
             </th>
             <th
+              v-if="showColumn('modified')"
               class="th-sortable"
               role="columnheader"
               :aria-sort="sortField === 'modified_at' ? (sortDirection === 'desc' ? 'descending' : 'ascending') : 'none'"
@@ -417,16 +473,16 @@ onUnmounted(() => {
               <span>{{ t.sort.modified }}</span>
               <span v-if="sortField === 'modified_at'" class="sort-indicator">{{ sortDirection === 'desc' ? '↓' : '↑' }}</span>
             </th>
-            <th role="columnheader">{{ t.preview.platform }}</th>
-            <th role="columnheader">{{ t.preview.prompt }}</th>
-            <th role="columnheader">{{ t.preview.dimensions }}</th>
-            <th role="columnheader">{{ t.preview.modelName }}</th>
+            <th v-if="showColumn('platform')" role="columnheader">{{ t.preview.platform }}</th>
+            <th v-if="showColumn('prompt')" role="columnheader">{{ t.preview.prompt }}</th>
+            <th v-if="showColumn('dimensions')" role="columnheader">{{ t.preview.dimensions }}</th>
+            <th v-if="showColumn('model')" role="columnheader">{{ t.preview.modelName }}</th>
           </tr>
         </thead>
         <tbody>
           <!-- Top Spacer for Virtualization -->
           <tr v-if="topSpacerHeight > 0" :style="{ height: `${topSpacerHeight}px` }" class="spacer-row">
-            <td colspan="10" class="spacer-cell"></td>
+            <td :colspan="columnCount" class="spacer-cell"></td>
           </tr>
 
           <!-- Visible Rows -->
@@ -452,7 +508,7 @@ onUnmounted(() => {
                 @click.stop="emit('toggleSelect', file)"
               />
             </td>
-            <td class="preview-cell">
+            <td v-if="showColumn('preview')" class="preview-cell">
               <div class="table-thumb-wrapper">
                 <img
                   v-if="
@@ -530,7 +586,7 @@ onUnmounted(() => {
                 </button>
               </div>
             </td>
-            <td class="name" :title="normalizePath(file.path)">
+            <td v-if="showColumn('name')" class="name" :title="normalizePath(file.path)">
               <button
                 v-if="isStackCover(file)"
                 type="button"
@@ -545,25 +601,25 @@ onUnmounted(() => {
               </button>
               {{ getFileName(file.path) }}
             </td>
-            <td>{{ file.container }}</td>
-            <td>{{ formatBytes(file.size_bytes) }}</td>
-            <td class="date">{{ formatDateTime(file.modified_at) }}</td>
-            <td>
+            <td v-if="showColumn('container')">{{ file.container }}</td>
+            <td v-if="showColumn('size')">{{ formatBytes(file.size_bytes) }}</td>
+            <td v-if="showColumn('modified')" class="date">{{ formatDateTime(file.modified_at) }}</td>
+            <td v-if="showColumn('platform')">
               <span v-if="file.metadata" class="format">{{ formatPlatformName(file.metadata.format) }}</span>
               <span v-else class="none">—</span>
             </td>
-            <td class="prompt" :title="file.metadata?.prompt ?? ''">
+            <td v-if="showColumn('prompt')" class="prompt" :title="file.metadata?.prompt ?? ''">
               {{ snippet(file.metadata?.prompt, 80) }}
             </td>
-            <td class="nowrap">{{ size(file.metadata) }}</td>
-            <td class="model" :title="file.metadata?.model_name ?? ''">
+            <td v-if="showColumn('dimensions')" class="nowrap">{{ size(file.metadata) }}</td>
+            <td v-if="showColumn('model')" class="model" :title="file.metadata?.model_name ?? ''">
               {{ snippet(file.metadata?.model_name, 32) }}
             </td>
           </tr>
 
           <!-- Bottom Spacer for Virtualization -->
           <tr v-if="bottomSpacerHeight > 0" :style="{ height: `${bottomSpacerHeight}px` }" class="spacer-row">
-            <td colspan="10" class="spacer-cell"></td>
+            <td :colspan="columnCount" class="spacer-cell"></td>
           </tr>
         </tbody>
       </table>
@@ -620,6 +676,16 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 
+.table-controls { display: flex; justify-content: flex-end; flex: 0 0 auto; padding: 4px 8px; }
+.column-menu { position: relative; font-size: 0.82em; }
+.column-menu summary { cursor: pointer; padding: 4px 8px; }
+.column-panel { position: absolute; right: 0; top: 100%; z-index: 20; width: min(320px, calc(100vw - 40px));
+  padding: 12px; background: var(--color-bg-primary); border: 1px solid var(--border-color); border-radius: 6px; }
+.column-option { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.column-option label { min-width: 0; }
+.column-option input[type="number"] { width: 72px; background: var(--color-bg-secondary); color: var(--color-text-primary); }
+.column-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
 .table-stack-btn {
   margin-right: 6px;
   padding: 2px 5px;
@@ -644,6 +710,7 @@ onUnmounted(() => {
 }
 
 .table {
+  table-layout: fixed;
   width: 100%;
   border-collapse: collapse;
   font-size: 0.82em;
@@ -663,6 +730,8 @@ onUnmounted(() => {
   padding: 0.4rem 0.6rem;
   border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .table th {
@@ -905,7 +974,6 @@ onUnmounted(() => {
 .name {
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   word-break: break-all;
-  max-width: 22rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -916,13 +984,11 @@ onUnmounted(() => {
 }
 
 .prompt {
-  max-width: 24rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .model {
-  max-width: 16rem;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.85em;

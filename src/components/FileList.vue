@@ -360,7 +360,8 @@ onUnmounted(() => {
               <input
                 type="checkbox"
                 :checked="files.length > 0 && selectedFilePaths?.size === files.length"
-                :title="t.view.selectAll"
+                :aria-label="t.view.selectAll"
+                :title="t.view.loadedSelectionHint"
                 @click.stop="emit('toggleAll')"
               />
             </th>

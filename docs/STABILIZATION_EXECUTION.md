@@ -23,11 +23,11 @@ required CI checks pass; delete only the merged task branch.
 | 4 | #284 | Release the shared database guard before export estimation; run codecs on a blocking worker; concurrent reads must proceed | Merged #353; CI passed on three platforms |
 | 5 | #285 | Bounded export input snapshot, codecs/output outside the shared guard; deterministic per-file results | Merged #354; CI passed on three platforms |
 | 6 | #202 | Short transform read/write locks with codecs/publication outside them; retain transactional per-item safety | Merged #355; CI passed on three platforms |
-| 7 | #255, #283 | Global transfer memory budget and cooperative cancellation across limiter/transfer waits; synthetic slow-transfer tests | Foundation #357 merged; integration #358 awaiting CI |
+| 7 | #255, #283 | Global transfer memory budget and cooperative cancellation across limiter/transfer waits; synthetic slow-transfer tests | Merged #357 and #358; CI passed on three platforms |
 | 8 | #251, #280 | Populate model/sampler statistics from production queries and report genuinely analyzed files | Merged #356; CI passed on three platforms |
 | 9 | #258 | Localize statistics, history and Sidebar text in all seven locales | Planned |
-| 10 | #282 | Accurate per-image selection names for assistive technology | Implementation next; localized identity/state labels required |
-| 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Planned |
+| 10 | #282 | Accurate per-image selection names for assistive technology | Merged #359; CI and synthetic browser checks passed |
+| 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Implemented; build and 237 frontend tests pass |
 | 12 | #259 | Table stack expansion with scoped members and keyboard access | Planned |
 | 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | Planned |
 | 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Planned |
@@ -62,3 +62,9 @@ uses the bulk selection label. Checkbox checked state agrees with membership in
 the shared selection set. Header/batch selection labels remain separate and their
 loaded-result scope is handled in #295. Rendering tests use production components
 with both selected and unselected file fixtures.
+
+- Loaded selection on 2026-10-11: synthetic 1,200-item browser library at
+  960 × 640 and 1600 × 950; Grid/Waterfall/Table retain 398 selected while
+  paging raises the loaded count to 798, then explicit repeat selects 798.
+  Favorites reports 10 selectable loaded representations of 12 results with
+  a collapsed three-member stack. Browser checks do not qualify native IPC.

@@ -187,7 +187,7 @@ Omera is built for large libraries. The gallery renders from the indexed SQLite 
 | `Space` / `Enter` | Open / Close Lightbox | `0` – `5` | Set Star Rating (0 = Clear) |
 | `F` | Toggle Favorite | `B` | Toggle Sidebar |
 | `I` | Toggle Inspector | `/` or `Ctrl+F` | Focus Search Bar |
-| `Ctrl+A` | Select All | `Esc` | Clear Selection / Close Modal |
+| `Ctrl+A` | Select loaded items | `Esc` | Clear Selection / Close Modal |
 | `Ctrl+O` | Folder Wizard | `Ctrl+,` | Settings |
 | `Ctrl+G` | Merge Stacks | `Ctrl+Shift+G` | Unstack |
 | `Alt+S` | Set Stack Cover | `C` | Side-by-Side Compare |

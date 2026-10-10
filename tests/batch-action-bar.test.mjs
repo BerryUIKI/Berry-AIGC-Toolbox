@@ -5,6 +5,7 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
+import { en } from "../src/i18n/locales/en.ts";
 import { h, createSSRApp, reactive } from "vue";
 import { renderToString } from "vue/server-renderer";
 
@@ -46,10 +47,7 @@ function loadProductionBatchActionBar() {
     stack: {
       cullDrafts: "Cull Drafts"
     },
-    view: {
-      selectAll: "Select All",
-      deselect: "Deselect"
-    }
+    view: ${JSON.stringify(en.view)}
   };`;
   scriptCode = scriptCode.replace(/import { t } from [^\n]+;/, mockI18n);
   scriptCode = scriptCode.replace(/import type [^\n]+;/, "");
@@ -95,7 +93,7 @@ test("BatchActionBar production component mounts and renders with controlled pro
     assert.ok(html.includes('role="toolbar"'), "Must include role='toolbar'");
     assert.ok(html.includes('aria-label="Batch Actions"'), "Must include aria-label");
     assert.ok(html.includes("2 of 10 selected"), "Must interpolate selection counts");
-    assert.ok(html.includes("Select All"), "Must render Select All button");
+    assert.ok(html.includes(en.view.selectAll), "Must render Select All button");
     assert.ok(html.includes("Deselect"), "Must render Deselect button");
     assert.ok(html.includes("Rating"), "Must render Rating button");
     assert.ok(html.includes("Favorite"), "Must render Favorite button");
@@ -297,4 +295,26 @@ test("BatchActionBar dynamic overflow detection triggers compact mode on scrollW
   assert.ok(source.includes("updateLayout"), "BatchActionBar must define updateLayout logic");
   assert.ok(source.includes("scrollWidth"), "BatchActionBar must inspect scrollWidth to detect overflow");
   assert.doesNotMatch(source, /isCompact\.value\s*=\s*width\s*<\s*920/, "Must not use fragile hardcoded 920px threshold alone");
+});
+
+
+test("batch counts distinguish the filtered population from selectable loaded items", async () => {
+  const loader = loadProductionBatchActionBar();
+  try {
+    const component = await loader.importComponent();
+    const files = Array.from({ length: 398 }, (_, id) => ({ id, path: `/photos/${id}.png` }));
+    const render = selectedFiles => renderToString(createSSRApp(component, {
+      selectedFiles, totalCount: 1200, loadedCount: 398,
+    }));
+    const full = await render(files);
+    assert.ok(full.includes("398 of 1200 selected"));
+    assert.ok(full.includes("398 loaded items"));
+    assert.ok(!full.includes(en.view.selectAll));
+    const partial = await render(files.slice(0, 1));
+    assert.ok(partial.includes("1 of 1200 selected"));
+    assert.ok(partial.includes(en.view.selectAll));
+    assert.ok(partial.includes(en.view.loadedSelectionHint));
+  } finally {
+    fs.unlinkSync(loader.tmpPath);
+  }
 });

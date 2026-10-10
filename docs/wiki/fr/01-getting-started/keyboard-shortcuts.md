@@ -12,7 +12,7 @@ Omera est pensé pour un **flux de travail axé sur le clavier**. Vous pouvez pa
 | `Échap` | **Fermer / Effacer** | Global | Ferme l'aperçu Lightbox ou une fenêtre modale, annule la recherche ou désélectionne les cartes. |
 | `←` / `→` | **Élément précédent / suivant** | Galerie & Lightbox | Déplace la sélection vers l'élément adjacent (ou avance/recule d'1 image lors de la lecture vidéo). |
 | `↑` / `↓` | **Ligne supérieure / inférieure** | Vue Grille | Déplace la sélection vers le haut ou le bas d'une rangée visuelle. |
-| `Ctrl + A` / `Cmd + A` | **Tout sélectionner** | Canevas de la galerie | Sélectionne toutes les cartes correspondant actuellement à la recherche/au filtre actif. |
+| `Ctrl + A` / `Cmd + A` | **Sélectionner les éléments chargés** | Canevas de la galerie | Sélectionne uniquement les éléments chargés. Dépliez les piles pour inclure leurs images ; recommencez après le chargement de pages supplémentaires. |
 | `Suppr` ou `Retour arrière` | **Mettre à la corbeille** | Sélection dans la galerie | Envoie les éléments sélectionnés dans la corbeille du système d'exploitation. |
 
 ---

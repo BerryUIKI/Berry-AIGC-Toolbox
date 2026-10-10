@@ -6,6 +6,7 @@ import type { ImageFile } from "../types";
 const props = defineProps<{
   selectedFiles: ImageFile[];
   totalCount: number;
+  loadedCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -35,6 +36,7 @@ const emit = defineEmits<{
 const hasStacks = computed(
   () => props.selectedFiles.some((f) => !!f.stack_id),
 );
+const selectableLoadedCount = computed(() => props.loadedCount ?? props.totalCount);
 
 const allFavorites = computed(
   () => props.selectedFiles.length > 0 && props.selectedFiles.every((f) => f.is_favorite),
@@ -198,13 +200,19 @@ function onTrash() {
   >
     <div ref="barRef" class="batch-bar" role="toolbar" aria-label="Batch Actions">
       <div class="batch-info">
-        <span class="batch-badge">
-          {{ selectedFiles.length }} {{ t.batch.selectedOf }} {{ totalCount }} {{ t.batch.selectedCount }}
-        </span>
+        <div class="batch-counts">
+          <span class="batch-badge">
+            {{ selectedFiles.length }} {{ t.batch.selectedOf }} {{ totalCount }} {{ t.batch.selectedCount }}
+          </span>
+          <span class="loaded-count" :title="t.view.loadedSelectionHint">
+            {{ t.view.loadedItems.replace('{count}', String(selectableLoadedCount)) }}
+          </span>
+        </div>
         <button
-          v-if="selectedFiles.length < totalCount"
+          v-if="selectedFiles.length < selectableLoadedCount"
           type="button"
           class="btn-text"
+          :title="t.view.loadedSelectionHint"
           @click="emit('selectAll')"
         >
           {{ t.view.selectAll }}
@@ -574,6 +582,19 @@ function onTrash() {
   color: #fff;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
+  white-space: nowrap;
+}
+
+.batch-counts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.loaded-count {
+  font-size: 0.72em;
+  color: var(--color-text-secondary);
   white-space: nowrap;
 }
 

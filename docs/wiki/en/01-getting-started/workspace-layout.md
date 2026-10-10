@@ -41,7 +41,7 @@ The window uses a frameless design with custom native-like title bar (`TitleBar.
   - `Preferences...` (`Ctrl + ,` / `Cmd + ,`): Open the central 8-tab settings window.
   - `Exit` (`Alt + F4`): Gracefully close the studio.
 - **Edit**:
-  - `Select All` (`Ctrl + A` / `Cmd + A`): Select all assets in the active gallery view.
+  - `Select loaded items` (`Ctrl + A` / `Cmd + A`): Selects loaded items only. Expand stacks to include their members; repeat after loading more pages.
   - `Clear Selection` (`Esc`): Deselect all highlighted items.
   - `Batch Tag...`: Attach or remove tags from selected files.
   - `Batch Add to Album...`: Assign selected files to an album.
@@ -151,7 +151,7 @@ Located at the bottom of the window:
 
 When one or more cards are selected, a floating toolbar appears at the bottom-center of the canvas:
 
-- Multi-selection count indicator (`X of Y selected`) with Select All / Deselect buttons.
+- Selection count (`X of Y selected`, Y is the filtered result total), a separate loaded count, and Select loaded items / Deselect buttons.
 - Batch Star Rating dropdown (0 to 10 stars).
 - "Add to Album" and "Add Tag" modal triggers.
 - "Auto-Tag (WD14)" trigger.

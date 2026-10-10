@@ -67,7 +67,7 @@ Whenever you select multiple items (via `Ctrl+Click`, `Shift+Click`, or `Ctrl+A`
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  [✓ 14 of 120 selected]  [Select All]  [Deselect]                                      │
+│  [✓ 14 of 120 selected]  [Select loaded items]  [Deselect]                                      │
 │  [★ Rate ▾]  [🏷 Tag]  [📁 Album]  [🧠 Auto-Tag]  [★ Fav]  [🔞 NSFW]                    │
 │  [📋 Copy Paths]  [📋 Copy Prompts]  [⇄ Move]  [⧉ Copy]  [🧹 Cull Drafts]  [📤 Export] │
 │  [🗑 Trash]                                                                            │

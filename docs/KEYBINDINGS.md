@@ -10,12 +10,16 @@ Omera is designed with desktop productivity in mind. Most major operations can b
 | :--- | :--- | :--- |
 | `Space` / `Enter` | Gallery | Open fullscreen Lightbox (Quick Look) for selected image |
 | `←` / `→` | Lightbox / Gallery | Navigate to previous / next image |
-| `Ctrl+A` / `Cmd+A` | Gallery | Select all visible images in current view |
+| `Ctrl+A` / `Cmd+A` | Gallery | Select loaded items in the current view |
 | `Esc` | Global | Clear selection / Exit Lightbox / Close active modal |
 | `0` | Global | Clear star rating on selected image(s) |
 | `1` ~ `5` | Global | Set star rating (1 to 5 stars) on selected image(s) |
 | `F` | Global | Toggle Favorite status on selected image(s) |
 | `Delete` | Global | Move selected image(s) to system Recycle Bin / Trash |
+
+Bulk selection does not fetch additional pages. Expand a stack to include its members,
+and repeat selection after more pages load. The batch bar reports the full filtered
+result total and the selectable loaded count separately.
 
 Range selection follows standard desktop behavior: click an image to establish the
 anchor, then Shift-click another image to select the inclusive range immediately.

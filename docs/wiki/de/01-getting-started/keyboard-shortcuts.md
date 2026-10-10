@@ -12,7 +12,7 @@ Omera ist für einen **Tastatur-fokussierten Arbeitsablauf** optimiert. Sie kön
 | `Esc` | **Schließen / Zurücksetzen** | Global | Schließt die Lightbox oder Modalfenster, leert die Suche oder hebt die Kartenauswahl auf. |
 | `←` / `→` | **Vorheriges / Nächstes Element** | Galerie & Lightbox | Bewegt die Auswahl zum benachbarten Element (oder 1 Frame weiter bei Videowiedergabe). |
 | `↑` / `↓` | **Zeile nach oben / unten** | Rasteransicht | Verschiebt die Auswahl visuell um eine Zeile nach oben oder unten. |
-| `Strg + A` / `Cmd + A` | **Alles auswählen** | Galeriebereich | Wählt alle Karten aus, die dem aktuellen Filter/Suchkriterium entsprechen. |
+| `Strg + A` / `Cmd + A` | **Geladene Einträge auswählen** | Galeriebereich | Wählt nur geladene Einträge aus. Stapel erweitern, um ihre Bilder einzubeziehen; nach dem Laden weiterer Seiten erneut auswählen. |
 | `Entf` oder `Rücktaste` | **In den Papierkorb** | Galerieauswahl | Verschiebt ausgewählte Elemente sicher in den Papierkorb des Betriebssystems. |
 
 ---

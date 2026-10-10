@@ -90,6 +90,11 @@ export const es: typeof en = {
     noMatchHint: "Ajuste las palabras clave o filtros (ej: prompt:cat, model:sdxl o steps:>=20).",
   },
   view: {
+    columns: "Columnas",
+    columnWidth: "Ancho (píxeles)",
+    resetColumns: "Restablecer columnas",
+    saveColumns: "Guardar columnas",
+    columnSaveError: "No se pudieron guardar las columnas",
     loadedItems: "{count} elementos cargados",
     loadedSelectionHint: "Selecciona solo elementos cargados. Expande las pilas para incluir sus imágenes y repite tras cargar más páginas.",
     selectFile: "Seleccionar {name}",

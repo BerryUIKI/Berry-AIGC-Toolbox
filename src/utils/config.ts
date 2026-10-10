@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { TableColumnPreference } from "./table-columns";
 import type { AppTheme } from "./theme";
 import type { CloudBackupConfig } from "../types";
 
@@ -12,6 +13,7 @@ export interface AppConfig {
   blur_nsfw: boolean;
   show_card_badges: boolean;
   default_view: "grid" | "masonry" | "table";
+  table_columns: TableColumnPreference[];
   thumbnail_max_edge: number;
   thumbnail_cache_budget_mb: number;
   similarity_limit: number;
@@ -54,6 +56,7 @@ const DEFAULT_CONFIG: AppConfig = {
   blur_nsfw: true,
   show_card_badges: true,
   default_view: "grid",
+  table_columns: [],
   thumbnail_max_edge: 384,
   thumbnail_cache_budget_mb: 2048,
   similarity_limit: 50,

@@ -90,6 +90,11 @@ export const zhTW: typeof en = {
     noMatchHint: "嘗試調整關鍵字或參數篩選條件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    columns: "欄位設定",
+    columnWidth: "寬度（像素）",
+    resetColumns: "重設欄位",
+    saveColumns: "儲存欄位",
+    columnSaveError: "無法儲存欄位設定",
     loadedItems: "{count} 個已載入項目",
     loadedSelectionHint: "僅選取已載入的項目。請展開堆疊以選取成員；載入更多頁面後可再次選取。",
     selectFile: "選取 {name}",

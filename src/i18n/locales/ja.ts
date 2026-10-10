@@ -90,6 +90,11 @@ export const ja: typeof en = {
     noMatchHint: "キーワードやパラメータ条件を調整してください (例: prompt:cat, model:sdxl, steps:>=20)。",
   },
   view: {
+    columns: "列の設定",
+    columnWidth: "幅（ピクセル）",
+    resetColumns: "列をリセット",
+    saveColumns: "列を保存",
+    columnSaveError: "列を保存できませんでした",
     loadedItems: "読み込み済み {count} 件",
     loadedSelectionHint: "読み込み済みの項目のみ選択します。スタックの項目を含めるには展開し、追加のページを読み込んだ後に再度選択してください。",
     selectFile: "{name}を選択",

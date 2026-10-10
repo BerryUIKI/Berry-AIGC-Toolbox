@@ -90,6 +90,11 @@ export const zhCN: typeof en = {
     noMatchHint: "尝试调整关键词或参数筛选条件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    columns: "列设置",
+    columnWidth: "宽度（像素）",
+    resetColumns: "重置列",
+    saveColumns: "保存列",
+    columnSaveError: "无法保存列设置",
     loadedItems: "{count} 个已加载项目",
     loadedSelectionHint: "仅选择已加载的项目。请展开堆叠以选择成员；加载更多页面后可再次选择。",
     selectFile: "选择 {name}",

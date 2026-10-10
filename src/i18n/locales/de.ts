@@ -90,6 +90,11 @@ export const de: typeof en = {
     noMatchHint: "Passen Sie Schlüsselwörter oder Parameterfilter an (z.B. prompt:cat, model:sdxl oder steps:>=20).",
   },
   view: {
+    columns: "Spalten",
+    columnWidth: "Breite (Pixel)",
+    resetColumns: "Spalten zurücksetzen",
+    saveColumns: "Spalten speichern",
+    columnSaveError: "Spalten konnten nicht gespeichert werden",
     loadedItems: "{count} geladene Einträge",
     loadedSelectionHint: "Wählt nur geladene Einträge aus. Stapel erweitern, um ihre Bilder einzubeziehen; nach dem Laden weiterer Seiten erneut auswählen.",
     selectFile: "{name} auswählen",

@@ -88,6 +88,11 @@ export const en = {
     noMatchHint: "Try adjusting keywords or parameter filters like prompt:cat, model:sdxl, or steps:>=20.",
   },
   view: {
+    columns: "Columns",
+    columnWidth: "Width (pixels)",
+    resetColumns: "Reset columns",
+    saveColumns: "Save columns",
+    columnSaveError: "Could not save columns",
     loadedItems: "{count} loaded items",
     loadedSelectionHint: "Selects loaded items only. Expand stacks to include their members; repeat after loading more pages.",
     selectFile: "Select {name}",

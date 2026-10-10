@@ -112,6 +112,8 @@ L'espace de travail central est le lieu où vous explorez, sélectionnez et orga
 
 ---
 
+Dans la vue Tableau, ouvrez **Colonnes** pour afficher/masquer les champs et modifier leur largeur en pixels, puis **Enregistrer les colonnes**. **Réinitialiser les colonnes** restaure le brouillon compact. Le nom de fichier et la sélection restent disponibles. Le bouton de pile affiche/masque les membres correspondants. Un échec de sauvegarde conserve le brouillon et la disposition actuelle.
+
 ## 5. Inspecteur de propriétés droit (`InspectorPane.vue`)
 
 L'inspecteur droit (`I` pour l'afficher ou le masquer) dévoile les métadonnées de génération détaillées et sans perte de l'élément sélectionné :

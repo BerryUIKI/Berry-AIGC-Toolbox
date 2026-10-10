@@ -111,6 +111,8 @@ Der zentrale Arbeitsbereich dient zum Durchsuchen, Auswählen und Kuratieren von
 
 ---
 
+In der Tabellenansicht unter **Spalten** Felder ein-/ausblenden und die Breite in Pixeln ändern, danach **Spalten speichern**. **Spalten zurücksetzen** stellt den kompakten Entwurf wieder her; zum Anwenden speichern. Dateiname und Auswahl bleiben verfügbar. Die Stapelanzahl öffnet/schließt passende Mitglieder. Fehlgeschlagene Speicherungen behalten Entwurf und aktuelle Ansicht.
+
 ## 5. Rechter Eigenschafts-Inspektor (`InspectorPane.vue`)
 
 Der rechte Inspektor (`I` zum Umschalten) liefert tiefgehende, verlustfreie Generierungs-Metadaten für das aktive Element:

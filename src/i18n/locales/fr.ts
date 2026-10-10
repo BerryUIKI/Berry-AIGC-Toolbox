@@ -90,6 +90,11 @@ export const fr: typeof en = {
     noMatchHint: "Ajustez vos mots-clés ou filtres (ex: prompt:cat, model:sdxl, ou steps:>=20).",
   },
   view: {
+    columns: "Colonnes",
+    columnWidth: "Largeur (pixels)",
+    resetColumns: "Réinitialiser les colonnes",
+    saveColumns: "Enregistrer les colonnes",
+    columnSaveError: "Impossible d’enregistrer les colonnes",
     loadedItems: "{count} éléments chargés",
     loadedSelectionHint: "Sélectionne uniquement les éléments chargés. Dépliez les piles pour inclure leurs images ; recommencez après le chargement de pages supplémentaires.",
     selectFile: "Sélectionner {name}",

@@ -52,6 +52,7 @@ import {
   setStorageItem,
   isWarningSuppressed,
   loadAppConfig,
+  type AppConfig,
   saveAppConfig,
   STACK_MERGE_WARNING_ID,
   suppressWarning,
@@ -60,6 +61,7 @@ import { checkForUpdates } from "./utils/updater";
 import { applyTheme, normalizeTheme, type AppTheme } from "./utils/theme";
 import ToastContainer from "./components/ToastContainer.vue";
 import { useNotification } from "./utils/notification";
+import { normalizeTableColumns, type TableColumnPreference } from "./utils/table-columns";
 import { actionHistory } from "./utils/history";
 import { applyBooleanFlagMutation } from "./utils/batch-flags";
 import { collaborationSync } from "./utils/collaborationSync";
@@ -317,6 +319,25 @@ const viewMode = ref<GalleryViewMode>(
     ? savedViewMode
     : "grid",
 );
+const tableColumns = ref(normalizeTableColumns([]));
+const tableColumnsSaving = ref(false);
+const tableColumnsError = ref("");
+async function onSaveTableColumns(columns: TableColumnPreference[]) {
+  if (tableColumnsSaving.value) return;
+  tableColumnsSaving.value = true;
+  tableColumnsError.value = "";
+  try {
+    const config = await invoke<AppConfig>("get_app_config");
+    config.table_columns = normalizeTableColumns(columns);
+    await saveAppConfig(config);
+    tableColumns.value = normalizeTableColumns(config.table_columns);
+  } catch (err) {
+    tableColumnsError.value = String(err);
+  } finally {
+    tableColumnsSaving.value = false;
+  }
+}
+
 const blurNsfw = ref(getStorageItem("blur_nsfw") !== "false");
 const {
   revealedPaths: revealedNsfw,
@@ -706,6 +727,7 @@ onMounted(async () => {
 
     // Load persistent configuration from config.json (auto-migrating localStorage)
     const cfg = await loadAppConfig();
+    tableColumns.value = normalizeTableColumns(cfg.table_columns);
     viewMode.value = cfg.default_view || "grid";
     blurNsfw.value = cfg.blur_nsfw;
     showCardBadges.value = cfg.show_card_badges;
@@ -2559,6 +2581,10 @@ function onResetZoom() {
             v-else
             :context-key="galleryContextKey"
             :files="files"
+            :columns="tableColumns"
+            :columns-saving="tableColumnsSaving"
+            :columns-error="tableColumnsError"
+            @save-columns="onSaveTableColumns"
             :file-revision="galleryRevision"
             :stack-map="stackMap"
             :expanded-stacks="expandedStacks"

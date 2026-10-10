@@ -7,6 +7,7 @@ import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
+import { normalizeTableColumns } from "../src/utils/table-columns.ts";
 import { en } from "../src/i18n/locales/en.ts";
 
 class MockElement {
@@ -352,4 +353,30 @@ test("Table renders one accessible stack control and emits expansion without cha
     assert.ok(html.includes('Expand: 1.png · 3 images in stack'));
     assert.equal((html.match(/class="data-row/g)??[]).length,1);
   } finally { fs.unlinkSync(loader.tmpPath); }
+});
+
+
+test("Table column settings render compact defaults, custom widths and matching spacer columns", async () => {
+  const loader = loadProductionFileList('table-columns');
+  try {
+    const FileList = await loader.importComponent();
+    const files = Array.from({length:400},(_,id)=>({id,path:'/very-long-file-name-'+id+'.png',container:'png',size_bytes:1,modified_at:1,metadata:{prompt:'long prompt',model_name:'model'}}));
+    const props = {files,loading:false};
+    let html = await renderToString(createSSRApp(FileList,props));
+    assert.ok(html.includes('colspan="5"'));
+    assert.equal((html.match(/role="columnheader"/g)??[]).length,5);
+    assert.ok(html.includes('aria-label="Prompt · Width (pixels)"'));
+    assert.ok(html.includes('Save columns'));
+    props.columns=normalizeTableColumns([{id:'preview',visible:false,width:44},{id:'model',visible:false,width:100},{id:'prompt',visible:true,width:320}]);
+    props.columnsError='revision conflict';
+    html=await renderToString(createSSRApp(FileList,props));
+    assert.ok(html.includes('width:320px'));
+    assert.ok(html.includes('colspan="3"'));
+    assert.equal((html.match(/role="columnheader"/g)??[]).length,3);
+    assert.ok(!html.includes('class="preview-cell"'));
+    assert.ok(!html.includes('class="model"'));
+    assert.ok(html.includes('role="alert"'));
+    assert.ok(html.includes('revision conflict'));
+    assert.ok((html.match(/class="data-row/g)??[]).length<30);
+  } finally {fs.unlinkSync(loader.tmpPath);}
 });

@@ -12,6 +12,9 @@ Omera should remain interactive with large local libraries while keeping CPU, me
 
 ### Cloud media transfer contract
 
+The reusable primitives are implemented first; production provider routing is
+tracked separately in #255/#283 until the follow-up integration lands.
+
 Media sync uses a shared transfer budget: at most eight active 64 KiB engine
 buffers (512 KiB total), independent of media size and the requested worker count.
 Hashing, local copying and remote uploads consume streams. Provider/TLS framing

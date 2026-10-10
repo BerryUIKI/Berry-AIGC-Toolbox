@@ -10,6 +10,26 @@ Omera should remain interactive with large local libraries while keeping CPU, me
 
 ## Implemented Safeguards
 
+### Cloud media transfer contract
+
+The reusable primitives are implemented first; production provider routing is
+tracked separately in #255/#283 until the follow-up integration lands.
+
+Media sync uses a shared transfer budget: at most eight active 64 KiB engine
+buffers (512 KiB total), independent of media size and the requested worker count.
+Hashing, local copying and remote uploads consume streams. Provider/TLS framing
+and small request metadata are additional bounded overhead, outside this budget.
+S3 signing requires a streaming digest pass before upload; checksum comparison
+reuses that digest. WebDAV checksum downloads are hashed as a stream.
+
+Cancellation is checked between chunks and while waiting for budget or bandwidth.
+Limiter waits release their mutex and check cancellation at most every 25 ms.
+Network adapters bound connect/read/write inactivity; cancellation cannot
+interrupt an OS filesystem call already in progress. Local mirrors stage output
+before publication so interrupted transfers retain an existing destination.
+Synthetic stream, throttle, budget and stalled-provider fixtures establish these
+contracts; they do not constitute live-provider qualification.
+
 ### Gallery scrolling
 
 - Grid and Waterfall cards keep the zoom-selected width. Window resizing changes the column count rather than stretching images.

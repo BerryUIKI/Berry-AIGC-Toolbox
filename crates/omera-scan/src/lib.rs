@@ -13,6 +13,7 @@ pub mod html_showcase;
 pub mod pipeline;
 pub mod scanner;
 pub mod thumbnail;
+pub mod transfer;
 pub mod transform;
 
 pub use export::{

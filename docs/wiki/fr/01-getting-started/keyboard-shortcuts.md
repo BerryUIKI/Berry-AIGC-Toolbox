@@ -13,6 +13,7 @@ Omera est pensé pour un **flux de travail axé sur le clavier**. Vous pouvez pa
 | `←` / `→` | **Élément précédent / suivant** | Galerie & Lightbox | Déplace la sélection vers l'élément adjacent (ou avance/recule d'1 image lors de la lecture vidéo). |
 | `↑` / `↓` | **Ligne supérieure / inférieure** | Vue Grille | Déplace la sélection vers le haut ou le bas d'une rangée visuelle. |
 | `Ctrl + A` / `Cmd + A` | **Sélectionner les éléments chargés** | Canevas de la galerie | Sélectionne uniquement les éléments chargés. Dépliez les piles pour inclure leurs images ; recommencez après le chargement de pages supplémentaires. |
+| `Shift + M` | **Masquage actif / Contenu visible** | Canevas de la galerie | Pour cette session uniquement. Les paramètres définissent le choix au démarrage. Maj+M bascule le masquage. |
 | `Suppr` ou `Retour arrière` | **Mettre à la corbeille** | Sélection dans la galerie | Envoie les éléments sélectionnés dans la corbeille du système d'exploitation. |
 
 ---

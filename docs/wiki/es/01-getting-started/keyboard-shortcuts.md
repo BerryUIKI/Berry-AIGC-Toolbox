@@ -13,6 +13,7 @@ Omera está diseñado con un flujo de trabajo centrado en el teclado (**keyboard
 | `←` / `→` | **Anterior / Siguiente** | Galería y Lightbox | Mover la selección al elemento adyacente (o avanzar/retroceder 1 fotograma en reproducción de vídeo). |
 | `↑` / `↓` | **Fila arriba / abajo** | Vista Cuadrícula | Mover la selección arriba o abajo en una fila visual completa. |
 | `Ctrl + A` / `Cmd + A` | **Seleccionar elementos cargados** | Lienzo de galería | Selecciona solo elementos cargados. Expande las pilas para incluir sus imágenes y repite tras cargar más páginas. |
+| `Shift + M` | **Ocultación activa / Contenido visible** | Lienzo de galería | Solo para esta sesión. Los ajustes controlan el estado inicial. Mayús+M alterna la ocultación. |
 | `Supr` o `Retroceso` | **Mover a la papelera** | Selección de galería | Enviar los elementos seleccionados a la papelera de reciclaje del sistema operativo. |
 
 ---

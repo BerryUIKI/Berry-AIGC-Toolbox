@@ -111,6 +111,8 @@ El espacio central es donde explora, selecciona y cura sus activos:
 
 ---
 
+En la vista Tabla, abre **Columnas** para mostrar u ocultar campos y cambiar su ancho en píxeles; después pulsa **Guardar columnas**. **Restablecer columnas** recupera el borrador compacto. El nombre de archivo y la selección siempre están disponibles. El contador de pila expande o contrae los miembros coincidentes. Un error al guardar conserva el borrador y el diseño actual.
+
 ## 5. Inspector de propiedades derecho (`InspectorPane.vue`)
 
 El inspector lateral derecho (`I` para alternar) desvela metadatos exhaustivos y sin pérdidas para la selección activa:

@@ -111,6 +111,8 @@ The central workspace is where you browse, select, and curate assets:
 
 ---
 
+In Table view, open **Columns** to show/hide fields and edit widths in pixels, then **Save columns**. **Reset columns** restores the compact draft; save to apply it. Filename and selection remain available. Stack count buttons expand/collapse the matching members. Failed saves retain your draft and current layout.
+
 ## 5. Right Property Inspector (`InspectorPane.vue`)
 
 The right inspector (`I` to toggle) reveals deep lossless generation metadata for the active selection:

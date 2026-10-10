@@ -127,6 +127,8 @@ fn stalled_webdav_checksum_body_has_bounded_cancellation_completion() {
     started_receive
         .recv_timeout(Duration::from_secs(3))
         .unwrap();
+    // Allow the consumer to enter its next socket read before cancelling.
+    thread::sleep(Duration::from_millis(50));
     cancel.store(true, Ordering::SeqCst);
     assert!(receive.recv_timeout(Duration::from_secs(3)).unwrap());
     let _ = release_send.send(());

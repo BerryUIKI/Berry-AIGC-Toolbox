@@ -144,6 +144,15 @@ impl TransferLease {
         TransferReader {
             source,
             control: &self.control,
+            remaining: None,
+        }
+    }
+
+    pub fn reader_exact<R: Read>(&self, source: R, length: u64) -> TransferReader<'_, R> {
+        TransferReader {
+            source,
+            control: &self.control,
+            remaining: Some(length),
         }
     }
 }
@@ -164,13 +173,29 @@ impl Drop for TransferLease {
 pub struct TransferReader<'a, R> {
     source: R,
     control: &'a TransferControl,
+    remaining: Option<u64>,
 }
 
 impl<R: Read> Read for TransferReader<'_, R> {
     fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
         self.control.check_cancelled()?;
-        let length = output.len().min(TRANSFER_CHUNK_BYTES);
+        let length = output
+            .len()
+            .min(TRANSFER_CHUNK_BYTES)
+            .min(self.remaining.unwrap_or(u64::MAX).min(usize::MAX as u64) as usize);
+        if length == 0 {
+            return Ok(0);
+        }
         let read = self.source.read(&mut output[..length])?;
+        if let Some(remaining) = &mut self.remaining {
+            if read == 0 && *remaining > 0 {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Source length changed during transfer",
+                ));
+            }
+            *remaining -= read as u64;
+        }
         self.control.throttle(read)?;
         Ok(read)
     }
@@ -287,5 +312,20 @@ mod tests {
             io::copy(&mut reader, &mut io::sink()).unwrap_err().kind(),
             io::ErrorKind::ConnectionAborted
         );
+    }
+
+    #[test]
+    fn declared_body_length_rejects_short_source_and_bounds_growing_source() {
+        let control = TransferControl::new(0, Arc::new(AtomicBool::new(false)));
+        let lease = control.acquire().unwrap();
+        let mut short = lease.reader_exact(&b"short"[..], 10);
+        assert_eq!(
+            io::copy(&mut short, &mut io::sink()).unwrap_err().kind(),
+            io::ErrorKind::UnexpectedEof
+        );
+        let mut growing = lease.reader_exact(&b"longer than declared"[..], 6);
+        let mut output = Vec::new();
+        assert_eq!(io::copy(&mut growing, &mut output).unwrap(), 6);
+        assert_eq!(output, b"longer");
     }
 }

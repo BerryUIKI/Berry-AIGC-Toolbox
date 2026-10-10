@@ -32,6 +32,14 @@ contracts; they do not constitute live-provider qualification.
 
 ### Gallery scrolling
 
+Bulk selection is explicitly **Select loaded items**, including Ctrl/Cmd+A and
+the Edit menu. It selects the currently loaded gallery representations without
+fetching additional pages or mounting additional images. Collapsed stack members
+are excluded until expanded. New pages do not silently extend an existing
+selection; the action can be repeated after loading them. The batch bar reports
+the selected count against the full filtered result population and separately
+shows the selectable loaded count. Clearing/navigating resets selection normally.
+
 - Grid and Waterfall cards keep the zoom-selected width. Window resizing changes the column count rather than stretching images.
 - Scroll events are coalesced through `requestAnimationFrame`, limiting reactive updates to one per rendered frame.
 - Waterfall geometry is cached until files, card width, gap, or viewport width changes.

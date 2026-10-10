@@ -207,3 +207,15 @@ and single-line ellipsis keep row height at 46 pixels even for long names and
 prompts. Saved preferences use the authoritative configuration revision, with
 compatible defaults for earlier installations. Optional preview decoding remains
 bounded by the visible window; hiding preview avoids speculative thumbnail work.
+
+
+### Session sensitive-content masking
+
+The gallery toolbar shows the active session state with a text/icon toggle and
+pressed state. Shift+M changes it only while gallery shortcuts are available;
+focused inputs, dialogs and handled key events suppress the shortcut. Changes
+reuse the shared presentation state across views and navigation without IPC,
+rescans, classification writes or storage writes. Enabling masking clears all
+temporary reveals immediately. Settings controls the saved startup default;
+applying that preference resets the current session state. Masking affects only
+items already classified sensitive and does not classify unknown content.

@@ -13,6 +13,7 @@ Omera is designed with a **keyboard-first workflow**. You can browse, rate, grou
 | `←` / `→` | **Navigate Previous / Next** | Gallery & Lightbox | Move selection to adjacent item (or step 1 frame in video playback). |
 | `↑` / `↓` | **Navigate Row Up / Down** | Grid View | Move selection up or down by one visual row. |
 | `Ctrl + A` / `Cmd + A` | **Select loaded items** | Gallery Canvas | Selects loaded items only. Expand stacks to include their members; repeat after loading more pages. |
+| `Shift + M` | **Masking on / Content visible** | Gallery Canvas | For this session only. Settings controls the startup default. Shift+M toggles masking. |
 | `Delete` or `Backspace` | **Move to Trash** | Gallery selection | Send selected item(s) to the OS Recycle Bin/Trash. |
 
 ---

@@ -90,6 +90,9 @@ export const zhTW: typeof en = {
     noMatchHint: "嘗試調整關鍵字或參數篩選條件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    maskingOn: "遮罩已開啟",
+    contentVisible: "內容可見",
+    sessionMaskHint: "僅影響目前工作階段。設定控制啟動預設狀態。Shift+M 切換遮罩。",
     columns: "欄位設定",
     columnWidth: "寬度（像素）",
     resetColumns: "重設欄位",

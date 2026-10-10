@@ -90,6 +90,9 @@ export const de: typeof en = {
     noMatchHint: "Passen Sie Schlüsselwörter oder Parameterfilter an (z.B. prompt:cat, model:sdxl oder steps:>=20).",
   },
   view: {
+    maskingOn: "Maskierung aktiv",
+    contentVisible: "Inhalte sichtbar",
+    sessionMaskHint: "Nur für diese Sitzung. Den Startstandard legen Sie in den Einstellungen fest. Shift+M schaltet die Maskierung um.",
     columns: "Spalten",
     columnWidth: "Breite (Pixel)",
     resetColumns: "Spalten zurücksetzen",

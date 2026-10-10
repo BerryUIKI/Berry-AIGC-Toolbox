@@ -90,6 +90,16 @@ export function clearSensitiveReveals(
   }
 }
 
+/** Apply session masking without changing classification or saved preferences. */
+export function setSensitiveMasking(
+  masking: Ref<boolean>,
+  enabled: boolean,
+  revealed: Ref<Set<string>> = sharedRevealedPaths,
+): void {
+  if (enabled) clearSensitiveReveals(revealed);
+  masking.value = enabled;
+}
+
 /**
  * Composable returning accessors and helpers for gallery privacy state.
  */

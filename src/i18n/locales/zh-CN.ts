@@ -90,6 +90,9 @@ export const zhCN: typeof en = {
     noMatchHint: "尝试调整关键词或参数筛选条件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    maskingOn: "遮罩已开启",
+    contentVisible: "内容可见",
+    sessionMaskHint: "仅影响当前会话。设置控制启动默认状态。Shift+M 切换遮罩。",
     columns: "列设置",
     columnWidth: "宽度（像素）",
     resetColumns: "重置列",

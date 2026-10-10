@@ -29,8 +29,8 @@ required CI checks pass; delete only the merged task branch.
 | 10 | #282 | Accurate per-image selection names for assistive technology | Merged #359; CI and synthetic browser checks passed |
 | 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Merged #360; CI and synthetic browser checks passed |
 | 12 | #259 | Table stack expansion with scoped members and keyboard access | Merged #362; CI and synthetic browser checks passed |
-| 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | Implemented; full cross-layer checks pass |
-| 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Planned |
+| 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | PR #363; full cross-layer checks pass |
+| 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Implemented; build and 249 frontend tests pass |
 | 15 | #246 | Opt-in automatic backup scheduling, compatible defaults, snapshot safety, restart/failure status | Planned |
 | 16 | #256 | Provision signed update pipeline without a trust bypass; validate tampering/missing signatures; record credentials/platform gates | Planned |
 
@@ -92,3 +92,9 @@ exercise localized text rather than English-only fixture fallbacks.
   confirm compact columns fit with both side panes, 46-pixel rows for long names,
   custom visibility/width saves, keyboard row navigation and internal horizontal
   scrolling (558 pixels) for deliberately wider preferences.
+
+- Session masking on 2026-10-11: synthetic browser checks at 960 × 640 and
+  1600 × 950 confirm the control remains visible, state survives Favorites and
+  Grid/Waterfall/Table changes, enabling conceals prior reveals, and Shift+M
+  is ignored in search input and a statistics dialog. The toolbar wraps controls
+  to retain the explicit state at narrow widths. Native IPC remains separate.

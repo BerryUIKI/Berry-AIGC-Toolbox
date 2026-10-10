@@ -90,6 +90,9 @@ export const ja: typeof en = {
     noMatchHint: "キーワードやパラメータ条件を調整してください (例: prompt:cat, model:sdxl, steps:>=20)。",
   },
   view: {
+    maskingOn: "マスク有効",
+    contentVisible: "コンテンツ表示",
+    sessionMaskHint: "このセッションのみ。起動時の設定は環境設定で変更します。Shift+M で切り替えます。",
     columns: "列の設定",
     columnWidth: "幅（ピクセル）",
     resetColumns: "列をリセット",

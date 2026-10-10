@@ -15,6 +15,7 @@ Omera is designed with desktop productivity in mind. Most major operations can b
 | `0` | Global | Clear star rating on selected image(s) |
 | `1` ~ `5` | Global | Set star rating (1 to 5 stars) on selected image(s) |
 | `F` | Global | Toggle Favorite status on selected image(s) |
+| `Shift+M` | Gallery | Toggle sensitive-content masking for this session; enabling clears temporary reveals |
 | `Delete` | Global | Move selected image(s) to system Recycle Bin / Trash |
 
 Bulk selection does not fetch additional pages. Expand a stack to include its members,

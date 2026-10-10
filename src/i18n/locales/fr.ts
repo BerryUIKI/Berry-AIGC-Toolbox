@@ -73,6 +73,8 @@ export const fr: typeof en = {
     noMatchHint: "Ajustez vos mots-clés ou filtres (ex: prompt:cat, model:sdxl, ou steps:>=20).",
   },
   view: {
+    selectFile: "Sélectionner {name}",
+    deselectFile: "Désélectionner {name}",
     grid: "Grille",
     masonry: "Mosaïque",
     table: "Tableau",

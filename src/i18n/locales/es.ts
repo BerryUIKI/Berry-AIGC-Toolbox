@@ -73,6 +73,8 @@ export const es: typeof en = {
     noMatchHint: "Ajuste las palabras clave o filtros (ej: prompt:cat, model:sdxl o steps:>=20).",
   },
   view: {
+    selectFile: "Seleccionar {name}",
+    deselectFile: "Deseleccionar {name}",
     grid: "Cuadrícula",
     masonry: "Cascada",
     table: "Lista",

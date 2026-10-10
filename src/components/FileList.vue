@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { FileSortField, ImageFile, SortDirection } from "../types";
+import { fileSelectionLabel } from "../utils/selection";
 import {
   assetUrl,
   formatBytes,
@@ -432,6 +433,7 @@ onUnmounted(() => {
               <input
                 type="checkbox"
                 :checked="selectedFilePaths?.has(file.path)"
+                :aria-label="fileSelectionLabel(file.path, !!selectedFilePaths?.has(file.path), t.view)"
                 @click.stop="emit('toggleSelect', file)"
               />
             </td>

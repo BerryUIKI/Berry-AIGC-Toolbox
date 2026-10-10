@@ -7,6 +7,7 @@ import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
+import { en } from "../src/i18n/locales/en.ts";
 
 class MockElement {
   constructor(tagName = "DIV") {
@@ -36,7 +37,7 @@ if (!globalThis.document) {
   };
 }
 
-function loadProductionVirtualGrid(componentId) {
+function loadProductionVirtualGrid(componentId, viewMessages = {}) {
   const filePath = path.resolve("src/components/VirtualGrid.vue");
   const sfc = fs.readFileSync(filePath, "utf-8");
   const { descriptor } = parse(sfc, { filename: path.basename(filePath) });
@@ -55,7 +56,7 @@ function loadProductionVirtualGrid(componentId) {
   // Mock i18n
   const mockI18n = `
   const i18nData = {
-    view: { loading: "Loading...", selectAll: "Select All", deselect: "Deselect" },
+    view: ${JSON.stringify({ ...en.view, ...viewMessages })},
     review: { noMatches: "No items match your filter", retry: "Reset Filters", gallery: "Gallery" },
     preview: {
       preview: "Preview",
@@ -206,5 +207,24 @@ test("VirtualGrid styles declare card-remask-btn, nsfw-overlay button styling, a
     );
   } finally {
     if (fs.existsSync(loader.tmpPath)) fs.unlinkSync(loader.tmpPath);
+  }
+});
+
+
+test("VirtualGrid names selected and unselected files correctly in every locale", async () => {
+  for (const [locale, symbol] of Object.entries({ en: "en", "zh-CN": "zhCN", "zh-TW": "zhTW", ja: "ja", de: "de", fr: "fr", es: "es" })) {
+    const messages = (await import(`../src/i18n/locales/${locale}.ts`))[symbol];
+    const loader = loadProductionVirtualGrid(`selection-${locale}`, messages.view);
+    try {
+      const component = await loader.importComponent();
+      const files = [
+        { id: 1, path: "/lib/first.png", container: "png", size_bytes: 1, modified_at: 1 },
+        { id: 2, path: "/lib/second.png", container: "png", size_bytes: 1, modified_at: 1 },
+      ];
+      const html = await renderToString(createSSRApp(component, { files, selectedFilePaths: new Set([files[1].path]) }));
+      assert.ok(html.includes(`aria-label="${messages.view.selectFile.replace("{name}", "first.png")}"`), locale);
+      assert.ok(html.includes(`aria-label="${messages.view.deselectFile.replace("{name}", "second.png")}"`), locale);
+      assert.match(html, /aria-pressed="true" aria-label=/);
+    } finally { fs.unlinkSync(loader.tmpPath); }
   }
 });

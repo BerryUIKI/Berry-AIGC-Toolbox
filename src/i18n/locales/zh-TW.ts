@@ -73,6 +73,8 @@ export const zhTW: typeof en = {
     noMatchHint: "嘗試調整關鍵字或參數篩選條件，如 prompt:cat、model:sdxl 或 steps:>=20。",
   },
   view: {
+    selectFile: "選取 {name}",
+    deselectFile: "取消選取 {name}",
     grid: "網格",
     masonry: "瀑布流",
     table: "清單",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { ImageFile } from "../types";
+import { fileSelectionLabel } from "../utils/selection";
 import {
   assetUrl,
   formatBytes,
@@ -738,8 +739,9 @@ function onDragStart(e: DragEvent, file: ImageFile) {
                 type="button"
                 class="card-select-btn"
                 :class="{ checked: selectedFilePaths?.has(file.path) }"
-                :aria-label="selectedFilePaths?.has(file.path) ? t.view.deselect : t.view.selectAll"
-                :title="selectedFilePaths?.has(file.path) ? t.view.deselect : t.view.selectAll"
+                :aria-pressed="!!selectedFilePaths?.has(file.path)"
+                :aria-label="fileSelectionLabel(file.path, !!selectedFilePaths?.has(file.path), t.view)"
+                :title="fileSelectionLabel(file.path, !!selectedFilePaths?.has(file.path), t.view)"
                 @click.stop="toggleSelect(file)"
               >
                 {{ selectedFilePaths?.has(file.path) ? "✓" : "" }}

@@ -219,3 +219,16 @@ rescans, classification writes or storage writes. Enabling masking clears all
 temporary reveals immediately. Settings controls the saved startup default;
 applying that preference resets the current session state. Masking affects only
 items already classified sensitive and does not classify unknown content.
+
+
+### Backup snapshot staging
+
+Snapshot creation uses an independent SQLite connection outside the shared
+application database guard. VACUUM INTO creates a stable database in a private
+application-data spool; its counts supply the manifest. SQLite and ZIP payloads
+remain on disk. Publication streams through one lease from the shared 64 KiB
+transfer-buffer pool (ZIP compression and SQLite use their own bounded working
+buffers). Local publication uses a synced temporary file and no-clobber atomic
+publication. UUID names prevent concurrent manual/automatic snapshots from
+colliding. Ordinary failures remove only the private spool and unpublished file.
+Backups contain the database and manifest, never user media or credentials.

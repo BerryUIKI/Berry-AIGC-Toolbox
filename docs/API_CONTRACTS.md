@@ -264,3 +264,19 @@ Visibility and widths are saved together through revision-checked configuration;
 failed saves retain the draft, show an error and leave active columns unchanged.
 Keyboard-accessible checkboxes and numeric width controls provide customization,
 with reset to the compact default. Horizontal scrolling stays inside the Table.
+
+
+## Automatic backup preparation (#246)
+
+Automatic backup remains off by default, with the same seven-day interval in
+Rust default construction, Serde legacy reads and frontend defaults. The future
+scheduler consumes only saved opt-in settings and clamps its interval to 1–365
+days. Scheduling/status IPC is not implemented by this preparation step.
+
+Manual and future scheduled snapshots use independent SQLite backup connections,
+spool database/archive files in private temporary application directories, and
+clean those staging files on ordinary success/failure. Counts come from the
+completed SQLite snapshot. Archive names include a unique suffix; local targets
+are published atomically without overwrite. Uploads stream the archive from disk.
+Backups contain the database and manifest, never media or credential/config files.
+Restore retains its existing staged-recovery contract.

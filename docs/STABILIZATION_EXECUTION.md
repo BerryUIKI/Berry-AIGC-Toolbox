@@ -29,9 +29,9 @@ required CI checks pass; delete only the merged task branch.
 | 10 | #282 | Accurate per-image selection names for assistive technology | Merged #359; CI and synthetic browser checks passed |
 | 11 | #295 | Explicit full-result selection or clearly named loaded-item selection; scope/navigation/cancellation tests | Merged #360; CI and synthetic browser checks passed |
 | 12 | #259 | Table stack expansion with scoped members and keyboard access | Merged #362; CI and synthetic browser checks passed |
-| 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | PR #363; full cross-layer checks pass |
-| 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Implemented; build and 249 frontend tests pass |
-| 15 | #246 | Opt-in automatic backup scheduling, compatible defaults, snapshot safety, restart/failure status | Planned |
+| 13 | #263 | Configurable Table columns at ordinary/narrow widths, compatible persistence defaults | Merged #363; CI and synthetic browser checks passed |
+| 14 | #297 | Session masking toggle and guarded shortcut; reset temporary reveals on enabling masking; saved startup default stays explicit | Merged #364; CI and synthetic browser checks passed |
+| 15 | #246 | Opt-in automatic backup scheduling, compatible defaults, snapshot safety, restart/failure status | Snapshot foundation checked; scheduler next |
 | 16 | #256 | Provision signed update pipeline without a trust bypass; validate tampering/missing signatures; record credentials/platform gates | Planned |
 
 Safety and correctness precede convenience controls. Lock changes precede new
@@ -98,3 +98,10 @@ exercise localized text rather than English-only fixture fallbacks.
   Grid/Waterfall/Table changes, enabling conceals prior reveals, and Shift+M
   is ignored in search input and a statistics dialog. The toolbar wraps controls
   to retain the explicit state at narrow widths. Native IPC remains separate.
+
+- Snapshot foundation on 2026-10-11: build, all 249 frontend tests (after one
+  isolated process exit passed on rerun), formatting, all-targets workspace clippy
+  and workspace Rust tests pass. WAL data/counts, unique archive names, ordinary
+  failure cleanup, preserved destination/source data, and streamed S3/WebDAV
+  provider paths/content lengths are covered. Automatic scheduling is not yet
+  implemented by this foundation.

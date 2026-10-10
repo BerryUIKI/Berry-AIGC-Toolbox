@@ -28,6 +28,16 @@ Do not add indexes for every column or introduce a second authoritative database
 
 ## Schema and migration rules
 
+Library batch transformations take short locks for folder/file reads and the
+single-row derivative update. Decode, verification, publication, archive/Trash
+and progress callbacks run outside the application database mutex. Transform
+jobs remain serialized by a separate job gate to avoid overlapping staging.
+Publication uses an atomic compare-and-update against the original row's path,
+folder, size and modification time. A changed/deleted row rejects publication
+and preserves the source; the derivative is compensated using the existing
+failure path. Curation fields are never rewritten from the earlier snapshot.
+No schema migration is needed. This is not a general filesystem transaction.
+
 - Applied migrations remain unchanged and ordered. Append new migrations in the storage crate; crate renaming moves the file without rewriting its history.
 - Backfill large new structures in bounded resumable batches. Do not expose incomplete indexes as complete search results. Define schema compatibility and recovery before switching readers.
 - Use foreign keys, uniqueness constraints, and explicit version/revision fields where required by actual ownership. Verify `integrity_check` and `foreign_key_check` on migrated copies.

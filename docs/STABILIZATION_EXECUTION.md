@@ -68,3 +68,14 @@ with both selected and unselected file fixtures.
   paging raises the loaded count to 798, then explicit repeat selects 798.
   Favorites reports 10 selectable loaded representations of 12 results with
   a collapsed three-member stack. Browser checks do not qualify native IPC.
+
+
+## Review feedback localization contract
+
+Statistics loading/empty states, actions, hints and accessible names use the
+selected locale, alongside Sidebar navigation/tools and panel toggles. History
+records retain the translated action name created when the operation runs;
+undo/redo notifications use the current locale around that recorded name.
+All seven supported locales supply the same keys. Backend errors and user data
+remain verbatim. Production component rendering and operation-handler tests
+exercise localized text rather than English-only fixture fallbacks.

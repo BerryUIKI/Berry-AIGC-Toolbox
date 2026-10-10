@@ -7,6 +7,7 @@ import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
+import { en } from "../src/i18n/locales/en.ts";
 
 class MockElement {
   constructor(tagName = "DIV") {
@@ -55,7 +56,7 @@ function loadProductionVirtualGrid(componentId, viewMessages = {}) {
   // Mock i18n
   const mockI18n = `
   const i18nData = {
-    view: ${JSON.stringify({ loading: "Loading...", selectAll: "Select All", deselect: "Deselect", selectFile: "Select {name}", deselectFile: "Deselect {name}", ...viewMessages })},
+    view: ${JSON.stringify({ ...en.view, ...viewMessages })},
     review: { noMatches: "No items match your filter", retry: "Reset Filters", gallery: "Gallery" },
     preview: {
       preview: "Preview",

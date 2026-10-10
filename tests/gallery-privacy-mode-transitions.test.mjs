@@ -6,6 +6,7 @@ import { parse, compileScript, compileTemplate } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createSSRApp } from "vue";
 import { renderToString } from "vue/server-renderer";
+import { en } from "../src/i18n/locales/en.ts";
 import {
   clearSensitiveReveals,
   isSensitiveMasked,
@@ -62,7 +63,7 @@ function loadProductionComponent(relativePath, componentId) {
 
   const mockI18n = `
   const i18nData = {
-    view: { loading: "Loading...", selectAll: "Select All" },
+    view: ${JSON.stringify(en.view)},
     review: { noMatches: "No items match your filter", retry: "Reset Filters", gallery: "Gallery Table" },
     sort: { name: "Name", size: "Size", modified: "Modified" },
     preview: {

@@ -1053,10 +1053,10 @@ async function onUndo() {
   try {
     const actionName = await actionHistory.undo();
     if (actionName) {
-      notification.showSuccess(`Undid: ${actionName}`, undefined, 2500);
+      notification.showSuccess(t.value.history.undid.replace("{action}", actionName), undefined, 2500);
     }
   } catch (err) {
-    notification.showError(`Undo failed: ${err}`);
+    notification.showError(t.value.history.undoFailed.replace("{error}", String(err)));
   }
 }
 
@@ -1064,10 +1064,10 @@ async function onRedo() {
   try {
     const actionName = await actionHistory.redo();
     if (actionName) {
-      notification.showSuccess(`Redid: ${actionName}`, undefined, 2500);
+      notification.showSuccess(t.value.history.redid.replace("{action}", actionName), undefined, 2500);
     }
   } catch (err) {
-    notification.showError(`Redo failed: ${err}`);
+    notification.showError(t.value.history.redoFailed.replace("{error}", String(err)));
   }
 }
 
@@ -1113,7 +1113,7 @@ async function onBatchRate(rating: number | null) {
     }
 
     await actionHistory.execute({
-      name: `Set rating to ${rating ?? 0} stars (${targetFiles.length} files)`,
+      name: t.value.history.rating.replace("{rating}", String(rating ?? 0)).replace("{count}", String(targetFiles.length)),
       execute: () => applyRatingState(newRatingsMap),
       undo: () => applyRatingState(previousRatings),
     });
@@ -1663,7 +1663,7 @@ async function onBatchToggleFavorite(isFavorite: boolean) {
     for (const f of targetFiles) newFavMap.set(f.id, isFavorite);
 
     await actionHistory.execute({
-      name: `${isFavorite ? "Favorite" : "Unfavorite"} ${targetFiles.length} files`,
+      name: (isFavorite ? t.value.history.favorite : t.value.history.unfavorite).replace("{count}", String(targetFiles.length)),
       execute: () => applyFavState(newFavMap),
       undo: () => applyFavState(previousFavs),
     });
@@ -1693,7 +1693,7 @@ async function onBatchToggleNsfw(isNsfw: boolean) {
     for (const f of targetFiles) newNsfwMap.set(f.id, isNsfw);
 
     await actionHistory.execute({
-      name: `Mark ${isNsfw ? "NSFW" : "SFW"} (${targetFiles.length} files)`,
+      name: (isNsfw ? t.value.history.sensitive : t.value.history.safe).replace("{count}", String(targetFiles.length)),
       execute: () => applyNsfwState(newNsfwMap),
       undo: () => applyNsfwState(previousNsfw),
     });
@@ -2259,7 +2259,7 @@ function onResetZoom() {
           type="button"
           class="titlebar-quick-btn"
           :class="{ active: sidebarOpen }"
-          :title="sidebarOpen ? '隐藏导航栏 (B)' : '显示导航栏 (B)'"
+          :title="sidebarOpen ? t.nav.hideSidebar : t.nav.showSidebar"
           style="margin-left: 8px;"
           @click="sidebarOpen = !sidebarOpen"
         >
@@ -2310,7 +2310,7 @@ function onResetZoom() {
           type="button"
           class="titlebar-quick-btn"
           :class="{ active: inspectorOpen }"
-          :title="inspectorOpen ? '隐藏检查器 (I)' : '显示检查器 (I)'"
+          :title="inspectorOpen ? t.nav.hideInspector : t.nav.showInspector"
           @click="inspectorOpen = !inspectorOpen"
         >
           <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">

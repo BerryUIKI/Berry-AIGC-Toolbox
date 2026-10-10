@@ -5,6 +5,7 @@
 //! Crates may depend on `omera-domain`, but it depends on nothing else.
 
 mod album;
+mod backup_schedule;
 mod checkpoint;
 mod cloud_backup;
 mod cloud_sync;
@@ -30,6 +31,7 @@ mod tag;
 pub mod transform;
 
 pub use album::Album;
+pub use backup_schedule::{AutomaticBackupStatus, BackupSchedule};
 pub use checkpoint::{CheckpointModelStat, ModelCacheEntry};
 pub use cloud_backup::{
     CloudBackupConfig, CloudBackupResult, CloudPingResult, CloudRestoreResult, CloudSnapshotMeta,
